@@ -1,3 +1,5 @@
+mod relay_server;
+
 use std::error::Error;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::time::Duration;

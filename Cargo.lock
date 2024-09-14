@@ -9,6 +9,7 @@ dependencies = [
  "bitcoin",
  "bitcoincore-rpc",
  "clap",
+ "futures",
  "futures-timer",
  "hex",
  "libp2p",
