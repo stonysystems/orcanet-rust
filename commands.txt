@@ -1,0 +1,5 @@
+# Listening node
+RUST_LOG=info  cargo run -- --relay-address /ip4/130.245.173.221/tcp/4001/p2p/12D3KooWDpJ7As7BWAwRMfu1VU2WCqNjvq387JEYKDBj4kx6nXTN --secret-key-seed 1 --mode listen
+
+# Dialing node
+RUST_LOG=info  cargo run -- --relay-address /ip4/130.245.173.221/tcp/4001/p2p/12D3KooWDpJ7As7BWAwRMfu1VU2WCqNjvq387JEYKDBj4kx6nXTN --secret-key-seed 2 --mode dial --remote-peer-id 12D3KooWPjceQrSwdWXPyLLeABRXmuqt69Rg3sBYbU1Nft9HyQ6X

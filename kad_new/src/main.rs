@@ -199,6 +199,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     SwarmEvent::ConnectionEstablished {
                         peer_id, endpoint, ..
                     } => {
+                        // TODO: Add condition check to ignore relay node connection events
                         tracing::info!(peer=%peer_id, ?endpoint, "Established new connection");
                         let peer_relay_addr = opts.relay_address.clone()
                             .with(Protocol::P2pCircuit)
