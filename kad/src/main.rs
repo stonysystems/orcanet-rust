@@ -5,7 +5,7 @@ use std::time::Duration;
 use bitcoin::script::Instruction::Op;
 use clap::Parser;
 use futures::{prelude::*, select};
-use libp2p::{identify, identity, kad, Multiaddr, ping, relay};
+use libp2p::{identify, identity, kad, Multiaddr, PeerId, ping, relay};
 use libp2p::{
     noise,
     swarm::{NetworkBehaviour, SwarmEvent},
@@ -38,6 +38,9 @@ struct Opts {
     /// The listening address
     #[clap(long)]
     relay_address: Multiaddr,
+
+    #[clap(long)]
+    remote_peer_id: Option<PeerId>,
 }
 
 #[async_std::main]
@@ -76,47 +79,26 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     println!("Created swarm");
     swarm.behaviour_mut().kademlia.set_mode(Some(Mode::Server));
-
-    // Connect to relay server
-    swarm.dial(opts.relay_address.clone()).unwrap();
-    block_on(async {
-        let mut learned_observed_addr = false;
-        let mut told_relay_observed_addr = false;
-
-        loop {
-            match swarm.next().await.unwrap() {
-                SwarmEvent::NewListenAddr { .. } => {}
-                SwarmEvent::Dialing { .. } => {}
-                SwarmEvent::ConnectionEstablished { .. } => {}
-                SwarmEvent::Behaviour(BehaviourEvent::Ping(_)) => {}
-                SwarmEvent::Behaviour(BehaviourEvent::Identify(identify::Event::Sent {
-                                                                   ..
-                                                               })) => {
-                    tracing::info!("Told relay its public address");
-                    told_relay_observed_addr = true;
-                }
-                SwarmEvent::Behaviour(BehaviourEvent::Identify(identify::Event::Received {
-                                                                   info: identify::Info { observed_addr, .. },
-                                                                   ..
-                                                               })) => {
-                    tracing::info!(address=%observed_addr, "Relay told us our observed address");
-                    learned_observed_addr = true;
-                }
-                event => panic!("{event:?}"),
-            }
-
-            if learned_observed_addr && told_relay_observed_addr {
-                break;
-            }
-        }
-    });
-    println!("Dialed relay server");
+    // swarm.behaviour_mut().kademlia.add_address();
 
     // Listen on all interfaces and whatever port the OS assigns.
     // swarm.listen_on("/ip4/0.0.0.0/udp/0/quic-v1".parse()?)?;
     swarm.listen_on("/ip4/0.0.0.0/tcp/0".parse()?)?;
     swarm.listen_on(opts.relay_address.clone().with(Protocol::P2pCircuit))?;
     println!("Set up listening");
+
+    // Connect to relay server
+    swarm.dial(opts.relay_address.clone()).unwrap();
+    println!("Dialed relay server");
+
+    // Dial remote client
+    if let Some(remote_peer_id) = opts.remote_peer_id {
+        swarm.dial(opts.relay_address.clone()
+            .with(Protocol::P2pCircuit)
+            .with(Protocol::P2p(remote_peer_id))
+        )?;
+    }
+    println!("Dialled remote client");
 
     // Read full lines from stdin
     let mut stdin = io::BufReader::new(io::stdin()).lines().fuse();
