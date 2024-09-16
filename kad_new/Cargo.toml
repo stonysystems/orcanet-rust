@@ -1,17 +1,10 @@
 [package]
-name = "P2PComm"
+name = "kad_new"
 version = "0.1.0"
 edition = "2021"
 
-[workspace]
-members = [
-    "kad",
-    "kad_new"
-]
-
 [dependencies]
-libp2p = { version = "0.54.1", features = ["dns", "dcutr", "identify", "macros", "noise", "ping", "quic", "relay", "rendezvous", "tcp", "tokio", "yamux", "gossipsub"] }
-bitcoin = "0.32.2"
+libp2p = { version = "0.54.1", features = ["async-std", "dns", "dcutr", "identify", "macros", "noise", "ping", "quic", "relay", "rendezvous", "tcp", "tokio", "yamux", "kad"] }
 tokio = { version = "1.40.0", features = ["full"] }
 rand = "0.8.5"
 hex = "0.4.3"
@@ -21,3 +14,4 @@ futures-timer = "3.0.3"
 clap = { version = "4.5.17", features = ["derive"] }
 tracing = "0.1.40"
 futures = "0.3.30"
+async-std = { version = "1.13.0", features = ["attributes"] }

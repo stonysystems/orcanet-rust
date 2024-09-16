@@ -2,7 +2,7 @@ use std::error::Error;
 use std::pin::pin;
 use std::time::Duration;
 
-use bitcoin::script::Instruction::Op;
+
 use clap::Parser;
 use futures::{prelude::*, select};
 use libp2p::{identify, identity, kad, Multiaddr, PeerId, ping, relay};

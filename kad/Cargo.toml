@@ -5,7 +5,6 @@ edition = "2021"
 
 [dependencies]
 libp2p = { version = "0.54.1", features = ["async-std", "dns", "dcutr", "identify", "macros", "noise", "ping", "quic", "relay", "rendezvous", "tcp", "tokio", "yamux", "kad"] }
-bitcoin = "0.32.2"
 tokio = { version = "1.40.0", features = ["full"] }
 rand = "0.8.5"
 hex = "0.4.3"

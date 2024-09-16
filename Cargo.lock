@@ -1705,7 +1705,23 @@ name = "kad"
 version = "0.1.0"
 dependencies = [
  "async-std",
- "bitcoin",
+ "bitcoincore-rpc",
+ "clap",
+ "futures",
+ "futures-timer",
+ "hex",
+ "libp2p",
+ "rand",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "kad_new"
+version = "0.1.0"
+dependencies = [
+ "async-std",
  "bitcoincore-rpc",
  "clap",
  "futures",
