@@ -8,7 +8,9 @@ use bitcoin::hashes::serde::de::Unexpected::Str;
 use clap::Parser;
 use libp2p::{core::multiaddr::{Multiaddr, Protocol}, dcutr, futures, gossipsub, identify, identity, noise, PeerId, ping, relay, swarm::{NetworkBehaviour, SwarmEvent}, tcp, yamux};
 use libp2p::futures::{executor::block_on, StreamExt, FutureExt};
+use libp2p::swarm::dummy::ConnectionHandler;
 use tokio::{io, io::AsyncBufReadExt, select};
+use tracing::instrument::WithSubscriber;
 use tracing_subscriber::EnvFilter;
 
 #[derive(NetworkBehaviour)]
@@ -16,7 +18,7 @@ struct Behaviour {
     relay_client: relay::client::Behaviour,
     ping: ping::Behaviour,
     identify: identify::Behaviour,
-    gossipsub: gossipsub::Behaviour,
+    gossipsub: gossipsub::Behaviour
 }
 
 #[derive(Debug, Parser)]
