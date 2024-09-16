@@ -1,13 +1,11 @@
 use clap::Parser;
 use futures::{executor::block_on, future::FutureExt, stream::StreamExt};
-use libp2p::{
-    core::multiaddr::{Multiaddr, Protocol},
-    dcutr, identify, identity, noise, ping, relay,
-    swarm::{NetworkBehaviour, SwarmEvent},
-    tcp, yamux, PeerId,
-};
+use libp2p::{core::multiaddr::{Multiaddr, Protocol}, dcutr, identify, identity, noise, ping, relay, swarm::{NetworkBehaviour, SwarmEvent}, tcp, yamux, PeerId, kad};
 use std::str::FromStr;
 use std::{error::Error, time::Duration};
+use libp2p::kad::store::MemoryStore;
+use tokio::{io, select};
+use tokio::io::AsyncBufReadExt;
 use tracing_subscriber::EnvFilter;
 
 #[derive(Debug, Parser)]
@@ -47,6 +45,14 @@ impl FromStr for Mode {
     }
 }
 
+#[derive(NetworkBehaviour)]
+struct Behaviour {
+    relay_client: relay::client::Behaviour,
+    ping: ping::Behaviour,
+    kademlia: kad::Behaviour<MemoryStore>,
+    identify: identify::Behaviour,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let _ = tracing_subscriber::fmt()
@@ -54,13 +60,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .try_init();
 
     let opts = Opts::parse();
-
-    #[derive(NetworkBehaviour)]
-    struct Behaviour {
-        relay_client: relay::client::Behaviour,
-        ping: ping::Behaviour,
-        identify: identify::Behaviour,
-    }
 
     let mut swarm =
         libp2p::SwarmBuilder::with_existing_identity(generate_ed25519(opts.secret_key_seed))
@@ -74,12 +73,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
             .with_dns()?
             .with_relay_client(noise::Config::new, yamux::Config::default)?
             .with_behaviour(|keypair, relay_behaviour| Behaviour {
+                kademlia: kad::Behaviour::new(
+                    keypair.public().to_peer_id(),
+                    MemoryStore::new(keypair.public().to_peer_id()),
+                ),
                 relay_client: relay_behaviour,
                 ping: ping::Behaviour::new(ping::Config::new()),
                 identify: identify::Behaviour::new(identify::Config::new(
                     "/TODO/0.0.1".to_string(),
                     keypair.public(),
-                ))
+                )),
             })?
             .with_swarm_config(|c| c.with_idle_connection_timeout(Duration::from_secs(60)))
             .build();
@@ -147,11 +150,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
     });
 
+    swarm.behaviour_mut().kademlia.set_mode(Some(libp2p::kad::Mode::Server));
+
     match opts.mode {
         Mode::Dial => {
             swarm
                 .dial(
-                    opts.relay_address
+                    opts.relay_address.clone()
                         .with(Protocol::P2pCircuit)
                         .with(Protocol::P2p(opts.remote_peer_id.unwrap())),
                 )
@@ -159,42 +164,183 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
         Mode::Listen => {
             swarm
-                .listen_on(opts.relay_address.with(Protocol::P2pCircuit))
+                .listen_on(opts.relay_address.clone().with(Protocol::P2pCircuit))
                 .unwrap();
         }
     }
 
+    // Read full lines from stdin
+    let mut stdin = io::BufReader::new(io::stdin()).lines();
+
     block_on(async {
         loop {
-            match swarm.next().await.unwrap() {
-                SwarmEvent::NewListenAddr { address, .. } => {
-                    tracing::info!(%address, "Listening on address");
+            select! {
+                Ok(Some(line)) = stdin.next_line() => {
+                    handle_input_line(&mut swarm.behaviour_mut().kademlia, line);
                 }
-                SwarmEvent::Behaviour(BehaviourEvent::RelayClient(
-                                          relay::client::Event::ReservationReqAccepted { .. },
-                                      )) => {
-                    assert!(opts.mode == Mode::Listen);
-                    tracing::info!("Relay accepted our reservation request");
+
+                event = swarm.select_next_some() => match event {
+                    SwarmEvent::NewListenAddr { address, .. } => {
+                        tracing::info!(%address, "Listening on address");
+                    }
+                    SwarmEvent::Behaviour(BehaviourEvent::RelayClient(
+                                              relay::client::Event::ReservationReqAccepted { .. },
+                                          )) => {
+                        assert!(opts.mode == Mode::Listen);
+                        tracing::info!("Relay accepted our reservation request");
+                    }
+                    SwarmEvent::Behaviour(BehaviourEvent::RelayClient(event)) => {
+                        tracing::info!(?event)
+                    }
+                    SwarmEvent::Behaviour(BehaviourEvent::Identify(event)) => {
+                        tracing::info!(?event)
+                    }
+                    SwarmEvent::Behaviour(BehaviourEvent::Ping(_)) => {}
+                    SwarmEvent::ConnectionEstablished {
+                        peer_id, endpoint, ..
+                    } => {
+                        tracing::info!(peer=%peer_id, ?endpoint, "Established new connection");
+                        let peer_relay_addr = opts.relay_address.clone()
+                            .with(Protocol::P2pCircuit)
+                            .with(Protocol::P2p(peer_id.clone()));
+                        swarm.behaviour_mut().kademlia.add_address(&peer_id, peer_relay_addr);
+                    }
+                    SwarmEvent::Behaviour(BehaviourEvent::Kademlia(kad::Event::OutboundQueryProgressed { result, .. })) => {
+                        match result {
+                            kad::QueryResult::GetProviders(Ok(kad::GetProvidersOk::FoundProviders { key, providers, .. })) => {
+                                for peer in providers {
+                                    println!(
+                                        "Peer {peer:?} provides key {:?}",
+                                        std::str::from_utf8(key.as_ref()).unwrap()
+                                    );
+                                }
+                            }
+                            kad::QueryResult::GetProviders(Err(err)) => {
+                                eprintln!("Failed to get providers: {err:?}");
+                            }
+                            kad::QueryResult::GetRecord(Ok(
+                                                            kad::GetRecordOk::FoundRecord(kad::PeerRecord {
+                                                                                              record: kad::Record { key, value, .. },
+                                                                                              ..
+                                                                                          })
+                                                        )) => {
+                                println!(
+                                    "Got record {:?} {:?}",
+                                    std::str::from_utf8(key.as_ref()).unwrap(),
+                                    std::str::from_utf8(&value).unwrap(),
+                                );
+                            }
+                            kad::QueryResult::GetRecord(Ok(_)) => {}
+                            kad::QueryResult::GetRecord(Err(err)) => {
+                                eprintln!("Failed to get record: {err:?}");
+                            }
+                            kad::QueryResult::PutRecord(Ok(kad::PutRecordOk { key })) => {
+                                println!(
+                                    "Successfully put record {:?}",
+                                    std::str::from_utf8(key.as_ref()).unwrap()
+                                );
+                            }
+                            kad::QueryResult::PutRecord(Err(err)) => {
+                                eprintln!("Failed to put record: {err:?}");
+                            }
+                            kad::QueryResult::StartProviding(Ok(kad::AddProviderOk { key })) => {
+                                println!(
+                                    "Successfully put provider record {:?}",
+                                    std::str::from_utf8(key.as_ref()).unwrap()
+                                );
+                            }
+                            kad::QueryResult::StartProviding(Err(err)) => {
+                                eprintln!("Failed to put provider record: {err:?}");
+                            }
+                            _ => {}
+                        }
+                    }
+                    SwarmEvent::OutgoingConnectionError { peer_id, error, .. } => {
+                        tracing::info!(peer=?peer_id, "Outgoing connection failed: {error}");
+                    }
+                    _ => {}
                 }
-                SwarmEvent::Behaviour(BehaviourEvent::RelayClient(event)) => {
-                    tracing::info!(?event)
-                }
-                SwarmEvent::Behaviour(BehaviourEvent::Identify(event)) => {
-                    tracing::info!(?event)
-                }
-                SwarmEvent::Behaviour(BehaviourEvent::Ping(_)) => {}
-                SwarmEvent::ConnectionEstablished {
-                    peer_id, endpoint, ..
-                } => {
-                    tracing::info!(peer=%peer_id, ?endpoint, "Established new connection");
-                }
-                SwarmEvent::OutgoingConnectionError { peer_id, error, .. } => {
-                    tracing::info!(peer=?peer_id, "Outgoing connection failed: {error}");
-                }
-                _ => {}
             }
         }
     })
+}
+
+fn handle_input_line(kademlia: &mut kad::Behaviour<MemoryStore>, line: String) {
+    let mut args = line.split(' ');
+
+    match args.next() {
+        Some("GET") => {
+            let key = {
+                match args.next() {
+                    Some(key) => kad::RecordKey::new(&key),
+                    None => {
+                        eprintln!("Expected key");
+                        return;
+                    }
+                }
+            };
+            kademlia.get_record(key);
+        }
+        Some("GET_PROVIDERS") => {
+            let key = {
+                match args.next() {
+                    Some(key) => kad::RecordKey::new(&key),
+                    None => {
+                        eprintln!("Expected key");
+                        return;
+                    }
+                }
+            };
+            kademlia.get_providers(key);
+        }
+        Some("PUT") => {
+            let key = {
+                match args.next() {
+                    Some(key) => kad::RecordKey::new(&key),
+                    None => {
+                        eprintln!("Expected key");
+                        return;
+                    }
+                }
+            };
+            let value = {
+                match args.next() {
+                    Some(value) => value.as_bytes().to_vec(),
+                    None => {
+                        eprintln!("Expected value");
+                        return;
+                    }
+                }
+            };
+            let record = kad::Record {
+                key,
+                value,
+                publisher: None,
+                expires: None,
+            };
+            kademlia
+                .put_record(record, kad::Quorum::One)
+                .expect("Failed to store record locally.");
+        }
+        Some("PUT_PROVIDER") => {
+            let key = {
+                match args.next() {
+                    Some(key) => kad::RecordKey::new(&key),
+                    None => {
+                        eprintln!("Expected key");
+                        return;
+                    }
+                }
+            };
+
+            kademlia
+                .start_providing(key)
+                .expect("Failed to start providing key");
+        }
+        _ => {
+            eprintln!("expected GET, GET_PROVIDERS, PUT or PUT_PROVIDER");
+        }
+    }
 }
 
 fn generate_ed25519(secret_key_seed: u8) -> identity::Keypair {

@@ -97,8 +97,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
             .with(Protocol::P2pCircuit)
             .with(Protocol::P2p(remote_peer_id))
         )?;
+        println!("Dialled remote peer");
     }
-    println!("Dialled remote client");
 
     // Read full lines from stdin
     let mut stdin = io::BufReader::new(io::stdin()).lines().fuse();
