@@ -1,9 +1,11 @@
-use clap::Parser;
-use futures::{executor::block_on, future::FutureExt, stream::StreamExt};
-use libp2p::{core::multiaddr::{Multiaddr, Protocol}, dcutr, identify, identity, noise, ping, relay, swarm::{NetworkBehaviour, SwarmEvent}, tcp, yamux, PeerId, kad};
-use std::str::FromStr;
 use std::{error::Error, time::Duration};
+use std::str::FromStr;
+
+use clap::Parser;
+use futures::{AsyncReadExt, executor::block_on, future::FutureExt, stream::StreamExt};
+use libp2p::{core::multiaddr::{Multiaddr, Protocol}, dcutr, identify, identity, kad, noise, PeerId, ping, relay, swarm::{NetworkBehaviour, SwarmEvent}, tcp, yamux};
 use libp2p::kad::store::MemoryStore;
+use libp2p::StreamProtocol;
 use tokio::{io, select};
 use tokio::io::AsyncBufReadExt;
 use tracing_subscriber::EnvFilter;
@@ -51,6 +53,13 @@ struct Behaviour {
     ping: ping::Behaviour,
     kademlia: kad::Behaviour<MemoryStore>,
     identify: identify::Behaviour,
+    stream: libp2p_stream::Behaviour,
+}
+
+fn get_address_through_relay(relay_address: &Multiaddr, peer_id: &PeerId) -> Multiaddr {
+    relay_address.clone()
+        .with(Protocol::P2pCircuit)
+        .with(Protocol::P2p(peer_id.clone()))
 }
 
 #[tokio::main]
@@ -83,6 +92,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     "/TODO/0.0.1".to_string(),
                     keypair.public(),
                 )),
+                stream: libp2p_stream::Behaviour::new(),
             })?
             .with_swarm_config(|c| c.with_idle_connection_timeout(Duration::from_secs(60)))
             .build();
@@ -156,9 +166,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         Mode::Dial => {
             swarm
                 .dial(
-                    opts.relay_address.clone()
-                        .with(Protocol::P2pCircuit)
-                        .with(Protocol::P2p(opts.remote_peer_id.unwrap())),
+                    get_address_through_relay(&opts.relay_address, opts.remote_peer_id.as_ref().unwrap())
                 )
                 .unwrap();
         }
@@ -171,12 +179,24 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // Read full lines from stdin
     let mut stdin = io::BufReader::new(io::stdin()).lines();
+    let mut control = swarm.behaviour().stream.new_control();
+    let mut incoming = control.accept(StreamProtocol::new("/peer-exchange/1.0.0")).unwrap();
 
     block_on(async {
         loop {
             select! {
                 Ok(Some(line)) = stdin.next_line() => {
                     handle_input_line(&mut swarm.behaviour_mut().kademlia, line);
+                }
+
+                stream_event = incoming.next() => {
+                    println!("Got incoming");
+                    if let Some((peer_id, mut stream)) = stream_event {
+                        let mut buffer = Vec::new();
+                        stream.read_to_end(&mut buffer).await?;
+
+                        println!("Peer {:?} Stream {:?}", peer_id, String::from_utf8(buffer));
+                    }
                 }
 
                 event = swarm.select_next_some() => match event {
@@ -201,9 +221,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     } => {
                         // TODO: Add condition check to ignore relay node connection events
                         tracing::info!(peer=%peer_id, ?endpoint, "Established new connection");
-                        let peer_relay_addr = opts.relay_address.clone()
-                            .with(Protocol::P2pCircuit)
-                            .with(Protocol::P2p(peer_id.clone()));
+                        let peer_relay_addr = get_address_through_relay(&opts.relay_address, &peer_id);
                         swarm.behaviour_mut().kademlia.add_address(&peer_id, peer_relay_addr);
                     }
                     SwarmEvent::Behaviour(BehaviourEvent::Kademlia(kad::Event::OutboundQueryProgressed { result, .. })) => {
