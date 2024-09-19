@@ -190,12 +190,29 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 }
 
                 stream_event = incoming.next() => {
-                    println!("Got incoming");
                     if let Some((peer_id, mut stream)) = stream_event {
+                        println!("Received stream from Peer {:?}", peer_id);
+
                         let mut buffer = Vec::new();
                         stream.read_to_end(&mut buffer).await?;
 
-                        println!("Peer {:?} Stream {:?}", peer_id, String::from_utf8(buffer));
+                        if let Ok(str) = String::from_utf8(buffer) {
+                            let json: serde_json::Value = serde_json::from_str(str.as_str())?;
+
+                            if let Some(known_peers) = json.get("known_peers") {
+                                for v in known_peers.as_array().unwrap() {
+                                    let peer_id_str = v.as_str().unwrap();
+                                    let known_peer_id = PeerId::from_str(peer_id_str).unwrap();
+                                    let peer_addr = get_address_through_relay(
+                                            &opts.relay_address,
+                                            &known_peer_id);
+                                    println!("Adding {:?} to Kademlia", known_peer_id);
+                                    swarm.behaviour_mut().kademlia.add_address(&known_peer_id, peer_addr);
+                                }
+                            }
+
+
+                        }
                     }
                 }
 
