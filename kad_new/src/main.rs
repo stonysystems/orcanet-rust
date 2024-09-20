@@ -11,7 +11,7 @@ use tokio::io::AsyncBufReadExt;
 use tracing_subscriber::EnvFilter;
 
 #[derive(Debug, Parser)]
-#[clap(name = "libp2p DCUtR client")]
+#[clap(name = "libp2p Kademlia client")]
 struct Opts {
     /// The mode (client-listen, client-dial).
     #[clap(long)]
@@ -210,8 +210,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
                                     swarm.behaviour_mut().kademlia.add_address(&known_peer_id, peer_addr);
                                 }
                             }
-
-
                         }
                     }
                 }
