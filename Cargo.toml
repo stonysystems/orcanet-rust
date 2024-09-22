@@ -4,9 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [workspace]
-members = [ "btc-test",
-    "kad",
-    "kad_new"
+members = [
+    "btc-miner",
+    "kademlia-node"
 ]
 
 [dependencies]

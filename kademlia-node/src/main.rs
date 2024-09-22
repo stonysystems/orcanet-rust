@@ -196,19 +196,31 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         let mut buffer = Vec::new();
                         stream.read_to_end(&mut buffer).await?;
 
-                        if let Ok(str) = String::from_utf8(buffer) {
-                            let json: serde_json::Value = serde_json::from_str(str.as_str())?;
+                        match String::from_utf8(buffer) {
+                            Ok(str) => {
+                                let json: serde_json::Value = serde_json::from_str(str.as_str())?;
 
-                            if let Some(known_peers) = json.get("known_peers") {
-                                for v in known_peers.as_array().unwrap() {
-                                    let peer_id_str = v.as_str().unwrap();
-                                    let known_peer_id = PeerId::from_str(peer_id_str).unwrap();
-                                    let peer_addr = get_address_through_relay(
-                                            &opts.relay_address,
-                                            &known_peer_id);
-                                    println!("Adding {:?} to Kademlia", known_peer_id);
-                                    swarm.behaviour_mut().kademlia.add_address(&known_peer_id, peer_addr);
+                                if let Some(known_peers) = json.get("known_peers") {
+                                    for v in known_peers.as_array().unwrap() {
+                                        let peer_id_str = v.as_str().unwrap();
+                                        let known_peer_id = PeerId::from_str(peer_id_str).unwrap();
+                                        let peer_addr = get_address_through_relay(
+                                                &opts.relay_address,
+                                                &known_peer_id);
+
+                                        // TODO: Check if this is fine
+                                        if let Ok(_) = swarm.dial(known_peer_id.clone()) {
+                                            println!("Adding {:?} to Kademlia", known_peer_id);
+                                            swarm.behaviour_mut().kademlia.add_address(&known_peer_id, peer_addr.clone());
+                                        }
+
+                                        // println!("Adding {:?} to Kademlia and dialing it", known_peer_id);
+                                        // swarm.behaviour_mut().kademlia.add_address(&known_peer_id, peer_addr.clone());
+                                    }
                                 }
+                            }
+                            Err(e) => {
+                                println!("Error while parsing stream data into UTF8 {:?}", e);
                             }
                         }
                     }
