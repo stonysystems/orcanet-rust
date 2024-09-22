@@ -24,14 +24,6 @@ struct Opts {
     wallet_name: String,
 }
 
-fn get_address() -> Address {
-    Address::from_str("bcrt1q7czpufw20tn9qnnl97ht5lkl327fq5cec4tz4a").unwrap().assume_checked()
-}
-
-fn private_key() -> String {
-    String::from("tprv8ZgxMBicQKsPfKvuWK3UN7q4wr7wTyfFakytnn8Wmg79ESLjrBqu9RbdfCpWiJDBAVBSSLeT1or6gPcmo46HKZf8GopAoSj5GxDvHrVvd11")
-}
-
 fn check_block_count(rpc_client: &Client) {
     let block_count = rpc_client.get_block_count().expect("Failed to get block count");
     println!("Current block count: {}", block_count);
@@ -122,14 +114,6 @@ async fn main() {
             }
         }
     });
-
-    // // Sleep and check for new transactions
-    // // TODO: Add randomized sleep duration
-    // loop {
-    //     sleep(Duration::new(10, 0)).await;
-    //     generate_blocks_if_required(&rpc_client);
-    // }
-    // generate_blocks(&rpc_client);
 }
 
 fn handle_input_line(rpc_client: &Client, line: String) {
@@ -172,6 +156,8 @@ fn handle_input_line(rpc_client: &Client, line: String) {
         Some("blockcount") => {
             check_block_count(rpc_client);
         }
-        _ => {}
+        _ => {
+            eprintln!("Invalid command");
+        }
     }
 }
