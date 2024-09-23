@@ -5,11 +5,12 @@ use std::str::FromStr;
 use clap::Parser;
 use futures::{AsyncReadExt, executor::block_on, future::FutureExt, stream::StreamExt};
 use libp2p::{core::multiaddr::{Multiaddr, Protocol}, identify, identity, kad, noise, PeerId, ping, relay, swarm::{NetworkBehaviour, SwarmEvent}, tcp, yamux};
-use libp2p::kad::store::MemoryStore;
+use libp2p::kad::store::{MemoryStore, MemoryStoreConfig};
 use libp2p::StreamProtocol;
 use tokio::{io, select};
 use tokio::io::AsyncBufReadExt;
 use tracing_subscriber::EnvFilter;
+
 
 const NAMESPACE: &str = "stony_kad";
 
@@ -101,7 +102,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
             .with_behaviour(|keypair, relay_behaviour| Behaviour {
                 kademlia: kad::Behaviour::new(
                     keypair.public().to_peer_id(),
-                    MemoryStore::new(keypair.public().to_peer_id()),
+                    MemoryStore::with_config(keypair.public().to_peer_id(), MemoryStoreConfig {
+                        max_records: 2 * 1000 * 1000, // 2M
+                        max_provided_keys: 2 * 1000 * 1000, // 2M
+                        max_providers_per_key: 500,
+                        max_value_bytes: 1 * 1024 * 1024 // 1 MB
+                    }),
                 ),
                 relay_client: relay_behaviour,
                 ping: ping::Behaviour::new(ping::Config::new()),
@@ -344,7 +350,7 @@ fn handle_input_line(kademlia: &mut kad::Behaviour<MemoryStore>, line: String) {
         Some(key) => {
             let key_with_ns = get_key_with_ns(key);
             kad::RecordKey::new(&key_with_ns.as_str())
-        },
+        }
         None => {
             eprintln!("Expected key");
             return;
