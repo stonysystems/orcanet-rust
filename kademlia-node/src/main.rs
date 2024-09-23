@@ -1,17 +1,15 @@
 use std::{error::Error, time::Duration};
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
-use bitcoincore_rpc::jsonrpc::arg;
 
 use clap::Parser;
 use futures::{AsyncReadExt, executor::block_on, future::FutureExt, stream::StreamExt};
-use libp2p::{core::multiaddr::{Multiaddr, Protocol}, dcutr, identify, identity, kad, noise, PeerId, ping, relay, swarm::{NetworkBehaviour, SwarmEvent}, tcp, yamux};
+use libp2p::{core::multiaddr::{Multiaddr, Protocol}, identify, identity, kad, noise, PeerId, ping, relay, swarm::{NetworkBehaviour, SwarmEvent}, tcp, yamux};
 use libp2p::kad::store::MemoryStore;
 use libp2p::StreamProtocol;
 use tokio::{io, select};
 use tokio::io::AsyncBufReadExt;
 use tracing_subscriber::EnvFilter;
-use tracing_subscriber::fmt::format;
 
 const NAMESPACE: &str = "stony_kad";
 
@@ -333,10 +331,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
 fn get_key_with_ns(key: &str) -> String {
     format!("{}/{}", NAMESPACE, key)
-}
-
-struct Constants {
-
 }
 
 fn handle_input_line(kademlia: &mut kad::Behaviour<MemoryStore>, line: String) {
