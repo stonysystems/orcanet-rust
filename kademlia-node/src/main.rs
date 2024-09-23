@@ -50,7 +50,6 @@ struct Opts {
 
     /// Peer ID of the remote peer to hole punch to.
     #[clap(long)]
-    #[arg(required = true)]
     remote_peer_id: Option<PeerId>,
 }
 
