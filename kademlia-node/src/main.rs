@@ -1,5 +1,7 @@
 use std::{error::Error, time::Duration};
+use std::fmt::{Display, Formatter};
 use std::str::FromStr;
+use bitcoincore_rpc::jsonrpc::arg;
 
 use clap::Parser;
 use futures::{AsyncReadExt, executor::block_on, future::FutureExt, stream::StreamExt};
@@ -9,31 +11,49 @@ use libp2p::StreamProtocol;
 use tokio::{io, select};
 use tokio::io::AsyncBufReadExt;
 use tracing_subscriber::EnvFilter;
+use tracing_subscriber::fmt::format;
+
+const NAMESPACE: &str = "stony_kad";
+
+#[derive(Clone, Debug, PartialEq, Parser)]
+enum Mode {
+    Dial,
+    Listen,
+}
+
+impl Display for Mode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mode_str = match self {
+            Mode::Dial => "dial",
+            Mode::Listen => "listen"
+        };
+
+        write!(f, "{}", mode_str)
+    }
+}
 
 #[derive(Debug, Parser)]
 #[clap(name = "libp2p Kademlia client")]
 struct Opts {
     /// The mode (client-listen, client-dial).
     #[clap(long)]
+    #[arg(default_value_t = Mode::Dial)]
     mode: Mode,
 
     /// Fixed value to generate deterministic peer id.
     #[clap(long)]
-    secret_key_seed: u8,
+    #[arg(required = true)]
+    secret_key_seed: u64,
 
     /// The listening address
     #[clap(long)]
+    #[arg(required = true)]
     relay_address: Multiaddr,
 
     /// Peer ID of the remote peer to hole punch to.
     #[clap(long)]
+    #[arg(required = true)]
     remote_peer_id: Option<PeerId>,
-}
-
-#[derive(Clone, Debug, PartialEq, Parser)]
-enum Mode {
-    Dial,
-    Listen,
 }
 
 impl FromStr for Mode {
@@ -311,51 +331,46 @@ async fn main() -> Result<(), Box<dyn Error>> {
     })
 }
 
+fn get_key_with_ns(key: &str) -> String {
+    format!("{}/{}", NAMESPACE, key)
+}
+
+struct Constants {
+
+}
+
 fn handle_input_line(kademlia: &mut kad::Behaviour<MemoryStore>, line: String) {
     let mut args = line.split(' ');
+    let command = args.next();
 
-    match args.next() {
-        Some("GET") => {
-            let key = {
-                match args.next() {
-                    Some(key) => kad::RecordKey::new(&key),
-                    None => {
-                        eprintln!("Expected key");
-                        return;
-                    }
-                }
-            };
+    if command.is_none() {
+        return;
+    }
+
+    let key = match args.next() {
+        Some(key) => {
+            let key_with_ns = get_key_with_ns(key);
+            kad::RecordKey::new(&key_with_ns.as_str())
+        },
+        None => {
+            eprintln!("Expected key");
+            return;
+        }
+    };
+
+    match command {
+        Some("get") => {
             kademlia.get_record(key);
         }
-        Some("GET_PROVIDERS") => {
-            let key = {
-                match args.next() {
-                    Some(key) => kad::RecordKey::new(&key),
-                    None => {
-                        eprintln!("Expected key");
-                        return;
-                    }
-                }
-            };
+        Some("get_providers") => {
             kademlia.get_providers(key);
         }
-        Some("PUT") => {
-            let key = {
-                match args.next() {
-                    Some(key) => kad::RecordKey::new(&key),
-                    None => {
-                        eprintln!("Expected key");
-                        return;
-                    }
-                }
-            };
-            let value = {
-                match args.next() {
-                    Some(value) => value.as_bytes().to_vec(),
-                    None => {
-                        eprintln!("Expected value");
-                        return;
-                    }
+        Some("put") => {
+            let value = match args.next() {
+                Some(value) => value.as_bytes().to_vec(),
+                None => {
+                    eprintln!("Expected value");
+                    return;
                 }
             };
             let record = kad::Record {
@@ -368,30 +383,20 @@ fn handle_input_line(kademlia: &mut kad::Behaviour<MemoryStore>, line: String) {
                 .put_record(record, kad::Quorum::One)
                 .expect("Failed to store record locally.");
         }
-        Some("PUT_PROVIDER") => {
-            let key = {
-                match args.next() {
-                    Some(key) => kad::RecordKey::new(&key),
-                    None => {
-                        eprintln!("Expected key");
-                        return;
-                    }
-                }
-            };
-
+        Some("put_provider") => {
             kademlia
                 .start_providing(key)
                 .expect("Failed to start providing key");
         }
         _ => {
-            eprintln!("expected GET, GET_PROVIDERS, PUT or PUT_PROVIDER");
+            eprintln!("expected get, get_providers, put or put_provider");
         }
     }
 }
 
-fn generate_ed25519(secret_key_seed: u8) -> identity::Keypair {
+fn generate_ed25519(secret_key_seed: u64) -> identity::Keypair {
     let mut bytes = [0u8; 32];
-    bytes[0] = secret_key_seed;
+    bytes[0..8].copy_from_slice(&secret_key_seed.to_le_bytes());
 
     identity::Keypair::ed25519_from_bytes(bytes).expect("only errors on wrong length")
 }

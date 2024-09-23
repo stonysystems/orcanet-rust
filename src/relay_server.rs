@@ -72,8 +72,15 @@
 //                 gossipsub_config,
 //             )?;
 //
+//             let config = relay::Config {
+//                 max_reservations: 1024,
+//                 max_circuits: 1024,
+//                 max_circuits_per_peer: 1024,
+//                 ..relay::Config::default()
+//             };
+//
 //             Ok(Behaviour {
-//                 relay: relay::Behaviour::new(key.public().to_peer_id(), Default::default()),
+//                 relay: relay::Behaviour::new(key.public().to_peer_id(), config),
 //                 ping: ping::Behaviour::new(ping::Config::new()),
 //                 identify: identify::Behaviour::new(identify::Config::new(
 //                     "/TODO/0.0.1".to_string(),

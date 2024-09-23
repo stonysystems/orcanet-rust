@@ -21,6 +21,7 @@ macro_rules! conditional_print {
 #[clap(name = "btc client")]
 struct Opts {
     #[clap(long)]
+    #[arg(required = true)]
     wallet_name: String,
 }
 
@@ -59,7 +60,7 @@ fn generate_blocks_if_required(rpc_client: &Client, do_print: bool) {
                 // If there are pending transactions, generate 1 block (bitcoin core should automatically mine the transactions in the mempool)
                 let new_address = rpc_client.get_new_address(None, None).unwrap().assume_checked();
                 match rpc_client.generate_to_address(1, &new_address) {
-                    Ok(_) => conditional_print!(do_print, "Generated and sent new block with {} transactions", pending_transactions.len()),
+                    Ok(_) => conditional_print!(do_print, "Generated and sent new block. Transaction count: {}", pending_transactions.len()),
                     Err(e) => conditional_print!(do_print, "Error generating block {e}")
                 }
             } else {
@@ -86,10 +87,11 @@ async fn main() {
     let rpc_client = Client::new(rpc_url, Auth::UserPass(rpc_user.to_string(), rpc_password.to_string()))
         .expect("Error creating RPC client");
 
-    if let Ok(v) = rpc_client.load_wallet(opts.wallet_name.as_str()) {
-        println!("Loaded wallet {}", v.name);
-    } else {
-        println!("Failed to load wallet {}. Either the wallet name is wrong or it's already loaded", opts.wallet_name);
+    match rpc_client.load_wallet(opts.wallet_name.as_str()) {
+        Ok(v) => println!("Loaded wallet {}", v.name),
+        Err(e) => {
+            println!("Failed to load wallet {:?}", e);
+        }
     }
 
     check_block_count(&rpc_client);
@@ -108,7 +110,7 @@ async fn main() {
                 }
 
                 () = &mut sleep => {
-                    generate_blocks_if_required(&rpc_client, false);
+                    // generate_blocks_if_required(&rpc_client, false);
                     sleep.as_mut().reset(Instant::now() + Duration::from_secs(15));
                 }
             }
@@ -116,6 +118,7 @@ async fn main() {
     });
 }
 
+// For convenience. All these can be done from the CLI
 fn handle_input_line(rpc_client: &Client, line: String) {
     let mut args = line.split(' ');
 
