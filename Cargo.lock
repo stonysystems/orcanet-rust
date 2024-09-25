@@ -1734,6 +1734,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "kademlia-new"
+version = "0.1.0"
+dependencies = [
+ "async-std",
+ "bitcoincore-rpc",
+ "clap",
+ "futures",
+ "futures-timer",
+ "hex",
+ "libp2p",
+ "libp2p-stream",
+ "rand",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "kv-log-macro"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -13,9 +13,9 @@ use tracing_subscriber::EnvFilter;
 
 struct Config;
 impl Config {
-    pub const NAMESPACE: &'static str = "orcanet";
+    pub const NAMESPACE: &'static str = "/orcanet";
     pub const STREAM_PROTOCOL: &'static str = "/orcanet/p2p";
-    pub const SECRET_KEY_SEED: u64 = 3;
+    pub const SECRET_KEY_SEED: u64 = 4;
 
     pub fn get_bootstrap_peer_id() -> PeerId {
         PeerId::from_str("12D3KooWPcfGdBCrdxX9nqGAdPAdkPMqfKEDjbZWGA4UFBJuY4rP").unwrap()
@@ -26,63 +26,11 @@ impl Config {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Parser)]
-enum Mode {
-    Dial,
-    Listen,
-}
-
-impl Display for Mode {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let mode_str = match self {
-            Mode::Dial => "dial",
-            Mode::Listen => "listen"
-        };
-
-        write!(f, "{}", mode_str)
-    }
-}
-
-#[derive(Debug, Parser)]
-#[clap(name = "libp2p Kademlia client")]
-struct Opts {
-    /// The mode (client-listen, client-dial).
-    #[clap(long)]
-    #[arg(default_value_t = Mode::Dial)]
-    mode: Mode,
-
-    /// Fixed value to generate deterministic peer id.
-    #[clap(long)]
-    #[arg(required = true)]
-    secret_key_seed: u64,
-
-    /// The listening address
-    #[clap(long)]
-    #[arg(required = true)]
-    relay_address: Multiaddr,
-
-    /// Peer ID of the bootstrap peer
-    #[clap(long)]
-    bootstrap_peer_id: Option<PeerId>,
-}
-
-impl FromStr for Mode {
-    type Err = String;
-    fn from_str(mode: &str) -> Result<Self, Self::Err> {
-        match mode {
-            "dial" => Ok(Mode::Dial),
-            "listen" => Ok(Mode::Listen),
-            _ => Err("Expected either 'dial' or 'listen'".to_string()),
-        }
-    }
-}
-
 #[derive(NetworkBehaviour)]
 struct Behaviour {
     relay_client: relay::client::Behaviour,
-    ping: ping::Behaviour,
     kademlia: kad::Behaviour<MemoryStore>,
-    identify: identify::Behaviour,
+    ping: ping::Behaviour,
     stream: libp2p_stream::Behaviour,
 }
 
@@ -122,12 +70,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         max_value_bytes: 1 * 1024 * 1024, // 1 MB
                     }),
                 ),
-                relay_client: relay_behaviour,
                 ping: ping::Behaviour::new(ping::Config::new()),
-                identify: identify::Behaviour::new(identify::Config::new(
-                    "/TODO/0.0.1".to_string(),
-                    keypair.public(),
-                )),
+                relay_client: relay_behaviour,
                 stream: libp2p_stream::Behaviour::new(),
             })?
             .with_swarm_config(|c| c.with_idle_connection_timeout(Duration::from_secs(60)))
@@ -161,44 +105,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
     });
 
-    // Connect to the relay server. Not for the reservation or relayed connection, but to (a) learn
-    // our local public address and (b) enable a freshly started relay to learn its public address.
-    swarm.dial(relay_address.clone()).unwrap();
-    block_on(async {
-        let mut learned_observed_addr = false;
-        let mut told_relay_observed_addr = false;
+    // Make a reservation with relay
+    swarm.listen_on(relay_address.clone().with(Protocol::P2pCircuit)).unwrap();
 
-        loop {
-            match swarm.next().await.unwrap() {
-                SwarmEvent::NewListenAddr { .. } => {}
-                SwarmEvent::Dialing { .. } => {}
-                SwarmEvent::ConnectionEstablished { .. } => {}
-                SwarmEvent::Behaviour(BehaviourEvent::Ping(_)) => {}
-                SwarmEvent::Behaviour(BehaviourEvent::Identify(identify::Event::Sent {
-                                                                   ..
-                                                               })) => {
-                    tracing::info!("Told relay its public address");
-                    told_relay_observed_addr = true;
-                }
-                SwarmEvent::Behaviour(BehaviourEvent::Identify(identify::Event::Received {
-                                                                   info: identify::Info { observed_addr, .. },
-                                                                   ..
-                                                               })) => {
-                    tracing::info!(address=%observed_addr, "Relay told us our observed address");
-                    learned_observed_addr = true;
-                }
-                event => panic!("{event:?}"),
-            }
-
-            if learned_observed_addr && told_relay_observed_addr {
-                break;
-            }
-        }
-    });
-
-    swarm.behaviour_mut().kademlia.set_mode(Some(libp2p::kad::Mode::Server));
+    // Set up kademlia props
+    swarm.behaviour_mut().kademlia.set_mode(Some(kad::Mode::Server));
     swarm.behaviour_mut().kademlia.add_address(&bootstrap_peer_id, boostrap_addr.clone());
 
+    // Dial the bootstrap node
     swarm.dial(boostrap_addr.clone()).unwrap();
 
     // Read full lines from stdin
@@ -237,9 +151,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
                                             println!("Adding {:?} to Kademlia", known_peer_id);
                                             swarm.behaviour_mut().kademlia.add_address(&known_peer_id, peer_addr.clone());
                                         }
-
-                                        // println!("Adding {:?} to Kademlia and dialing it", known_peer_id);
-                                        // swarm.behaviour_mut().kademlia.add_address(&known_peer_id, peer_addr.clone());
                                     }
                                 }
                             }
@@ -262,10 +173,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     SwarmEvent::Behaviour(BehaviourEvent::RelayClient(event)) => {
                         tracing::info!(?event)
                     }
-                    SwarmEvent::Behaviour(BehaviourEvent::Identify(event)) => {
-                        tracing::info!(?event)
-                    }
-                    SwarmEvent::Behaviour(BehaviourEvent::Ping(_)) => {}
                     SwarmEvent::ConnectionEstablished {
                         peer_id, endpoint, ..
                     } => {
