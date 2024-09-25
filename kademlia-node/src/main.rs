@@ -109,7 +109,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     swarm.listen_on(relay_address.clone().with(Protocol::P2pCircuit)).unwrap();
 
     // Set up kademlia props
-    swarm.behaviour_mut().kademlia.set_mode(Some(kad::Mode::Server));
+    swarm.behaviour_mut().kademlia.set_mode(Some(kad::Mode::Client));
     swarm.behaviour_mut().kademlia.add_address(&bootstrap_peer_id, boostrap_addr.clone());
 
     // Dial the bootstrap node
