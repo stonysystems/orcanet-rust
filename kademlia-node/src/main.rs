@@ -15,7 +15,7 @@ struct Config;
 impl Config {
     pub const NAMESPACE: &'static str = "orcanet";
     pub const STREAM_PROTOCOL: &'static str = "/orcanet/p2p";
-    pub const SECRET_KEY_SEED: u64 = 2;
+    pub const SECRET_KEY_SEED: u64 = 3;
 
     pub fn get_bootstrap_peer_id() -> PeerId {
         PeerId::from_str("12D3KooWPcfGdBCrdxX9nqGAdPAdkPMqfKEDjbZWGA4UFBJuY4rP").unwrap()
@@ -99,6 +99,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .try_init();
     let relay_address = Config::get_relay_address();
     let bootstrap_peer_id = Config::get_bootstrap_peer_id();
+    let boostrap_addr = get_address_through_relay(&relay_address, &bootstrap_peer_id);
 
     let mut swarm =
         libp2p::SwarmBuilder::with_existing_identity(generate_ed25519(Config::SECRET_KEY_SEED))
@@ -196,8 +197,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     });
 
     swarm.behaviour_mut().kademlia.set_mode(Some(libp2p::kad::Mode::Server));
-    swarm.dial(get_address_through_relay(&relay_address, &bootstrap_peer_id))
-        .unwrap();
+    swarm.behaviour_mut().kademlia.add_address(&bootstrap_peer_id, boostrap_addr.clone());
+
+    swarm.dial(boostrap_addr.clone()).unwrap();
 
     // Read full lines from stdin
     let mut stdin = io::BufReader::new(io::stdin()).lines();
@@ -221,17 +223,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         match String::from_utf8(buffer) {
                             Ok(str) => {
                                 let json: serde_json::Value = serde_json::from_str(str.as_str())?;
-
+                                println!("Got json {:?}", json);
                                 if let Some(known_peers) = json.get("known_peers") {
                                     for v in known_peers.as_array().unwrap() {
-                                        let peer_id_str = v.as_str().unwrap();
+                                        let peer_id_str = v.get("peer_id").unwrap().as_str().unwrap();
                                         let known_peer_id = PeerId::from_str(peer_id_str).unwrap();
                                         let peer_addr = get_address_through_relay(
                                                 &relay_address,
                                                 &known_peer_id);
 
                                         // TODO: Check if this is fine
-                                        if let Ok(_) = swarm.dial(known_peer_id.clone()) {
+                                        if let Ok(_) = swarm.dial(peer_addr.clone()) {
                                             println!("Adding {:?} to Kademlia", known_peer_id);
                                             swarm.behaviour_mut().kademlia.add_address(&known_peer_id, peer_addr.clone());
                                         }
