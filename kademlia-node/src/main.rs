@@ -11,9 +11,20 @@ use tokio::{io, select};
 use tokio::io::AsyncBufReadExt;
 use tracing_subscriber::EnvFilter;
 
+struct Config;
+impl Config {
+    pub const NAMESPACE: &'static str = "orcanet";
+    pub const STREAM_PROTOCOL: &'static str = "/orcanet/p2p";
+    pub const SECRET_KEY_SEED: u64 = 2;
 
-const NAMESPACE: &str = "orcanet";
-const STREAM_PROTOCOL: &str = "/orcanet/p2p";
+    pub fn get_bootstrap_peer_id() -> PeerId {
+        PeerId::from_str("12D3KooWPcfGdBCrdxX9nqGAdPAdkPMqfKEDjbZWGA4UFBJuY4rP").unwrap()
+    }
+
+    pub fn get_relay_address() -> Multiaddr {
+        "/ip4/130.245.173.221/tcp/4001/p2p/12D3KooWDpJ7As7BWAwRMfu1VU2WCqNjvq387JEYKDBj4kx6nXTN".parse().unwrap()
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Parser)]
 enum Mode {
@@ -50,9 +61,9 @@ struct Opts {
     #[arg(required = true)]
     relay_address: Multiaddr,
 
-    /// Peer ID of the remote peer to hole punch to.
+    /// Peer ID of the bootstrap peer
     #[clap(long)]
-    remote_peer_id: Option<PeerId>,
+    bootstrap_peer_id: Option<PeerId>,
 }
 
 impl FromStr for Mode {
@@ -86,11 +97,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let _ = tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env())
         .try_init();
-
-    let opts = Opts::parse();
+    let relay_address = Config::get_relay_address();
+    let bootstrap_peer_id = Config::get_bootstrap_peer_id();
 
     let mut swarm =
-        libp2p::SwarmBuilder::with_existing_identity(generate_ed25519(opts.secret_key_seed))
+        libp2p::SwarmBuilder::with_existing_identity(generate_ed25519(Config::SECRET_KEY_SEED))
             .with_tokio()
             .with_tcp(
                 tcp::Config::default().nodelay(true),
@@ -107,7 +118,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         max_records: 2 * 1000 * 1000, // 2M
                         max_provided_keys: 2 * 1000 * 1000, // 2M
                         max_providers_per_key: 500,
-                        max_value_bytes: 1 * 1024 * 1024 // 1 MB
+                        max_value_bytes: 1 * 1024 * 1024, // 1 MB
                     }),
                 ),
                 relay_client: relay_behaviour,
@@ -151,7 +162,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // Connect to the relay server. Not for the reservation or relayed connection, but to (a) learn
     // our local public address and (b) enable a freshly started relay to learn its public address.
-    swarm.dial(opts.relay_address.clone()).unwrap();
+    swarm.dial(relay_address.clone()).unwrap();
     block_on(async {
         let mut learned_observed_addr = false;
         let mut told_relay_observed_addr = false;
@@ -185,26 +196,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
     });
 
     swarm.behaviour_mut().kademlia.set_mode(Some(libp2p::kad::Mode::Server));
-
-    match opts.mode {
-        Mode::Dial => {
-            swarm
-                .dial(
-                    get_address_through_relay(&opts.relay_address, opts.remote_peer_id.as_ref().unwrap())
-                )
-                .unwrap();
-        }
-        Mode::Listen => {
-            swarm
-                .listen_on(opts.relay_address.clone().with(Protocol::P2pCircuit))
-                .unwrap();
-        }
-    }
+    swarm.dial(get_address_through_relay(&relay_address, &bootstrap_peer_id))
+        .unwrap();
 
     // Read full lines from stdin
     let mut stdin = io::BufReader::new(io::stdin()).lines();
     let mut control = swarm.behaviour().stream.new_control();
-    let mut incoming = control.accept(StreamProtocol::new(STREAM_PROTOCOL)).unwrap();
+    let mut incoming = control.accept(StreamProtocol::new(Config::STREAM_PROTOCOL)).unwrap();
 
     block_on(async {
         loop {
@@ -229,7 +227,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                                         let peer_id_str = v.as_str().unwrap();
                                         let known_peer_id = PeerId::from_str(peer_id_str).unwrap();
                                         let peer_addr = get_address_through_relay(
-                                                &opts.relay_address,
+                                                &relay_address,
                                                 &known_peer_id);
 
                                         // TODO: Check if this is fine
@@ -257,7 +255,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     SwarmEvent::Behaviour(BehaviourEvent::RelayClient(
                                               relay::client::Event::ReservationReqAccepted { .. },
                                           )) => {
-                        assert!(opts.mode == Mode::Listen);
                         tracing::info!("Relay accepted our reservation request");
                     }
                     SwarmEvent::Behaviour(BehaviourEvent::RelayClient(event)) => {
@@ -272,7 +269,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     } => {
                         // TODO: Add condition check to ignore relay node connection events
                         tracing::info!(peer=%peer_id, ?endpoint, "Established new connection");
-                        let peer_relay_addr = get_address_through_relay(&opts.relay_address, &peer_id);
+                        let peer_relay_addr = get_address_through_relay(&relay_address, &peer_id);
                         swarm.behaviour_mut().kademlia.add_address(&peer_id, peer_relay_addr);
                     }
                     SwarmEvent::Behaviour(BehaviourEvent::Kademlia(kad::Event::OutboundQueryProgressed { result, .. })) => {
@@ -336,7 +333,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 }
 
 fn get_key_with_ns(key: &str) -> String {
-    format!("{}/{}", NAMESPACE, key)
+    format!("{}/{}", Config::NAMESPACE, key)
 }
 
 fn handle_input_line(kademlia: &mut kad::Behaviour<MemoryStore>, line: String) {
