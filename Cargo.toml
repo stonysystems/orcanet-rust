@@ -5,7 +5,7 @@ edition = "2021"
 
 [workspace]
 members = [
-    "btc-miner", "kademlia-new",
+    "btc-miner",
     "kademlia-node"
 ]
 

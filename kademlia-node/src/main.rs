@@ -18,7 +18,7 @@ impl Config {
     pub const SECRET_KEY_SEED: u64 = 4;
 
     pub fn get_bootstrap_peer_id() -> PeerId {
-        PeerId::from_str("12D3KooWPcfGdBCrdxX9nqGAdPAdkPMqfKEDjbZWGA4UFBJuY4rP").unwrap()
+        PeerId::from_str("12D3KooWQd1K1k8XA9xVEzSAu7HUCodC7LJB6uW5Kw4VwkRdstPE").unwrap()
     }
 
     pub fn get_relay_address() -> Multiaddr {
@@ -29,8 +29,9 @@ impl Config {
 #[derive(NetworkBehaviour)]
 struct Behaviour {
     relay_client: relay::client::Behaviour,
-    kademlia: kad::Behaviour<MemoryStore>,
     ping: ping::Behaviour,
+    identify: identify::Behaviour,
+    kademlia: kad::Behaviour<MemoryStore>,
     stream: libp2p_stream::Behaviour,
 }
 
@@ -61,6 +62,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
             .with_dns()?
             .with_relay_client(noise::Config::new, yamux::Config::default)?
             .with_behaviour(|keypair, relay_behaviour| Behaviour {
+                relay_client: relay_behaviour,
+                ping: ping::Behaviour::new(ping::Config::new()),
+                identify: identify::Behaviour::new(identify::Config::new(
+                    "/TODO/0.0.1".to_string(),
+                    keypair.public(),
+                )),
                 kademlia: kad::Behaviour::new(
                     keypair.public().to_peer_id(),
                     MemoryStore::with_config(keypair.public().to_peer_id(), MemoryStoreConfig {
@@ -70,8 +77,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         max_value_bytes: 1 * 1024 * 1024, // 1 MB
                     }),
                 ),
-                ping: ping::Behaviour::new(ping::Config::new()),
-                relay_client: relay_behaviour,
                 stream: libp2p_stream::Behaviour::new(),
             })?
             .with_swarm_config(|c| c.with_idle_connection_timeout(Duration::from_secs(60)))
