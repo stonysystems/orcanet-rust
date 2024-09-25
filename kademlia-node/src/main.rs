@@ -12,7 +12,8 @@ use tokio::io::AsyncBufReadExt;
 use tracing_subscriber::EnvFilter;
 
 
-const NAMESPACE: &str = "stony_kad";
+const NAMESPACE: &str = "orcanet";
+const STREAM_PROTOCOL: &str = "/orcanet/p2p";
 
 #[derive(Clone, Debug, PartialEq, Parser)]
 enum Mode {
@@ -203,7 +204,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // Read full lines from stdin
     let mut stdin = io::BufReader::new(io::stdin()).lines();
     let mut control = swarm.behaviour().stream.new_control();
-    let mut incoming = control.accept(StreamProtocol::new("/peer-exchange/1.0.0")).unwrap();
+    let mut incoming = control.accept(StreamProtocol::new(STREAM_PROTOCOL)).unwrap();
 
     block_on(async {
         loop {
