@@ -5,8 +5,9 @@ edition = "2021"
 
 [workspace]
 members = [
-    "btc-miner",
-    "kademlia-node"
+    "btc_miner",
+    "http_server",
+    "kademlia_node"
 ]
 
 [dependencies]

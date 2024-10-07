@@ -1,4 +1,4 @@
-mod btc_rpc;
+pub mod btc_rpc;
 
 use std::str::FromStr;
 
