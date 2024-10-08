@@ -1304,6 +1304,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "28dea519a9695b9977216879a3ebfddf92f1c08c05d984f8996aecd6ecdc811d"
 
 [[package]]
+name = "file_transfer"
+version = "0.1.0"
+dependencies = [
+ "async-std",
+ "bitcoincore-rpc",
+ "clap",
+ "futures",
+ "futures-timer",
+ "hex",
+ "libp2p",
+ "libp2p-stream",
+ "rand",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "fnv"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
