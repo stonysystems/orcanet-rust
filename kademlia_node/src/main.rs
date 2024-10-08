@@ -71,6 +71,8 @@ async fn send_get_file_request(control: &mut Control, peer_id: PeerId) {
             tracing::info!(?err, "Write failed with error:");
         }
     }
+
+    // stream.close().await.unwrap();
 }
 
 #[tokio::main]
@@ -191,6 +193,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
                                             swarm.behaviour_mut().kademlia.add_address(&known_peer_id, peer_addr.clone());
                                         }
                                     }
+                                } else {
+                                    stream.write(r#"{"great":"yes"}"#.as_bytes()).await.unwrap();
                                 }
                             }
                             Err(e) => {
