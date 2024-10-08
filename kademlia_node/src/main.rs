@@ -11,7 +11,7 @@ use libp2p::identity::ParseError;
 use libp2p::kad::store::{MemoryStore, MemoryStoreConfig};
 use libp2p::StreamProtocol;
 use libp2p_stream::Control;
-use tokio::{io, select};
+use tokio::{io, select, time};
 use tokio::io::AsyncBufReadExt;
 use tracing_subscriber::EnvFilter;
 use request_handlers::{FileRequest, FileResponse, RequestHandler};
@@ -25,6 +25,10 @@ impl Config {
 
     pub fn get_bootstrap_peer_id() -> PeerId {
         PeerId::from_str("12D3KooWQd1K1k8XA9xVEzSAu7HUCodC7LJB6uW5Kw4VwkRdstPE").unwrap()
+    }
+
+    pub fn get_relay_peer_id() -> PeerId {
+        PeerId::from_str("12D3KooWDpJ7As7BWAwRMfu1VU2WCqNjvq387JEYKDBj4kx6nXTN").unwrap()
     }
 
     pub fn get_relay_address() -> Multiaddr {
@@ -49,7 +53,6 @@ fn get_address_through_relay(relay_address: &Multiaddr, peer_id: &PeerId) -> Mul
 
 async fn send_get_file_request(control: &mut Control, peer_id: PeerId) {
     tracing::info!("Send get file request");
-    println!("Send get file request");
     let mut stream = control
         .open_stream(peer_id, StreamProtocol::new(Config::STREAM_PROTOCOL))
         .await.unwrap();
@@ -59,7 +62,6 @@ async fn send_get_file_request(control: &mut Control, peer_id: PeerId) {
     };
 
     tracing::info!("Opened stream");
-    println!("Opened stream");
 
     match stream.write(serde_json::to_string(&file_request).unwrap().as_bytes()).await {
         Ok(_) => {
@@ -215,8 +217,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     } => {
                         // TODO: Add condition check to ignore relay node connection events
                         tracing::info!(peer=%peer_id, ?endpoint, "Established new connection");
-                        let peer_relay_addr = get_address_through_relay(&relay_address, &peer_id);
-                        swarm.behaviour_mut().kademlia.add_address(&peer_id, peer_relay_addr);
+
+                        if peer_id != Config::get_relay_peer_id() {
+                            let peer_relay_addr = get_address_through_relay(&relay_address, &peer_id);
+                            swarm.behaviour_mut().kademlia.add_address(&peer_id, peer_relay_addr);
+                            send_get_file_request(&mut control, peer_id).await;
+                        }
                     }
                     SwarmEvent::Behaviour(BehaviourEvent::Kademlia(kad::Event::OutboundQueryProgressed { result, .. })) => {
                         match result {
@@ -367,9 +373,45 @@ async fn handle_input_line_file_check(control: &mut Control, swarm: &mut Swarm<B
     match command {
         Some("send_req") => {
             let address = get_address_through_relay(&Config::get_relay_address(), &peer_id);
-            swarm.dial(address).expect("TODO: panic message");
-            println!("Calling send get");
-            send_get_file_request(control, peer_id).await;
+            match swarm.dial(address) {
+                Ok(_) => {
+                    println!("Dialled successfully")
+                }
+                Err(e) => {
+                    eprintln!("Dial failed {:?}", e);
+                    return;
+                }
+            }
+
+            // tokio::time::sleep(Duration::from_secs(3)).await;
+            //
+            // // tokio::task::spawn(async move {
+            // //     send_get_file_request(control, peer_id).await;
+            // // });
+            // tracing::info!("Send get file request");
+            // let mut stream = match control
+            //     .open_stream(peer_id, StreamProtocol::new(Config::STREAM_PROTOCOL)).await {
+            //     Ok(s) => s,
+            //     Err(e) => {
+            //         eprintln!("Error opening stream: {:?}", e);
+            //         return;
+            //     }
+            // };
+            // let file_request = FileRequest {
+            //     file_hash: String::from("abcd"),
+            //     requester_id: String::from("idv"),
+            // };
+            //
+            // tracing::info!("Opened stream");
+            //
+            // match stream.write(serde_json::to_string(&file_request).unwrap().as_bytes()).await {
+            //     Ok(_) => {
+            //         tracing::info!("Write succeeded");
+            //     }
+            //     Err(err) => {
+            //         tracing::info!(?err, "Write failed with error:");
+            //     }
+            // }
         }
         _ => {
             eprintln!("expected send_req");
