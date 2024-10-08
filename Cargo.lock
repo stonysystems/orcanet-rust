@@ -2008,6 +2008,7 @@ dependencies = [
  "libp2p",
  "libp2p-stream",
  "rand",
+ "serde",
  "serde_json",
  "tokio",
  "tracing",

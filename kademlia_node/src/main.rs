@@ -1,3 +1,5 @@
+mod request_handlers;
+
 use std::{error::Error, time::Duration};
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
