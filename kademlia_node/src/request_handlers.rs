@@ -1,13 +1,13 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
-struct FileRequest {
-    file_hash: String,
-    requester_id: String, // Bitcoin address
+pub struct FileRequest {
+    pub(crate) file_hash: String,
+    pub(crate) requester_id: String, // Bitcoin address
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-struct FileResponse {
+pub struct FileResponse {
     file_name: String,
     file_hash: String,
     server_id: String, // Bitcoin address
@@ -16,7 +16,7 @@ struct FileResponse {
     file_content_b64: String,
 }
 
-enum Detail {
+pub enum Detail {
     FileRequest(FileRequest),
     FileResponse(FileResponse),
     // HTTPProxyRequest,
@@ -24,7 +24,7 @@ enum Detail {
 }
 
 
-struct RequestHandler;
+pub struct RequestHandler;
 
 impl RequestHandler {
     pub fn handle_request(request: String) -> Option<String> {

@@ -5,15 +5,19 @@ use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 
 use clap::Parser;
-use futures::{AsyncReadExt, executor::block_on, future::FutureExt, stream::StreamExt};
+use futures::{AsyncReadExt, AsyncWriteExt, executor::block_on, future::FutureExt, stream::StreamExt};
 use libp2p::{core::multiaddr::{Multiaddr, Protocol}, identify, identity, kad, noise, PeerId, ping, relay, swarm::{NetworkBehaviour, SwarmEvent}, tcp, yamux};
+use libp2p::identity::ParseError;
 use libp2p::kad::store::{MemoryStore, MemoryStoreConfig};
 use libp2p::StreamProtocol;
+use libp2p_stream::Control;
 use tokio::{io, select};
 use tokio::io::AsyncBufReadExt;
 use tracing_subscriber::EnvFilter;
+use request_handlers::{FileRequest, FileResponse, RequestHandler};
 
 struct Config;
+
 impl Config {
     pub const NAMESPACE: &'static str = "/orcanet";
     pub const STREAM_PROTOCOL: &'static str = "/orcanet/p2p";
@@ -42,6 +46,26 @@ fn get_address_through_relay(relay_address: &Multiaddr, peer_id: &PeerId) -> Mul
         .with(Protocol::P2pCircuit)
         .with(Protocol::P2p(peer_id.clone()))
 }
+
+async fn send_get_file_request(control: &mut Control, peer_id: PeerId) {
+    let mut stream = control
+        .open_stream(peer_id, StreamProtocol::new(Config::STREAM_PROTOCOL))
+        .await.unwrap();
+    let file_request = FileRequest {
+        file_hash: String::from("abcd"),
+        requester_id: String::from("idv"),
+    };
+
+    match stream.write(serde_json::to_string(&file_request).unwrap().as_bytes()).await {
+        Ok(_) => {
+            println!("Write succeeded");
+        }
+        Err(err) => {
+            println!("Write failed with error: {:?}", err);
+        }
+    }
+}
+
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -124,14 +148,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // Read full lines from stdin
     let mut stdin = io::BufReader::new(io::stdin()).lines();
+    let stream_protocol = StreamProtocol::new(Config::STREAM_PROTOCOL);
     let mut control = swarm.behaviour().stream.new_control();
-    let mut incoming = control.accept(StreamProtocol::new(Config::STREAM_PROTOCOL)).unwrap();
+    let mut incoming = control.accept(stream_protocol.clone()).unwrap();
 
     block_on(async {
         loop {
             select! {
                 Ok(Some(line)) = stdin.next_line() => {
-                    handle_input_line(&mut swarm.behaviour_mut().kademlia, line);
+                    // handle_input_line(&mut swarm.behaviour_mut().kademlia, line);
+                    handle_input_line_file_check(&mut control, line);
                 }
 
                 stream_event = incoming.next() => {
@@ -300,6 +326,47 @@ fn handle_input_line(kademlia: &mut kad::Behaviour<MemoryStore>, line: String) {
             kademlia
                 .start_providing(key)
                 .expect("Failed to start providing key");
+        }
+        _ => {
+            eprintln!("expected get, get_providers, put or put_provider");
+        }
+    }
+}
+
+fn handle_input_line_file_check(control: &mut Control, line: String) {
+    let mut args = line.split(' ');
+    let command = args.next();
+
+    if command.is_none() {
+        return;
+    }
+
+    match args.next()
+        .map(|v| PeerId::from_str(v)) {
+        Some(v) => {}
+        None => {}
+    }
+
+    let peer_id = match args.next()
+        .map(|v| PeerId::from_str(v)) {
+        Some(res) => {
+            match res {
+                Ok(peer_id) => peer_id,
+                Err(_) => {
+                    eprintln!("Invalid peer id");
+                    return;
+                }
+            }
+        }
+        None => {
+            eprintln!("Expected peer id");
+            return;
+        }
+    };
+
+    match command {
+        Some("send_req") => {
+            send_get_file_request(control, peer_id)
         }
         _ => {
             eprintln!("expected get, get_providers, put or put_provider");
