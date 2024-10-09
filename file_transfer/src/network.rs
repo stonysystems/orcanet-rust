@@ -79,11 +79,6 @@ pub(crate) async fn new(
             .with_swarm_config(|c| c.with_idle_connection_timeout(Duration::from_secs(60)))
             .build();
 
-    swarm
-        .behaviour_mut()
-        .kademlia
-        .set_mode(Some(kad::Mode::Server));
-
     // Set up listening on all interfaces
     swarm
         .listen_on("/ip4/0.0.0.0/udp/0/quic-v1".parse().unwrap())
@@ -96,11 +91,17 @@ pub(crate) async fn new(
     swarm.listen_on(relay_address.clone().with(Protocol::P2pCircuit)).unwrap();
 
     // Set up kademlia props
-    swarm.behaviour_mut().kademlia.set_mode(Some(kad::Mode::Client));
-    swarm.behaviour_mut().kademlia.add_address(&bootstrap_peer_id, boostrap_addr.clone());
+    swarm
+        .behaviour_mut()
+        .kademlia
+        .set_mode(Some(kad::Mode::Server));
+    // swarm
+    //     .behaviour_mut()
+    //     .kademlia
+    //     .add_address(&bootstrap_peer_id, boostrap_addr.clone());
 
     // Dial the bootstrap node
-    swarm.dial(boostrap_addr.clone()).unwrap();
+    // swarm.dial(boostrap_addr.clone()).unwrap();
 
     let (command_sender, command_receiver) = mpsc::channel(0);
     let (event_sender, event_receiver) = mpsc::channel(0);
@@ -173,6 +174,9 @@ impl EventLoop {
             }
             SwarmEvent::Behaviour(BehaviourEvent::Kademlia(kad::Event::OutboundQueryProgressed { id, result, .. })) => {
                 self.handle_kademlia_events(id, result);
+            }
+            SwarmEvent::Behaviour(BehaviourEvent::Kademlia(event)) => {
+                tracing::info!(?event, "Received kademlia event");
             }
             SwarmEvent::Behaviour(BehaviourEvent::RequestResponse(
                                       request_response::Event::Message { message, .. },
@@ -358,11 +362,16 @@ impl EventLoop {
                 peer_addr,
                 sender,
             } => {
+                self.swarm
+                    .behaviour_mut()
+                    .kademlia
+                    .add_address(&peer_id, peer_addr.clone());
+
                 if let hash_map::Entry::Vacant(e) = self.pending_dial.entry(peer_id) {
-                    self.swarm
-                        .behaviour_mut()
-                        .kademlia
-                        .add_address(&peer_id, peer_addr.clone());
+                    // self.swarm
+                    //     .behaviour_mut()
+                    //     .kademlia
+                    //     .add_address(&peer_id, peer_addr.clone());
 
                     match self.swarm.dial(peer_addr.clone()) {
                         Ok(()) => {
