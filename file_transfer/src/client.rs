@@ -5,10 +5,9 @@ use std::io::Write;
 use futures::{FutureExt, SinkExt};
 use futures::channel::{mpsc, oneshot};
 use libp2p::{Multiaddr, PeerId};
+use libp2p::request_response::ResponseChannel;
 
-use crate::common::OrcaNetCommand;
-
-struct FileResponse(Vec<u8>);
+use crate::common::{FileResponse, OrcaNetCommand};
 
 #[derive(Clone)]
 pub struct NetworkClient {
@@ -147,15 +146,15 @@ impl NetworkClient {
     //     Ok(())
     // }
 
-    // /// Respond with the provided file content to the given request.
-    // pub async fn respond_file(
-    //     &mut self,
-    //     file: Vec<u8>,
-    //     channel: ResponseChannel<FileResponse>,
-    // ) {
-    //     self.sender
-    //         .send(Command::RespondFile { file, channel })
-    //         .await
-    //         .expect("Command receiver not to be dropped.");
-    // }
+    /// Respond with the provided file content to the given request.
+    pub async fn respond_file(
+        &mut self,
+        file: Vec<u8>,
+        channel: ResponseChannel<FileResponse>,
+    ) {
+        self.sender
+            .send( OrcaNetCommand::RespondFile { file, channel })
+            .await
+            .expect("Command receiver not to be dropped.");
+    }
 }

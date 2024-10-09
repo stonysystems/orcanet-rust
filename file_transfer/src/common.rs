@@ -68,6 +68,10 @@ pub enum OrcaNetCommand {
         peer: PeerId,
         sender: oneshot::Sender<Result<Vec<u8>, Box<dyn Error + Send>>>,
     },
+    RespondFile {
+        file: Vec<u8>,
+        channel: ResponseChannel<FileResponse>,
+    },
 }
 
 pub struct Utils;

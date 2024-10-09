@@ -388,15 +388,16 @@ impl EventLoop {
                     .behaviour_mut()
                     .request_response
                     .send_request(&peer, FileRequest(file_id));
+                println!("Sending file request");
                 self.pending_request_file.insert(request_id, sender);
             }
-            // OrcaNetCommand::RespondFile { file, channel } => {
-            //     self.swarm
-            //         .behaviour_mut()
-            //         .request_response
-            //         .send_response(channel, FileResponse(file))
-            //         .expect("Connection to peer to be still open.");
-            // }
+            OrcaNetCommand::RespondFile { file, channel } => {
+                self.swarm
+                    .behaviour_mut()
+                    .request_response
+                    .send_response(channel, FileResponse(file))
+                    .expect("Connection to peer to be still open.");
+            }
             OrcaNetCommand::PutKV { key, value, sender } => {
                 let record = kad::Record {
                     key: kad::RecordKey::new(&key.as_str()),
