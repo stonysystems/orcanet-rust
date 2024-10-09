@@ -141,7 +141,7 @@ impl EventLoop {
             pending_get_providers: Default::default(),
             pending_request_file: Default::default(),
             pending_put_kv: Default::default(),
-            pending_get_value: Default::default()
+            pending_get_value: Default::default(),
         }
     }
 
@@ -160,17 +160,19 @@ impl EventLoop {
 
     async fn handle_event(&mut self, event: SwarmEvent<BehaviourEvent>) {
         match event {
-            // SwarmEvent::Behaviour(BehaviourEvent::Kademlia(
-            //                           kad::Event::OutboundQueryProgressed {
-            //                               result:
-            //                               kad::QueryResult::GetProviders(Ok(
-            //                                                                  kad::GetProvidersOk::FinishedWithNoAdditionalRecord { .. },
-            //                                                              )),
-            //                               ..
-            //                           },
-            //                       )) => {}
+            SwarmEvent::NewListenAddr { address, .. } => {
+                tracing::info!(%address, "Listening on address");
+            }
+            SwarmEvent::Behaviour(BehaviourEvent::RelayClient(
+                                      relay::client::Event::ReservationReqAccepted { .. },
+                                  )) => {
+                tracing::info!("Relay accepted our reservation request");
+            }
+            SwarmEvent::Behaviour(BehaviourEvent::RelayClient(event)) => {
+                tracing::info!(?event)
+            }
             SwarmEvent::Behaviour(BehaviourEvent::Kademlia(kad::Event::OutboundQueryProgressed { id, result, .. })) => {
-                self.process_kademlia_events(id, result);
+                self.handle_kademlia_events(id, result);
             }
             SwarmEvent::Behaviour(BehaviourEvent::RequestResponse(
                                       request_response::Event::Message { message, .. },
@@ -211,17 +213,12 @@ impl EventLoop {
             SwarmEvent::Behaviour(BehaviourEvent::RequestResponse(
                                       request_response::Event::ResponseSent { .. },
                                   )) => {}
-            SwarmEvent::NewListenAddr { address, .. } => {
-                let local_peer_id = *self.swarm.local_peer_id();
-                eprintln!(
-                    "Local node is listening on {:?}",
-                    address.with(Protocol::P2p(local_peer_id))
-                );
-            }
             SwarmEvent::IncomingConnection { .. } => {}
             SwarmEvent::ConnectionEstablished {
                 peer_id, endpoint, ..
             } => {
+                tracing::info!(peer=%peer_id, ?endpoint, "Established new connection");
+
                 if endpoint.is_dialer() {
                     if let Some(sender) = self.pending_dial.remove(&peer_id) {
                         let _ = sender.send(Ok(()));
@@ -230,6 +227,7 @@ impl EventLoop {
             }
             SwarmEvent::ConnectionClosed { .. } => {}
             SwarmEvent::OutgoingConnectionError { peer_id, error, .. } => {
+                tracing::error!(peer=?peer_id, "Outgoing connection failed: {error}");
                 if let Some(peer_id) = peer_id {
                     if let Some(sender) = self.pending_dial.remove(&peer_id) {
                         let _ = sender.send(Err(Box::new(error)));
@@ -240,13 +238,13 @@ impl EventLoop {
             SwarmEvent::Dialing {
                 peer_id: Some(peer_id),
                 ..
-            } => eprintln!("Dialing {peer_id}"),
+            } => tracing::info!("Dialing {peer_id}"),
             _ => {}
             // e => panic!("{e:?}"),
         }
     }
 
-    fn process_kademlia_events(&mut self, query_id: kad::QueryId, result: kad::QueryResult) {
+    fn handle_kademlia_events(&mut self, query_id: kad::QueryId, result: kad::QueryResult) {
         match result {
             kad::QueryResult::GetProviders(Ok(kad::GetProvidersOk::FoundProviders { key, providers, .. })) => {
                 for peer in &providers {
@@ -340,7 +338,7 @@ impl EventLoop {
                     .expect("Completed query to be previously pending.");
                 let _ = sender.send(());
             }
-            kad::QueryResult::StartProviding(Err( err)) => {
+            kad::QueryResult::StartProviding(Err(err)) => {
                 eprintln!("Failed to put provider record: {err:?}");
             }
             _ => {}
@@ -365,7 +363,8 @@ impl EventLoop {
                         .behaviour_mut()
                         .kademlia
                         .add_address(&peer_id, peer_addr.clone());
-                    match self.swarm.dial(peer_addr.with(Protocol::P2p(peer_id))) {
+
+                    match self.swarm.dial(peer_addr.clone()) {
                         Ok(()) => {
                             e.insert(sender);
                         }
@@ -378,8 +377,7 @@ impl EventLoop {
                 }
             }
             OrcaNetCommand::StartProviding { file_id, sender } => {
-                let query_id = self
-                    .swarm
+                let query_id = self.swarm
                     .behaviour_mut()
                     .kademlia
                     .start_providing(file_id.into_bytes().into())
@@ -387,8 +385,7 @@ impl EventLoop {
                 self.pending_start_providing.insert(query_id, sender);
             }
             OrcaNetCommand::GetProviders { file_id, sender } => {
-                let query_id = self
-                    .swarm
+                let query_id = self.swarm
                     .behaviour_mut()
                     .kademlia
                     .get_providers(file_id.into_bytes().into());
@@ -399,8 +396,7 @@ impl EventLoop {
                 peer,
                 sender,
             } => {
-                let request_id = self
-                    .swarm
+                let request_id = self.swarm
                     .behaviour_mut()
                     .request_response
                     .send_request(&peer, FileRequest(file_id));
@@ -420,16 +416,15 @@ impl EventLoop {
                     publisher: None,
                     expires: None,
                 };
-                let request_id = self.swarm.
-                    behaviour_mut()
+                let request_id = self.swarm
+                    .behaviour_mut()
                     .kademlia
                     .put_record(record, kad::Quorum::One)
                     .expect("Failed to initiate put request");
                 self.pending_put_kv.insert(request_id, sender);
             }
             OrcaNetCommand::GetValue { key, sender } => {
-                let request_id = self.
-                    swarm
+                let request_id = self.swarm
                     .behaviour_mut()
                     .kademlia
                     .get_record(kad::RecordKey::new(&key.as_str()));

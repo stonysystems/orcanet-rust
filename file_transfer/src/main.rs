@@ -1,7 +1,9 @@
 use std::error::Error;
+use std::str::FromStr;
 use async_std::task::block_on;
 use clap::Parser;
 use futures::StreamExt;
+use libp2p::PeerId;
 use tokio::{io, select};
 use tokio::io::AsyncBufReadExt;
 use tracing_subscriber::EnvFilter;
@@ -110,6 +112,21 @@ async fn handle_input_line(client: &mut NetworkClient, line: String) {
                     eprintln!("Failed to get value {:?}", e);
                 }
             }
+        }
+        Some("add_peer") => {
+            let peer_id = {
+                match args.next() {
+                    Some(peer_id) => PeerId::from_str(peer_id).unwrap(),
+                    None => {
+                        eprintln!("Expected key");
+                        return;
+                    }
+                }
+            };
+
+            let peer_addr = Utils::get_address_through_relay(&peer_id, None);
+            client.dial(peer_id, peer_addr).await
+                .expect("Dial to succeed");
         }
         _ => {}
     }

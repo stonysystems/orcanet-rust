@@ -70,7 +70,8 @@ pub(crate) enum OrcaNetCommand {
 pub(crate) struct Utils;
 
 impl Utils {
-    pub fn get_address_through_relay(relay_address: &Multiaddr, peer_id: &PeerId) -> Multiaddr {
+    pub fn get_address_through_relay(peer_id: &PeerId, relay_address_override: Option<Multiaddr>) -> Multiaddr {
+        let relay_address = relay_address_override.unwrap_or(OrcaNetConfig::get_relay_address());
         relay_address.clone()
             .with(Protocol::P2pCircuit)
             .with(Protocol::P2p(peer_id.clone()))

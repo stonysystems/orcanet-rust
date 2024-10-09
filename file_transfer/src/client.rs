@@ -84,7 +84,7 @@ impl NetworkClient {
         receiver.await.expect("Sender not be dropped.")
     }
 
-    /// Request the content of the given file from the given peer.
+    /// Put the given KV pair to the DHT
     pub(crate) async fn put_kv_pair(
         &mut self,
         key: String,
@@ -103,7 +103,7 @@ impl NetworkClient {
         receiver.await.expect("Sender not be dropped.")
     }
 
-    /// Request the content of the given file from the given peer.
+    /// Get the value for the given key from the DHT
     pub(crate) async fn get_value(
         &mut self,
         key: String,
