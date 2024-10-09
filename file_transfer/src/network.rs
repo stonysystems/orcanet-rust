@@ -285,14 +285,6 @@ impl EventLoop {
                 // );
                 if let Some(sender) = self.pending_get_value.remove(&query_id) {
                     sender.send(Ok(value)).expect("Receiver not to be dropped");
-
-                    // // Finish the query. We are only interested in the first result.
-                    // self.swarm
-                    //     .behaviour_mut()
-                    //     .kademlia
-                    //     .query_mut(&query_id)
-                    //     .unwrap()
-                    //     .finish();
                 }
             }
             kad::QueryResult::GetRecord(Err(err)) => {
@@ -376,6 +368,7 @@ impl EventLoop {
                     .kademlia
                     .start_providing(file_id.into_bytes().into())
                     .expect("No store error.");
+
                 self.pending_start_providing.insert(query_id, sender);
             }
             OrcaNetCommand::GetProviders { file_id, sender } => {

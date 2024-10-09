@@ -136,7 +136,7 @@ async fn handle_input_line(client: &mut NetworkClient, line: String) {
                 }
             };
 
-            let _ = client.start_providing(key);
+            let _ = client.start_providing(key).await;
         }
         Some("get_providers") => {
             let key = {
