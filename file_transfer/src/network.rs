@@ -11,8 +11,8 @@ use libp2p::kad::store::{MemoryStore, MemoryStoreConfig};
 use libp2p::request_response::ProtocolSupport;
 use serde::{Deserialize, Serialize};
 
-use crate::client::{NetworkClient, OrcaNetCommand};
-use crate::common::{OrcaNetConfig, Utils};
+use crate::client::{NetworkClient};
+use crate::common::{OrcaNetConfig, Utils, OrcaNetCommand};
 
 #[derive(NetworkBehaviour)]
 struct Behaviour {
@@ -97,7 +97,7 @@ pub(crate) async fn new(
 
     // Set up kademlia props
     swarm.behaviour_mut().kademlia.set_mode(Some(kad::Mode::Client));
-    swarm.behaviour_mut().kademlia.add_address(&bootstrap_peer_id, boostrap_addr);
+    swarm.behaviour_mut().kademlia.add_address(&bootstrap_peer_id, boostrap_addr.clone());
 
     // Dial the bootstrap node
     swarm.dial(boostrap_addr.clone()).unwrap();
@@ -241,14 +241,15 @@ impl EventLoop {
                 peer_id: Some(peer_id),
                 ..
             } => eprintln!("Dialing {peer_id}"),
-            e => panic!("{e:?}"),
+            _ => {}
+            // e => panic!("{e:?}"),
         }
     }
 
     fn process_kademlia_events(&mut self, query_id: kad::QueryId, result: kad::QueryResult) {
         match result {
             kad::QueryResult::GetProviders(Ok(kad::GetProvidersOk::FoundProviders { key, providers, .. })) => {
-                for peer in providers {
+                for peer in &providers {
                     println!(
                         "Peer {peer:?} provides key {:?}",
                         std::str::from_utf8(key.as_ref()).unwrap()
@@ -283,13 +284,13 @@ impl EventLoop {
                 if let Some(sender) = self.pending_get_value.remove(&query_id) {
                     sender.send(Ok(value)).expect("Receiver not to be dropped");
 
-                    // Finish the query. We are only interested in the first result.
-                    self.swarm
-                        .behaviour_mut()
-                        .kademlia
-                        .query_mut(&query_id)
-                        .unwrap()
-                        .finish();
+                    // // Finish the query. We are only interested in the first result.
+                    // self.swarm
+                    //     .behaviour_mut()
+                    //     .kademlia
+                    //     .query_mut(&query_id)
+                    //     .unwrap()
+                    //     .finish();
                 }
             }
             kad::QueryResult::GetRecord(Ok(_)) => {}
@@ -304,27 +305,28 @@ impl EventLoop {
                 if let Some(sender) = self.pending_put_kv.remove(&query_id) {
                     sender.send(Ok(())).expect("Receiver not to be dropped");
 
-                    // Finish the query. We are only interested in the first result.
-                    self.swarm
-                        .behaviour_mut()
-                        .kademlia
-                        .query_mut(&query_id)
-                        .unwrap()
-                        .finish();
+                    // // Finish the query. We are only interested in the first result.
+                    // self.swarm
+                    //     .behaviour_mut()
+                    //     .kademlia
+                    //     .query_mut(&query_id)
+                    //     .unwrap()
+                    //     .finish();
                 }
             }
             kad::QueryResult::PutRecord(Err(err)) => {
                 eprintln!("Failed to put record: {err:?}");
                 if let Some(sender) = self.pending_put_kv.remove(&query_id) {
-                    sender.send(Err(err.into())).expect("Receiver not to be dropped");
+                    // TODO: Change to err
+                    sender.send(Ok(())).expect("Receiver not to be dropped");
 
-                    // Finish the query. We are only interested in the first result.
-                    self.swarm
-                        .behaviour_mut()
-                        .kademlia
-                        .query_mut(&query_id)
-                        .unwrap()
-                        .finish();
+                    // // Finish the query. We are only interested in the first result.
+                    // self.swarm
+                    //     .behaviour_mut()
+                    //     .kademlia
+                    //     .query_mut(&query_id)
+                    //     .unwrap()
+                    //     .finish();
                 }
             }
             kad::QueryResult::StartProviding(Ok(kad::AddProviderOk { key })) => {
@@ -413,7 +415,7 @@ impl EventLoop {
             // }
             OrcaNetCommand::PutKV { key, value, sender } => {
                 let record = kad::Record {
-                    key: key.into(),
+                    key: kad::RecordKey::new(&key.as_str()),
                     value: value.into(),
                     publisher: None,
                     expires: None,

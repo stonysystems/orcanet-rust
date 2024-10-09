@@ -33,7 +33,7 @@ impl OrcaNetConfig {
 }
 
 #[derive(Debug)]
-pub enum OrcaNetCommand {
+pub(crate) enum OrcaNetCommand {
     StartListening {
         addr: Multiaddr,
         sender: oneshot::Sender<Result<(), Box<dyn Error + Send>>>,
@@ -81,6 +81,10 @@ impl Utils {
         bytes[0..8].copy_from_slice(&secret_key_seed.to_le_bytes());
 
         identity::Keypair::ed25519_from_bytes(bytes).expect("only errors on wrong length")
+    }
+
+    pub fn get_key_with_ns(key: &str) -> String {
+        format!("{}/{}", OrcaNetConfig::NAMESPACE, key)
     }
 }
 
