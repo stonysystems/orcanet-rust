@@ -25,5 +25,7 @@ fn get_block_count() -> String {
 
 #[tokio::main]
 async fn main() {
-    rocket::ignite().mount("/", routes![index, get_block_count]).launch();
+    rocket::ignite()
+        .mount("/", routes![index, get_block_count])
+        .launch();
 }

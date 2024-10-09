@@ -18,23 +18,31 @@ use tracing_subscriber::EnvFilter;
 use request_handlers::{FileRequest, FileResponse, RequestHandler};
 use crate::kademlia::process_kademlia_events;
 
-struct Config;
+struct OrcaNetConfig;
 
-impl Config {
+impl OrcaNetConfig {
     pub const NAMESPACE: &'static str = "/orcanet";
     pub const STREAM_PROTOCOL: &'static str = "/orcanet/p2p";
     pub const SECRET_KEY_SEED: u64 = 4;
 
     pub fn get_bootstrap_peer_id() -> PeerId {
-        PeerId::from_str("12D3KooWQd1K1k8XA9xVEzSAu7HUCodC7LJB6uW5Kw4VwkRdstPE").unwrap()
+        "12D3KooWQd1K1k8XA9xVEzSAu7HUCodC7LJB6uW5Kw4VwkRdstPE"
+            .parse().unwrap()
+    }
+
+    pub fn get_bootstrap_address() -> Multiaddr {
+        "/ip4/130.245.173.222/tcp/61000/p2p/12D3KooWQd1K1k8XA9xVEzSAu7HUCodC7LJB6uW5Kw4VwkRdstPE"
+            .parse().unwrap()
     }
 
     pub fn get_relay_peer_id() -> PeerId {
-        PeerId::from_str("12D3KooWDpJ7As7BWAwRMfu1VU2WCqNjvq387JEYKDBj4kx6nXTN").unwrap()
+        "12D3KooWDpJ7As7BWAwRMfu1VU2WCqNjvq387JEYKDBj4kx6nXTN"
+            .parse().unwrap()
     }
 
     pub fn get_relay_address() -> Multiaddr {
-        "/ip4/130.245.173.221/tcp/4001/p2p/12D3KooWDpJ7As7BWAwRMfu1VU2WCqNjvq387JEYKDBj4kx6nXTN".parse().unwrap()
+        "/ip4/130.245.173.221/tcp/4001/p2p/12D3KooWDpJ7As7BWAwRMfu1VU2WCqNjvq387JEYKDBj4kx6nXTN"
+            .parse().unwrap()
     }
 }
 
@@ -56,7 +64,7 @@ fn get_address_through_relay(relay_address: &Multiaddr, peer_id: &PeerId) -> Mul
 async fn send_get_file_request(control: &mut Control, peer_id: PeerId) {
     tracing::info!("Send get file request");
     let mut stream = control
-        .open_stream(peer_id, StreamProtocol::new(Config::STREAM_PROTOCOL))
+        .open_stream(peer_id, StreamProtocol::new(OrcaNetConfig::STREAM_PROTOCOL))
         .await.unwrap();
     let file_request = FileRequest {
         file_hash: String::from("abcd"),
@@ -82,12 +90,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let _ = tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env())
         .try_init();
-    let relay_address = Config::get_relay_address();
-    let bootstrap_peer_id = Config::get_bootstrap_peer_id();
-    let boostrap_addr = get_address_through_relay(&relay_address, &bootstrap_peer_id);
+    let relay_address = OrcaNetConfig::get_relay_address();
+    let bootstrap_peer_id = OrcaNetConfig::get_bootstrap_peer_id();
+    let boostrap_addr = OrcaNetConfig::get_bootstrap_address();
 
     let mut swarm =
-        libp2p::SwarmBuilder::with_existing_identity(generate_ed25519(Config::SECRET_KEY_SEED))
+        libp2p::SwarmBuilder::with_existing_identity(generate_ed25519(OrcaNetConfig::SECRET_KEY_SEED))
             .with_tokio()
             .with_tcp(
                 tcp::Config::default().nodelay(true),
@@ -151,14 +159,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // Set up kademlia props
     swarm.behaviour_mut().kademlia.set_mode(Some(kad::Mode::Client));
-    swarm.behaviour_mut().kademlia.add_address(&bootstrap_peer_id, boostrap_addr.clone());
+    swarm.behaviour_mut().kademlia.add_address(&bootstrap_peer_id, boostrap_addr);
 
     // Dial the bootstrap node
     swarm.dial(boostrap_addr.clone()).unwrap();
 
     // Read full lines from stdin
     let mut stdin = io::BufReader::new(io::stdin()).lines();
-    let stream_protocol = StreamProtocol::new(Config::STREAM_PROTOCOL);
+    let stream_protocol = StreamProtocol::new(OrcaNetConfig::STREAM_PROTOCOL);
     let mut control = swarm.behaviour().stream.new_control();
     let mut incoming = control.accept(stream_protocol.clone()).unwrap();
 
@@ -222,7 +230,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         // TODO: Add condition check to ignore relay node connection events
                         tracing::info!(peer=%peer_id, ?endpoint, "Established new connection");
 
-                        if peer_id != Config::get_relay_peer_id() {
+                        if peer_id != OrcaNetConfig::get_relay_peer_id() {
                             let peer_relay_addr = get_address_through_relay(&relay_address, &peer_id);
                             swarm.behaviour_mut().kademlia.add_address(&peer_id, peer_relay_addr);
                             send_get_file_request(&mut control, peer_id).await;
@@ -242,7 +250,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 }
 
 fn get_key_with_ns(key: &str) -> String {
-    format!("{}/{}", Config::NAMESPACE, key)
+    format!("{}/{}", OrcaNetConfig::NAMESPACE, key)
 }
 
 async fn handle_input_line_file_check(control: &mut Control, swarm: &mut Swarm<Behaviour>, line: String) {
@@ -274,7 +282,7 @@ async fn handle_input_line_file_check(control: &mut Control, swarm: &mut Swarm<B
 
     match command {
         Some("send_req") => {
-            let address = get_address_through_relay(&Config::get_relay_address(), &peer_id);
+            let address = get_address_through_relay(&OrcaNetConfig::get_relay_address(), &peer_id);
             match swarm.dial(address) {
                 Ok(_) => {
                     println!("Dialled successfully")
