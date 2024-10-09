@@ -1,4 +1,5 @@
 use std::error::Error;
+use std::process::exit;
 use std::str::FromStr;
 use async_std::task::block_on;
 use clap::Parser;
@@ -123,6 +124,36 @@ async fn handle_input_line(client: &mut NetworkClient, line: String) {
 
             let peer_addr = Utils::get_address_through_relay(&peer_id, None);
             let _ = client.dial(peer_id, peer_addr).await;
+        }
+        Some("start_providing") => {
+            let key = {
+                match args.next() {
+                    Some(key) => String::from(key),
+                    None => {
+                        eprintln!("Expected key");
+                        return;
+                    }
+                }
+            };
+
+            let _ = client.start_providing(key);
+        }
+        Some("get_providers") => {
+            let key = {
+                match args.next() {
+                    Some(key) => String::from(key),
+                    None => {
+                        eprintln!("Expected key");
+                        return;
+                    }
+                }
+            };
+
+            let providers = client.get_providers(key.clone()).await;
+            println!("Got providers for {} {:?}", key, providers);
+        }
+        Some("exit") => {
+            exit(0);
         }
         _ => {}
     }
