@@ -89,9 +89,8 @@ async fn handle_input_line(client: &mut NetworkClient, line: String) {
                     }
                 }
             };
-            client.put_kv_pair(key, value)
-                .await
-                .expect("Expected response from client");
+
+            let _ = client.put_kv_pair(key, value).await;
         }
         Some("get") => {
             let key = {
@@ -108,9 +107,7 @@ async fn handle_input_line(client: &mut NetworkClient, line: String) {
                 Ok(v) => {
                     println!("Got value {}", String::from_utf8(v).unwrap());
                 }
-                Err(e) => {
-                    eprintln!("Failed to get value {:?}", e);
-                }
+                _ => {}
             }
         }
         Some("add_peer") => {
@@ -125,8 +122,7 @@ async fn handle_input_line(client: &mut NetworkClient, line: String) {
             };
 
             let peer_addr = Utils::get_address_through_relay(&peer_id, None);
-            client.dial(peer_id, peer_addr).await
-                .expect("Dial to succeed");
+            let _ = client.dial(peer_id, peer_addr).await;
         }
         _ => {}
     }
