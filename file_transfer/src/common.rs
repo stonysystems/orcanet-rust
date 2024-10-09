@@ -1,10 +1,13 @@
 use std::collections::HashSet;
 use std::error::Error;
+
 use futures::channel::oneshot;
 use libp2p::{identity, Multiaddr, PeerId};
 use libp2p::multiaddr::Protocol;
+use libp2p::request_response::ResponseChannel;
+use serde::{Deserialize, Serialize};
 
-pub(crate) struct OrcaNetConfig;
+pub struct OrcaNetConfig;
 
 impl OrcaNetConfig {
     pub const NAMESPACE: &'static str = "/orcanet";
@@ -33,7 +36,7 @@ impl OrcaNetConfig {
 }
 
 #[derive(Debug)]
-pub(crate) enum OrcaNetCommand {
+pub enum OrcaNetCommand {
     StartListening {
         addr: Multiaddr,
         sender: oneshot::Sender<Result<(), Box<dyn Error + Send>>>,
@@ -67,7 +70,7 @@ pub(crate) enum OrcaNetCommand {
     },
 }
 
-pub(crate) struct Utils;
+pub struct Utils;
 
 impl Utils {
     pub fn get_address_through_relay(peer_id: &PeerId, relay_address_override: Option<Multiaddr>) -> Multiaddr {
@@ -89,3 +92,17 @@ impl Utils {
     }
 }
 
+#[derive(Debug)]
+pub enum OrcaNetEvent {
+    FileRequest {
+        file_id: String,
+        channel: ResponseChannel<FileResponse>,
+    }
+}
+
+// Simple file exchange protocol
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FileRequest(pub String);
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FileResponse(pub Vec<u8>);

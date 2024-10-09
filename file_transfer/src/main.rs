@@ -1,6 +1,7 @@
 use std::error::Error;
 use std::process::exit;
 use std::str::FromStr;
+
 use async_std::task::block_on;
 use clap::Parser;
 use futures::StreamExt;
@@ -8,8 +9,10 @@ use libp2p::PeerId;
 use tokio::{io, select};
 use tokio::io::AsyncBufReadExt;
 use tracing_subscriber::EnvFilter;
+
 use crate::client::NetworkClient;
 use crate::common::Utils;
+use crate::request_handlers::RequestHandlerLoop;
 
 mod request_handlers;
 mod client;
@@ -31,18 +34,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let (mut network_client, mut network_events, network_event_loop) =
         network::new(opts.seed).await?;
+    let mut request_handler_loop = RequestHandlerLoop::new(network_client.clone(), network_events);
 
+    // Network event loop
     tokio::task::spawn(network_event_loop.run());
 
-    // block_on(async {
-    //     loop {
-    //         select! {
-    //             event = network_events.select_next_some() => {
-    //                 println!("Got event");
-    //             }
-    //         }
-    //     }
-    // });
+    // OrcaNet requests event loop
+    tokio::task::spawn(request_handler_loop.run());
 
     let mut stdin = io::BufReader::new(io::stdin()).lines();
 
@@ -151,6 +149,29 @@ async fn handle_input_line(client: &mut NetworkClient, line: String) {
 
             let providers = client.get_providers(key.clone()).await;
             println!("Got providers for {} {:?}", key, providers);
+        }
+        Some("get_file") => {
+            let file_id = {
+                match args.next() {
+                    Some(file_id) => String::from(file_id),
+                    None => {
+                        eprintln!("Expected file_id");
+                        return;
+                    }
+                }
+            };
+
+            let peer_id = {
+                match args.next() {
+                    Some(peer_id) => String::from(peer_id),
+                    None => {
+                        eprintln!("Expected peer_id");
+                        return;
+                    }
+                }
+            };
+
+            let _ = client.request_file(peer_id.parse().unwrap(), file_id).await;
         }
         Some("exit") => {
             exit(0);

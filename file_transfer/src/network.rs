@@ -11,8 +11,8 @@ use libp2p::kad::store::{MemoryStore, MemoryStoreConfig};
 use libp2p::request_response::ProtocolSupport;
 use serde::{Deserialize, Serialize};
 
-use crate::client::{NetworkClient};
-use crate::common::{OrcaNetConfig, Utils, OrcaNetCommand};
+use crate::client::NetworkClient;
+use crate::common::{FileRequest, FileResponse, OrcaNetCommand, OrcaNetConfig, OrcaNetEvent, Utils};
 
 #[derive(NetworkBehaviour)]
 struct Behaviour {
@@ -32,9 +32,9 @@ struct Behaviour {
 /// - The network event stream, e.g. for incoming requests.
 ///
 /// - The network task driving the network itself.
-pub(crate) async fn new(
+pub async fn new(
     secret_key_seed: u64,
-) -> Result<(NetworkClient, impl Stream<Item=Event>, EventLoop), Box<dyn Error>> {
+) -> Result<(NetworkClient, mpsc::Receiver<OrcaNetEvent>, EventLoop), Box<dyn Error>> {
     let identity = Utils::generate_ed25519(secret_key_seed);
     let relay_address = OrcaNetConfig::get_relay_address();
     let bootstrap_peer_id = OrcaNetConfig::get_bootstrap_peer_id();
@@ -115,10 +115,10 @@ pub(crate) async fn new(
     ))
 }
 
-pub(crate) struct EventLoop {
+pub struct EventLoop {
     swarm: Swarm<Behaviour>,
     command_receiver: mpsc::Receiver<OrcaNetCommand>,
-    event_sender: mpsc::Sender<Event>,
+    event_sender: mpsc::Sender<OrcaNetEvent>,
     pending_dial: HashMap<PeerId, oneshot::Sender<Result<(), Box<dyn Error + Send>>>>,
     pending_start_providing: HashMap<kad::QueryId, oneshot::Sender<()>>,
     pending_get_providers: HashMap<kad::QueryId, oneshot::Sender<HashSet<PeerId>>>,
@@ -131,7 +131,7 @@ impl EventLoop {
     fn new(
         swarm: Swarm<Behaviour>,
         command_receiver: mpsc::Receiver<OrcaNetCommand>,
-        event_sender: mpsc::Sender<Event>,
+        event_sender: mpsc::Sender<OrcaNetEvent>,
     ) -> Self {
         Self {
             swarm,
@@ -146,10 +146,11 @@ impl EventLoop {
         }
     }
 
-    pub(crate) async fn run(mut self) {
+    pub async fn run(mut self) {
         loop {
             tokio::select! {
                 event = self.swarm.select_next_some() => self.handle_event(event).await,
+
                 command = self.command_receiver.next() => match command {
                     Some(c) => self.handle_command(c).await,
                     // Command channel closed, thus shutting down the network event loop.
@@ -185,8 +186,8 @@ impl EventLoop {
                     request, channel, ..
                 } => {
                     self.event_sender
-                        .send(Event::InboundRequest {
-                            request: request.0,
+                        .send(OrcaNetEvent::FileRequest {
+                            file_id: request.0,
                             channel,
                         })
                         .await
@@ -420,18 +421,3 @@ impl EventLoop {
         }
     }
 }
-
-#[derive(Debug)]
-pub(crate) enum Event {
-    InboundRequest {
-        request: String,
-        channel: ResponseChannel<FileResponse>,
-    },
-}
-
-// Simple file exchange protocol
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-struct FileRequest(String);
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) struct FileResponse(Vec<u8>);

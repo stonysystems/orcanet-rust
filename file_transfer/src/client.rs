@@ -1,22 +1,23 @@
 use std::collections::HashSet;
 use std::error::Error;
+use std::io::Write;
 
+use futures::{FutureExt, SinkExt};
 use futures::channel::{mpsc, oneshot};
-use futures::SinkExt;
 use libp2p::{Multiaddr, PeerId};
-use crate::common::OrcaNetCommand;
 
+use crate::common::OrcaNetCommand;
 
 struct FileResponse(Vec<u8>);
 
 #[derive(Clone)]
-pub(crate) struct NetworkClient {
-    pub(crate) sender: mpsc::Sender<OrcaNetCommand>,
+pub struct NetworkClient {
+    pub sender: mpsc::Sender<OrcaNetCommand>,
 }
 
 impl NetworkClient {
     /// Listen for incoming connections on the given address.
-    pub(crate) async fn start_listening(
+    pub async fn start_listening(
         &mut self,
         addr: Multiaddr,
     ) -> Result<(), Box<dyn Error + Send>> {
@@ -29,7 +30,7 @@ impl NetworkClient {
     }
 
     /// Dial the given peer at the given address.
-    pub(crate) async fn dial(
+    pub async fn dial(
         &mut self,
         peer_id: PeerId,
         peer_addr: Multiaddr,
@@ -47,7 +48,7 @@ impl NetworkClient {
     }
 
     /// Advertise the local node as the provider of the given file on the DHT.
-    pub(crate) async fn start_providing(&mut self, file_id: String) {
+    pub async fn start_providing(&mut self, file_id: String) {
         let (sender, receiver) = oneshot::channel();
         self.sender
             .send(OrcaNetCommand::StartProviding { file_id, sender })
@@ -57,7 +58,7 @@ impl NetworkClient {
     }
 
     /// Find the providers for the given file on the DHT.
-    pub(crate) async fn get_providers(&mut self, file_id: String) -> HashSet<PeerId> {
+    pub async fn get_providers(&mut self, file_id: String) -> HashSet<PeerId> {
         let (sender, receiver) = oneshot::channel();
         self.sender
             .send(OrcaNetCommand::GetProviders { file_id, sender })
@@ -67,7 +68,7 @@ impl NetworkClient {
     }
 
     /// Request the content of the given file from the given peer.
-    pub(crate) async fn request_file(
+    pub async fn request_file(
         &mut self,
         peer: PeerId,
         file_id: String,
@@ -85,7 +86,7 @@ impl NetworkClient {
     }
 
     /// Put the given KV pair to the DHT
-    pub(crate) async fn put_kv_pair(
+    pub async fn put_kv_pair(
         &mut self,
         key: String,
         value: Vec<u8>,
@@ -104,7 +105,7 @@ impl NetworkClient {
     }
 
     /// Get the value for the given key from the DHT
-    pub(crate) async fn get_value(
+    pub async fn get_value(
         &mut self,
         key: String,
     ) -> Result<Vec<u8>, Box<dyn Error + Send>> {
@@ -120,8 +121,34 @@ impl NetworkClient {
         receiver.await.expect("Sender not be dropped.")
     }
 
+    // pub async fn get_file(
+    //     &mut self,
+    //     file_id: String,
+    // ) -> Result<(), dyn Error> {
+    //     let providers = self.get_providers(file_id.clone()).await;
+    //     if providers.is_empty() {
+    //         return Err(format!("Could not find provider for file {name}.").into());
+    //     }
+    //
+    //     // Request the content of the file from each node.
+    //     let requests = providers.into_iter().map(|p| {
+    //         let mut network_client = self.clone();
+    //         let name = file_id.clone();
+    //         async move { network_client.request_file(p, name).await }.boxed()
+    //     });
+    //
+    //     // Await the requests, ignore the remaining once a single one succeeds.
+    //     let file_content = futures::future::select_ok(requests)
+    //         .await
+    //         .map_err(|_| "None of the providers returned file.")?
+    //         .0;
+    //
+    //     std::io::stdout().write_all(&file_content)?;
+    //     Ok(())
+    // }
+
     // /// Respond with the provided file content to the given request.
-    // pub(crate) async fn respond_file(
+    // pub async fn respond_file(
     //     &mut self,
     //     file: Vec<u8>,
     //     channel: ResponseChannel<FileResponse>,
