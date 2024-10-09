@@ -109,7 +109,7 @@ async fn handle_input_line(client: &mut NetworkClient, line: String) {
                 _ => {}
             }
         }
-        Some("add_peer") => {
+        Some("addpeer") => {
             let peer_id = {
                 match args.next() {
                     Some(peer_id) => PeerId::from_str(peer_id).unwrap(),
@@ -123,7 +123,23 @@ async fn handle_input_line(client: &mut NetworkClient, line: String) {
             let peer_addr = Utils::get_address_through_relay(&peer_id, None);
             let _ = client.dial(peer_id, peer_addr).await;
         }
-        Some("start_providing") => {
+        Some("addpeerws") => {
+            let seed = {
+                match args.next() {
+                    Some(peer_id) => u64::from_str(peer_id).unwrap(),
+                    None => {
+                        eprintln!("Expected key");
+                        return;
+                    }
+                }
+            };
+
+            let identity = Utils::generate_ed25519(seed);
+            let peer_id = identity.public().to_peer_id();
+            let peer_addr = Utils::get_address_through_relay(&peer_id, None);
+            let _ = client.dial(peer_id, peer_addr).await;
+        }
+        Some("startproviding") => {
             let key = {
                 match args.next() {
                     Some(key) => String::from(key),
@@ -136,7 +152,7 @@ async fn handle_input_line(client: &mut NetworkClient, line: String) {
 
             let _ = client.start_providing(key).await;
         }
-        Some("get_providers") => {
+        Some("getproviders") => {
             let key = {
                 match args.next() {
                     Some(key) => String::from(key),
@@ -150,7 +166,7 @@ async fn handle_input_line(client: &mut NetworkClient, line: String) {
             let providers = client.get_providers(key.clone()).await;
             println!("Got providers for {} {:?}", key, providers);
         }
-        Some("get_file") => {
+        Some("getfile") => {
             let file_id = {
                 match args.next() {
                     Some(file_id) => String::from(file_id),
