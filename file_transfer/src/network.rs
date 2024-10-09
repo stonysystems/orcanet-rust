@@ -295,10 +295,9 @@ impl EventLoop {
                     //     .finish();
                 }
             }
-            kad::QueryResult::GetRecord(Ok(_)) => {}
             kad::QueryResult::GetRecord(Err(err)) => {
                 if let Some(sender) = self.pending_get_value.remove(&query_id) {
-                    sender.send(Err(Box::new(err))).expect("Receiver not to be dropped");
+                    sender.send(Err(Box::new(err.clone()))).expect("Receiver not to be dropped");
                 }
                 eprintln!("Failed to get record: {err:?}");
             }
@@ -309,28 +308,12 @@ impl EventLoop {
                 );
                 if let Some(sender) = self.pending_put_kv.remove(&query_id) {
                     sender.send(Ok(())).expect("Receiver not to be dropped");
-
-                    // // Finish the query. We are only interested in the first result.
-                    // self.swarm
-                    //     .behaviour_mut()
-                    //     .kademlia
-                    //     .query_mut(&query_id)
-                    //     .unwrap()
-                    //     .finish();
                 }
             }
             kad::QueryResult::PutRecord(Err(err)) => {
                 eprintln!("Failed to put record: {err:?}");
                 if let Some(sender) = self.pending_put_kv.remove(&query_id) {
                     sender.send(Err(Box::new(err))).expect("Receiver not to be dropped");
-
-                    // // Finish the query. We are only interested in the first result.
-                    // self.swarm
-                    //     .behaviour_mut()
-                    //     .kademlia
-                    //     .query_mut(&query_id)
-                    //     .unwrap()
-                    //     .finish();
                 }
             }
             kad::QueryResult::StartProviding(Ok(kad::AddProviderOk { key })) => {
