@@ -278,11 +278,11 @@ impl EventLoop {
                                                                               ..
                                                                           })
                                         )) => {
-                println!(
-                    "Got record {:?} {:?}",
-                    std::str::from_utf8(key.as_ref()).unwrap(),
-                    std::str::from_utf8(&value).unwrap(),
-                );
+                // println!(
+                //     "Got record {:?} {:?}",
+                //     std::str::from_utf8(key.as_ref()).unwrap(),
+                //     std::str::from_utf8(&value).unwrap(),
+                // );
                 if let Some(sender) = self.pending_get_value.remove(&query_id) {
                     sender.send(Ok(value)).expect("Receiver not to be dropped");
 

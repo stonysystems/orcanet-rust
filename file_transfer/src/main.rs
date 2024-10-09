@@ -63,7 +63,7 @@ async fn handle_input_line(client: &mut NetworkClient, line: String) {
     let mut args = line.split(' ');
     let command = args.next();
 
-    println!("Got command {:?}", command);
+    // println!("Got command {:?}", command);
 
     if command.is_none() {
         return;
