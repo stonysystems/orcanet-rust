@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 use std::error::Error;
+use std::str::FromStr;
 
 use futures::channel::oneshot;
 use libp2p::{identity, Multiaddr, PeerId};
@@ -93,6 +94,16 @@ impl Utils {
 
     pub fn get_key_with_ns(key: &str) -> String {
         format!("{}/{}", OrcaNetConfig::NAMESPACE, key)
+    }
+
+    pub fn get_peer_id_from_input(input: &str) -> PeerId {
+        match u64::from_str(input) {
+            Ok(seed) => {
+                let keypair = Utils::generate_ed25519(seed);
+                keypair.public().to_peer_id()
+            }
+            Err(_) => PeerId::from_str(input).unwrap()
+        }
     }
 }
 

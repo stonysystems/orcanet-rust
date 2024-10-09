@@ -5,7 +5,6 @@ use std::str::FromStr;
 use async_std::task::block_on;
 use clap::Parser;
 use futures::StreamExt;
-use libp2p::PeerId;
 use tokio::{io, select};
 use tokio::io::AsyncBufReadExt;
 use tracing_subscriber::EnvFilter;
@@ -112,7 +111,7 @@ async fn handle_input_line(client: &mut NetworkClient, line: String) {
         Some("addpeer") => {
             let peer_id = {
                 match args.next() {
-                    Some(peer_id) => PeerId::from_str(peer_id).unwrap(),
+                    Some(input) => Utils::get_peer_id_from_input(input),
                     None => {
                         eprintln!("Expected key");
                         return;
@@ -120,22 +119,6 @@ async fn handle_input_line(client: &mut NetworkClient, line: String) {
                 }
             };
 
-            let peer_addr = Utils::get_address_through_relay(&peer_id, None);
-            let _ = client.dial(peer_id, peer_addr).await;
-        }
-        Some("addpeerws") => {
-            let seed = {
-                match args.next() {
-                    Some(peer_id) => u64::from_str(peer_id).unwrap(),
-                    None => {
-                        eprintln!("Expected key");
-                        return;
-                    }
-                }
-            };
-
-            let identity = Utils::generate_ed25519(seed);
-            let peer_id = identity.public().to_peer_id();
             let peer_addr = Utils::get_address_through_relay(&peer_id, None);
             let _ = client.dial(peer_id, peer_addr).await;
         }
@@ -179,15 +162,15 @@ async fn handle_input_line(client: &mut NetworkClient, line: String) {
 
             let peer_id = {
                 match args.next() {
-                    Some(peer_id) => String::from(peer_id),
+                    Some(input) => Utils::get_peer_id_from_input(input),
                     None => {
-                        eprintln!("Expected peer_id");
+                        eprintln!("Expected key");
                         return;
                     }
                 }
             };
 
-            let _ = client.request_file(peer_id.parse().unwrap(), file_id).await;
+            let _ = client.request_file(peer_id, file_id).await;
         }
         Some("exit") => {
             exit(0);

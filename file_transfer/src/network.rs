@@ -35,13 +35,13 @@ struct Behaviour {
 pub async fn new(
     secret_key_seed: u64,
 ) -> Result<(NetworkClient, mpsc::Receiver<OrcaNetEvent>, EventLoop), Box<dyn Error>> {
-    let identity = Utils::generate_ed25519(secret_key_seed);
+    let keypair = Utils::generate_ed25519(secret_key_seed);
     let relay_address = OrcaNetConfig::get_relay_address();
     let bootstrap_peer_id = OrcaNetConfig::get_bootstrap_peer_id();
     let boostrap_addr = OrcaNetConfig::get_bootstrap_address();
 
     let mut swarm =
-        libp2p::SwarmBuilder::with_existing_identity(identity)
+        libp2p::SwarmBuilder::with_existing_identity(keypair)
             .with_tokio()
             .with_tcp(
                 tcp::Config::default().nodelay(true),
@@ -186,7 +186,7 @@ impl EventLoop {
                     request, channel, ..
                 } => {
                     tracing::info!(?request, "Received request");
-                    
+
                     self.event_sender
                         .send(OrcaNetEvent::FileRequest {
                             file_id: request.0,
