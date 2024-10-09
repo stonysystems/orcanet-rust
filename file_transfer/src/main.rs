@@ -24,6 +24,20 @@ struct Opts {
     seed: u64,
 }
 
+macro_rules! expect_input {
+    ($exp:expr, $x:literal, $fn:expr) => {
+        {
+            match $exp {
+                Some(input) => $fn(input),
+                None => {
+                    eprintln!("Expected {}", $x);
+                    return;
+                }
+            }
+        }
+    };
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let _ = tracing_subscriber::fmt()
@@ -69,37 +83,13 @@ async fn handle_input_line(client: &mut NetworkClient, line: String) {
 
     match command {
         Some("put") => {
-            let key = {
-                match args.next() {
-                    Some(key) => Utils::get_key_with_ns(key),
-                    None => {
-                        eprintln!("Expected key");
-                        return;
-                    }
-                }
-            };
-            let value = {
-                match args.next() {
-                    Some(value) => value.as_bytes().to_vec(),
-                    None => {
-                        eprintln!("Expected value");
-                        return;
-                    }
-                }
-            };
+            let key = expect_input!(args.next(), "key", Utils::get_key_with_ns);
+            let value = expect_input!(args.next(), "value", |value: &str| value.as_bytes().to_vec());
 
             let _ = client.put_kv_pair(key, value).await;
         }
         Some("get") => {
-            let key = {
-                match args.next() {
-                    Some(key) => Utils::get_key_with_ns(key),
-                    None => {
-                        eprintln!("Expected key");
-                        return;
-                    }
-                }
-            };
+            let key = expect_input!(args.next(), "key", Utils::get_key_with_ns);
 
             match client.get_value(key).await {
                 Ok(v) => {
@@ -109,66 +99,25 @@ async fn handle_input_line(client: &mut NetworkClient, line: String) {
             }
         }
         Some("addpeer") => {
-            let peer_id = {
-                match args.next() {
-                    Some(input) => Utils::get_peer_id_from_input(input),
-                    None => {
-                        eprintln!("Expected key");
-                        return;
-                    }
-                }
-            };
+            let peer_id = expect_input!(args.next(), "peer_id", Utils::get_peer_id_from_input);
 
             let peer_addr = Utils::get_address_through_relay(&peer_id, None);
             let _ = client.dial(peer_id, peer_addr).await;
         }
         Some("startproviding") => {
-            let key = {
-                match args.next() {
-                    Some(key) => String::from(key),
-                    None => {
-                        eprintln!("Expected key");
-                        return;
-                    }
-                }
-            };
+            let key = expect_input!(args.next(), "key", Utils::get_key_with_ns);
 
             let _ = client.start_providing(key).await;
         }
         Some("getproviders") => {
-            let key = {
-                match args.next() {
-                    Some(key) => String::from(key),
-                    None => {
-                        eprintln!("Expected key");
-                        return;
-                    }
-                }
-            };
+            let key = expect_input!(args.next(), "key", Utils::get_key_with_ns);
 
             let providers = client.get_providers(key.clone()).await;
             println!("Got providers for {} {:?}", key, providers);
         }
         Some("getfile") => {
-            let file_id = {
-                match args.next() {
-                    Some(file_id) => String::from(file_id),
-                    None => {
-                        eprintln!("Expected file_id");
-                        return;
-                    }
-                }
-            };
-
-            let peer_id = {
-                match args.next() {
-                    Some(input) => Utils::get_peer_id_from_input(input),
-                    None => {
-                        eprintln!("Expected key");
-                        return;
-                    }
-                }
-            };
+            let file_id = expect_input!(args.next(), "file_id", Utils::get_key_with_ns);
+            let peer_id = expect_input!(args.next(), "peer_id", Utils::get_peer_id_from_input);
 
             match client.request_file(peer_id, file_id).await {
                 Ok(res) => {
