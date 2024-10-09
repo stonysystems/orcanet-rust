@@ -170,7 +170,13 @@ async fn handle_input_line(client: &mut NetworkClient, line: String) {
                 }
             };
 
-            let _ = client.request_file(peer_id, file_id).await;
+            match client.request_file(peer_id, file_id).await {
+                Ok(res) => {
+                    // let a = String::from()
+                    println!("Got file content: {}", String::from_utf8(res).unwrap());
+                }
+                Err(e) => eprintln!("Error when getting file: {:?}", e)
+            }
         }
         Some("exit") => {
             exit(0);
