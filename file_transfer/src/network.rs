@@ -185,6 +185,8 @@ impl EventLoop {
                 request_response::Message::Request {
                     request, channel, ..
                 } => {
+                    tracing::info!(?request, "Received request");
+                    
                     self.event_sender
                         .send(OrcaNetEvent::FileRequest {
                             file_id: request.0,
@@ -197,6 +199,8 @@ impl EventLoop {
                     request_id,
                     response,
                 } => {
+                    tracing::info!(?response, "Received response");
+
                     let _ = self
                         .pending_request_file
                         .remove(&request_id)
@@ -209,6 +213,8 @@ impl EventLoop {
                                           request_id, error, ..
                                       },
                                   )) => {
+                tracing::info!(?error, "Request response outbound failure:");
+
                 let _ = self
                     .pending_request_file
                     .remove(&request_id)
@@ -388,7 +394,7 @@ impl EventLoop {
                     .behaviour_mut()
                     .request_response
                     .send_request(&peer, FileRequest(file_id));
-                println!("Sending file request");
+                println!("Sent file request");
                 self.pending_request_file.insert(request_id, sender);
             }
             OrcaNetCommand::RespondFile { file, channel } => {
