@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::path::Path;
 use std::str::FromStr;
@@ -15,7 +15,8 @@ impl OrcaNetConfig {
     pub const NAMESPACE: &'static str = "/orcanet";
     pub const STREAM_PROTOCOL: &'static str = "/orcanet/p2p";
     pub const SECRET_KEY_SEED: u64 = 4;
-    pub const FILE_SAVE_DIR: &'static str = "/Users/sethu/RustroverProjects/P2PComm/file_store_dest";
+    pub const FILE_SAVE_DIR: &'static str = "/Users/sethu/RustroverProjects/P2PComm/app_data/file_store_dest";
+    pub const FILES_LISTING: &'static str = "/Users/sethu/RustroverProjects/P2PComm/app_data/provided_files.json";
 
     pub fn get_bootstrap_peer_id() -> PeerId {
         "12D3KooWQd1K1k8XA9xVEzSAu7HUCodC7LJB6uW5Kw4VwkRdstPE"
@@ -106,6 +107,20 @@ impl Utils {
             }
             Err(_) => PeerId::from_str(input).unwrap()
         }
+    }
+
+    pub fn dump_provided_files(files_map: &HashMap<String, String>) {
+        let json = serde_json::to_string(files_map)
+            .expect("files_map must be serializable");
+        let _ = std::fs::write(Path::new(OrcaNetConfig::FILES_LISTING), json);
+    }
+
+    pub fn load_provided_files() -> HashMap<String, String> {
+        let json = std::fs::read_to_string(Path::new(OrcaNetConfig::FILES_LISTING)).unwrap();
+        let map: HashMap<String, String> = serde_json::from_str(&json)
+            .unwrap_or(Default::default());
+
+        return map;
     }
 }
 

@@ -1,4 +1,4 @@
 /target
 .idea
 .DS_Store
-file_store_dest
+app_data

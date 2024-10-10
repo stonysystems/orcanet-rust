@@ -6,7 +6,7 @@ use futures::StreamExt;
 use tokio::select;
 
 use crate::client::NetworkClient;
-use crate::common::{FileResponse, OrcaNetEvent};
+use crate::common::{FileResponse, OrcaNetEvent, Utils};
 
 pub struct RequestHandlerLoop {
     network_client: NetworkClient,
@@ -19,11 +19,16 @@ impl RequestHandlerLoop {
         RequestHandlerLoop {
             network_client,
             event_receiver,
-            provided_files: Default::default(),
+            provided_files: Utils::load_provided_files(),
         }
     }
 
     pub async fn run(mut self) {
+        // Start providing all configured files
+        for file_id in self.provided_files.keys() {
+            self.network_client.start_providing(file_id.clone()).await;
+        }
+
         loop {
             select! {
                 event = self.event_receiver.next() => match event {
@@ -69,6 +74,7 @@ impl RequestHandlerLoop {
                 if path.exists() {
                     println!("Added file {} to provided files list", file_id);
                     self.provided_files.insert(file_id, file_path);
+                    Utils::dump_provided_files(&self.provided_files);
                 }
             }
         }
