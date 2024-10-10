@@ -1,4 +1,5 @@
 use std::error::Error;
+use std::path::Path;
 use std::process::exit;
 use std::str::FromStr;
 
@@ -11,7 +12,7 @@ use tokio::io::AsyncBufReadExt;
 use tracing_subscriber::EnvFilter;
 
 use crate::client::NetworkClient;
-use crate::common::{OrcaNetEvent, Utils};
+use crate::common::{OrcaNetConfig, OrcaNetEvent, Utils};
 use crate::request_handler::RequestHandlerLoop;
 
 mod request_handler;
@@ -126,10 +127,14 @@ async fn handle_input_line(
 
             match client.request_file(peer_id, file_id).await {
                 Ok(res) => {
-                    // let a = String::from()
+                    // println!("Got file name: {}, content: {}", res.file_name,
+                    //          String::from_utf8(res.content).unwrap());
 
-                    println!("Got file name: {}, content: {}", res.file_name,
-                             String::from_utf8(res.content).unwrap());
+                    let path = Path::new(OrcaNetConfig::FILE_SAVE_DIR).join(res.file_name.clone());
+                    match std::fs::write(&path, &res.content) {
+                        Ok(_) => println!("Wrote file {} to {:?}", res.file_name, path),
+                        Err(e) => eprintln!("Error writing file {:?}", e)
+                    }
                 }
                 Err(e) => eprintln!("Error when getting file: {:?}", e)
             }
