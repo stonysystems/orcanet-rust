@@ -96,13 +96,13 @@ pub async fn new(
         .behaviour_mut()
         .kademlia
         .set_mode(Some(kad::Mode::Server));
-    // swarm
-    //     .behaviour_mut()
-    //     .kademlia
-    //     .add_address(&bootstrap_peer_id, boostrap_addr.clone());
+    swarm
+        .behaviour_mut()
+        .kademlia
+        .add_address(&bootstrap_peer_id, boostrap_addr.clone());
 
     // Dial the bootstrap node
-    // swarm.dial(boostrap_addr.clone()).unwrap();
+    swarm.dial(boostrap_addr.clone()).unwrap();
 
     let (command_sender, command_receiver) = mpsc::channel(0);
 
