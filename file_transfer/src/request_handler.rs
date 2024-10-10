@@ -42,7 +42,10 @@ impl RequestHandlerLoop {
 
                 let file_resp = match self.provided_files.get(&file_id) {
                     Some(file_path) => {
-                        std::fs::read(file_path).unwrap_or("Can't read it".as_bytes().into())
+                        std::fs::read(file_path).unwrap_or_else(|e| {
+                            eprintln!("Couldn't read file: {:?}", e);
+                            "Can't read it".as_bytes().into()
+                        })
                     }
                     None => "Don't have it".as_bytes().into()
                 };
