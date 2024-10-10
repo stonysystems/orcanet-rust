@@ -25,8 +25,8 @@ struct Opts {
     #[arg(long, default_value_t = 4)]
     seed: u64,
 
-    // #[arg(long, required = true)]
-    // app_data_path: String,
+    #[arg(long, required = true)]
+    app_data_path: String,
 }
 
 macro_rules! expect_input {
@@ -52,7 +52,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let (mut event_sender, event_receiver) = mpsc::channel::<OrcaNetEvent>(0);
     let (mut network_client, network_event_loop) = network::new(opts.seed, event_sender.clone()).await?;
-    let mut request_handler_loop = RequestHandlerLoop::new(network_client.clone(), event_receiver);
+    let mut request_handler_loop = RequestHandlerLoop::new(
+        network_client.clone(), event_receiver, opts.app_data_path.clone());
 
     // Network event loop
     tokio::task::spawn(network_event_loop.run());
@@ -67,7 +68,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
             select! {
                 Ok(Some(line)) = stdin.next_line() => {
                     // handle_input_line(&mut swarm.behaviour_mut().kademlia, line);
-                    handle_input_line(&mut network_client, &mut event_sender, line).await;
+                    handle_input_line(&mut network_client, &mut event_sender,
+                        &opts.app_data_path, line).await;
                 }
             }
         }
@@ -79,6 +81,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 async fn handle_input_line(
     client: &mut NetworkClient,
     event_sender: &mut mpsc::Sender<OrcaNetEvent>,
+    app_data_path: &String,
     line: String,
 ) {
     let mut args = line.split(' ');
@@ -133,7 +136,7 @@ async fn handle_input_line(
                     // println!("Got file name: {}, content: {}", res.file_name,
                     //          String::from_utf8(res.content).unwrap());
 
-                    let path = Path::new(OrcaNetConfig::FILE_SAVE_DIR).join(res.file_name.clone());
+                    let path = Path::new(app_data_path).join(res.file_name.clone());
                     match std::fs::write(&path, &res.content) {
                         Ok(_) => println!("Wrote file {} to {:?}", res.file_name, path),
                         Err(e) => eprintln!("Error writing file {:?}", e)

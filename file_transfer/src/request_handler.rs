@@ -12,20 +12,20 @@ pub struct RequestHandlerLoop {
     network_client: NetworkClient,
     event_receiver: mpsc::Receiver<OrcaNetEvent>,
     provided_files: HashMap<String, String>,
-    // app_data_path: String
+    app_data_path: String,
 }
 
 impl RequestHandlerLoop {
     pub fn new(
         network_client: NetworkClient,
         event_receiver: mpsc::Receiver<OrcaNetEvent>,
-        // app_data_path: String
+        app_data_path: String,
     ) -> Self {
         RequestHandlerLoop {
             network_client,
             event_receiver,
-            provided_files: Utils::load_provided_files(),
-            // app_data_path
+            provided_files: Utils::load_provided_files(&app_data_path),
+            app_data_path,
         }
     }
 
@@ -80,7 +80,7 @@ impl RequestHandlerLoop {
                 if path.exists() {
                     println!("Added file {} to provided files list", file_id);
                     self.provided_files.insert(file_id, file_path);
-                    Utils::dump_provided_files(&self.provided_files);
+                    Utils::dump_provided_files(&self.app_data_path, &self.provided_files);
                 }
             }
         }

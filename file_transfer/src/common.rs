@@ -15,8 +15,8 @@ impl OrcaNetConfig {
     pub const NAMESPACE: &'static str = "/orcanet";
     pub const STREAM_PROTOCOL: &'static str = "/orcanet/p2p";
     pub const SECRET_KEY_SEED: u64 = 4;
-    pub const FILE_SAVE_DIR: &'static str = "/Users/sethu/Documents/orcanet/file_store_dest";
-    pub const FILES_LISTING: &'static str = "/Users/sethu/Documents/orcanet/provided_files.json";
+    pub const FILE_SAVE_DIR: &'static str = "orcanet/file_store_dest";
+    pub const FILES_LISTING: &'static str = "orcanet/provided_files.json";
 
     pub fn get_bootstrap_peer_id() -> PeerId {
         "12D3KooWQd1K1k8XA9xVEzSAu7HUCodC7LJB6uW5Kw4VwkRdstPE"
@@ -109,8 +109,8 @@ impl Utils {
         }
     }
 
-    pub fn dump_provided_files(files_map: &HashMap<String, String>) {
-        let path = Path::new(OrcaNetConfig::FILES_LISTING);
+    pub fn dump_provided_files(app_data_path: &String, files_map: &HashMap<String, String>) {
+        let path = Path::new(app_data_path).join(OrcaNetConfig::FILES_LISTING);
         if !path.exists() {
             return;
         }
@@ -120,13 +120,13 @@ impl Utils {
         let _ = std::fs::write(path, json);
     }
 
-    pub fn load_provided_files() -> HashMap<String, String> {
-        let path = Path::new(OrcaNetConfig::FILES_LISTING);
+    pub fn load_provided_files(app_data_path: &String) -> HashMap<String, String> {
+        let path = Path::new(app_data_path).join(OrcaNetConfig::FILES_LISTING);
         if !path.exists() {
             return Default::default();
         }
 
-        let json = std::fs::read_to_string(Path::new(OrcaNetConfig::FILES_LISTING)).unwrap();
+        let json = std::fs::read_to_string(path).unwrap();
         let map: HashMap<String, String> = serde_json::from_str(&json)
             .unwrap_or(Default::default());
 
