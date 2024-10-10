@@ -24,6 +24,9 @@ mod common;
 struct Opts {
     #[arg(long, default_value_t = 4)]
     seed: u64,
+
+    // #[arg(long, required = true)]
+    // app_data_path: String,
 }
 
 macro_rules! expect_input {

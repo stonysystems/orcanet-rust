@@ -12,14 +12,20 @@ pub struct RequestHandlerLoop {
     network_client: NetworkClient,
     event_receiver: mpsc::Receiver<OrcaNetEvent>,
     provided_files: HashMap<String, String>,
+    // app_data_path: String
 }
 
 impl RequestHandlerLoop {
-    pub fn new(network_client: NetworkClient, event_receiver: mpsc::Receiver<OrcaNetEvent>) -> Self {
+    pub fn new(
+        network_client: NetworkClient,
+        event_receiver: mpsc::Receiver<OrcaNetEvent>,
+        // app_data_path: String
+    ) -> Self {
         RequestHandlerLoop {
             network_client,
             event_receiver,
             provided_files: Utils::load_provided_files(),
+            // app_data_path
         }
     }
 
