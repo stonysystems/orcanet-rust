@@ -198,7 +198,7 @@ impl EventLoop {
                     request_id,
                     response,
                 } => {
-                    tracing::info!(?response, "Received response");
+                    tracing::debug!(?response, "Received file");
 
                     let _ = self
                         .pending_request_file

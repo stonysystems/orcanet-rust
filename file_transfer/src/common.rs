@@ -15,7 +15,7 @@ impl OrcaNetConfig {
     pub const NAMESPACE: &'static str = "/orcanet";
     pub const STREAM_PROTOCOL: &'static str = "/orcanet/p2p";
     pub const SECRET_KEY_SEED: u64 = 4;
-    pub const FILE_SAVE_DIR: &'static str = "/Users/sethu/RustroverProjects/P2PComm/files_saved";
+    pub const FILE_SAVE_DIR: &'static str = "/Users/sethu/RustroverProjects/P2PComm/file_store_dest";
 
     pub fn get_bootstrap_peer_id() -> PeerId {
         "12D3KooWQd1K1k8XA9xVEzSAu7HUCodC7LJB6uW5Kw4VwkRdstPE"
