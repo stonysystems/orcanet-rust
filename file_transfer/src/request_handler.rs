@@ -6,7 +6,7 @@ use futures::StreamExt;
 use tokio::select;
 
 use crate::client::NetworkClient;
-use crate::common::OrcaNetEvent;
+use crate::common::{FileResponse, OrcaNetEvent};
 
 pub struct RequestHandlerLoop {
     network_client: NetworkClient,
@@ -42,12 +42,22 @@ impl RequestHandlerLoop {
 
                 let file_resp = match self.provided_files.get(&file_id) {
                     Some(file_path) => {
-                        std::fs::read(file_path).unwrap_or_else(|e| {
+                        let path = Path::new(&file_path);
+                        let file_name = String::from(path.file_name().unwrap().to_str().unwrap());
+                        let content = std::fs::read(path).unwrap_or_else(|e| {
                             eprintln!("Couldn't read file: {:?}", e);
                             "Can't read it".as_bytes().into()
-                        })
+                        });
+
+                        FileResponse {
+                            file_name,
+                            content,
+                        }
                     }
-                    None => "Don't have it".as_bytes().into()
+                    None => FileResponse {
+                        file_name: "no_name".to_string(),
+                        content: "Can't find it".as_bytes().into(),
+                    }
                 };
 
                 self.network_client

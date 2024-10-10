@@ -4,8 +4,8 @@ use std::str::FromStr;
 
 use async_std::task::block_on;
 use clap::Parser;
-use futures::channel::mpsc;
 use futures::{SinkExt, StreamExt};
+use futures::channel::mpsc;
 use tokio::{io, select};
 use tokio::io::AsyncBufReadExt;
 use tracing_subscriber::EnvFilter;
@@ -127,7 +127,9 @@ async fn handle_input_line(
             match client.request_file(peer_id, file_id).await {
                 Ok(res) => {
                     // let a = String::from()
-                    println!("Got file content: {}", String::from_utf8(res).unwrap());
+
+                    println!("Got file name: {}, content: {}", res.file_name,
+                             String::from_utf8(res.content).unwrap());
                 }
                 Err(e) => eprintln!("Error when getting file: {:?}", e)
             }
@@ -137,7 +139,7 @@ async fn handle_input_line(
             let file_path = expect_input!(args.next(), "file_path", String::from);
 
             let _ = client.start_providing(file_id.clone()).await;
-            let _ = event_sender.send(OrcaNetEvent::ProvideFile {file_id, file_path}).await;
+            let _ = event_sender.send(OrcaNetEvent::ProvideFile { file_id, file_path }).await;
         }
         Some("exit") => {
             exit(0);

@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 use std::error::Error;
+use std::path::Path;
 use std::str::FromStr;
 
 use futures::channel::oneshot;
@@ -67,10 +68,10 @@ pub enum OrcaNetCommand {
     RequestFile {
         file_id: String,
         peer: PeerId,
-        sender: oneshot::Sender<Result<Vec<u8>, Box<dyn Error + Send>>>,
+        sender: oneshot::Sender<Result<FileResponse, Box<dyn Error + Send>>>,
     },
     RespondFile {
-        file: Vec<u8>,
+        file_resp: FileResponse,
         channel: ResponseChannel<FileResponse>,
     },
 }
@@ -124,4 +125,7 @@ pub enum OrcaNetEvent {
 pub struct FileRequest(pub String);
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct FileResponse(pub Vec<u8>);
+pub struct FileResponse {
+    pub file_name: String,
+    pub content: Vec<u8>,
+}

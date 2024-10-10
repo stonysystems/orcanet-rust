@@ -71,7 +71,7 @@ impl NetworkClient {
         &mut self,
         peer: PeerId,
         file_id: String,
-    ) -> Result<Vec<u8>, Box<dyn Error + Send>> {
+    ) -> Result<FileResponse, Box<dyn Error + Send>> {
         let (sender, receiver) = oneshot::channel();
         self.sender
             .send(OrcaNetCommand::RequestFile {
@@ -149,11 +149,11 @@ impl NetworkClient {
     /// Respond with the provided file content to the given request.
     pub async fn respond_file(
         &mut self,
-        file: Vec<u8>,
+        file_resp: FileResponse,
         channel: ResponseChannel<FileResponse>,
     ) {
         self.sender
-            .send( OrcaNetCommand::RespondFile { file, channel })
+            .send( OrcaNetCommand::RespondFile { file_resp, channel })
             .await
             .expect("Command receiver not to be dropped.");
     }

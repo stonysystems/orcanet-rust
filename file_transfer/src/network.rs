@@ -121,7 +121,7 @@ pub struct EventLoop {
     pending_dial: HashMap<PeerId, oneshot::Sender<Result<(), Box<dyn Error + Send>>>>,
     pending_start_providing: HashMap<kad::QueryId, oneshot::Sender<()>>,
     pending_get_providers: HashMap<kad::QueryId, oneshot::Sender<HashSet<PeerId>>>,
-    pending_request_file: HashMap<OutboundRequestId, oneshot::Sender<Result<Vec<u8>, Box<dyn Error + Send>>>>,
+    pending_request_file: HashMap<OutboundRequestId, oneshot::Sender<Result<FileResponse, Box<dyn Error + Send>>>>,
     pending_put_kv: HashMap<kad::QueryId, oneshot::Sender<Result<(), Box<dyn Error + Send>>>>,
     pending_get_value: HashMap<kad::QueryId, oneshot::Sender<Result<Vec<u8>, Box<dyn Error + Send>>>>,
 }
@@ -204,7 +204,7 @@ impl EventLoop {
                         .pending_request_file
                         .remove(&request_id)
                         .expect("Request to still be pending.")
-                        .send(Ok(response.0));
+                        .send(Ok(response));
                 }
             },
             SwarmEvent::Behaviour(BehaviourEvent::RequestResponse(
@@ -396,11 +396,11 @@ impl EventLoop {
                 println!("Sent file request");
                 self.pending_request_file.insert(request_id, sender);
             }
-            OrcaNetCommand::RespondFile { file, channel } => {
+            OrcaNetCommand::RespondFile { file_resp, channel } => {
                 self.swarm
                     .behaviour_mut()
                     .request_response
-                    .send_response(channel, FileResponse(file))
+                    .send_response(channel, file_resp)
                     .expect("Connection to peer to be still open.");
             }
             OrcaNetCommand::PutKV { key, value, sender } => {
