@@ -34,7 +34,8 @@ struct Behaviour {
 /// - The network task driving the network itself.
 pub async fn new(
     secret_key_seed: u64,
-) -> Result<(NetworkClient, mpsc::Receiver<OrcaNetEvent>, EventLoop), Box<dyn Error>> {
+    event_sender: mpsc::Sender<OrcaNetEvent>
+) -> Result<(NetworkClient, EventLoop), Box<dyn Error>> {
     let keypair = Utils::generate_ed25519(secret_key_seed);
     let relay_address = OrcaNetConfig::get_relay_address();
     let bootstrap_peer_id = OrcaNetConfig::get_bootstrap_peer_id();
@@ -104,13 +105,11 @@ pub async fn new(
     // swarm.dial(boostrap_addr.clone()).unwrap();
 
     let (command_sender, command_receiver) = mpsc::channel(0);
-    let (event_sender, event_receiver) = mpsc::channel(0);
 
     Ok((
         NetworkClient {
             sender: command_sender,
         },
-        event_receiver,
         EventLoop::new(swarm, command_receiver, event_sender),
     ))
 }

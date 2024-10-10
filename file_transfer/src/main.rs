@@ -4,16 +4,17 @@ use std::str::FromStr;
 
 use async_std::task::block_on;
 use clap::Parser;
-use futures::StreamExt;
+use futures::channel::mpsc;
+use futures::{SinkExt, StreamExt};
 use tokio::{io, select};
 use tokio::io::AsyncBufReadExt;
 use tracing_subscriber::EnvFilter;
 
 use crate::client::NetworkClient;
-use crate::common::Utils;
-use crate::request_handlers::RequestHandlerLoop;
+use crate::common::{OrcaNetEvent, Utils};
+use crate::request_handler::RequestHandlerLoop;
 
-mod request_handlers;
+mod request_handler;
 mod client;
 mod network;
 mod common;
@@ -25,12 +26,12 @@ struct Opts {
 }
 
 macro_rules! expect_input {
-    ($exp:expr, $x:literal, $fn:expr) => {
+    ($exp:expr, $name:literal, $func:expr) => {
         {
             match $exp {
-                Some(input) => $fn(input),
+                Some(input) => $func(input),
                 None => {
-                    eprintln!("Expected {}", $x);
+                    eprintln!("Expected {}", $name);
                     return;
                 }
             }
@@ -45,9 +46,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .try_init();
     let opts = Opts::parse();
 
-    let (mut network_client, mut network_events, network_event_loop) =
-        network::new(opts.seed).await?;
-    let mut request_handler_loop = RequestHandlerLoop::new(network_client.clone(), network_events);
+    let (mut event_sender, event_receiver) = mpsc::channel::<OrcaNetEvent>(0);
+    let (mut network_client, network_event_loop) = network::new(opts.seed, event_sender.clone()).await?;
+    let mut request_handler_loop = RequestHandlerLoop::new(network_client.clone(), event_receiver);
 
     // Network event loop
     tokio::task::spawn(network_event_loop.run());
@@ -62,7 +63,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             select! {
                 Ok(Some(line)) = stdin.next_line() => {
                     // handle_input_line(&mut swarm.behaviour_mut().kademlia, line);
-                    handle_input_line(&mut network_client, line).await;
+                    handle_input_line(&mut network_client, &mut event_sender, line).await;
                 }
             }
         }
@@ -71,7 +72,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-async fn handle_input_line(client: &mut NetworkClient, line: String) {
+async fn handle_input_line(
+    client: &mut NetworkClient,
+    event_sender: &mut mpsc::Sender<OrcaNetEvent>,
+    line: String,
+) {
     let mut args = line.split(' ');
     let command = args.next();
 
@@ -100,8 +105,8 @@ async fn handle_input_line(client: &mut NetworkClient, line: String) {
         }
         Some("addpeer") => {
             let peer_id = expect_input!(args.next(), "peer_id", Utils::get_peer_id_from_input);
-
             let peer_addr = Utils::get_address_through_relay(&peer_id, None);
+
             let _ = client.dial(peer_id, peer_addr).await;
         }
         Some("startproviding") => {
@@ -126,6 +131,13 @@ async fn handle_input_line(client: &mut NetworkClient, line: String) {
                 }
                 Err(e) => eprintln!("Error when getting file: {:?}", e)
             }
+        }
+        Some("providefile") => {
+            let file_id = expect_input!(args.next(), "file_id", Utils::get_key_with_ns);
+            let file_path = expect_input!(args.next(), "file_path", String::from);
+
+            let _ = client.start_providing(file_id.clone()).await;
+            let _ = event_sender.send(OrcaNetEvent::ProvideFile {file_id, file_path}).await;
         }
         Some("exit") => {
             exit(0);

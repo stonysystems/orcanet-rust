@@ -112,7 +112,11 @@ pub enum OrcaNetEvent {
     FileRequest {
         file_id: String,
         channel: ResponseChannel<FileResponse>,
-    }
+    },
+    ProvideFile {
+        file_id: String,
+        file_path: String,
+    },
 }
 
 // Simple file exchange protocol
