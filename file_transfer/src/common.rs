@@ -18,8 +18,7 @@ impl OrcaNetConfig {
     pub const SECRET_KEY_SEED: u64 = 4;
     // pub const CONFIG_FILE_PATH: PathBuf = dirs::home_dir().unwrap().join("/.orcanet/config.json");
     pub const CONFIG_FILE_REL_PATH: &'static str = ".orcanet/config.json";
-    pub const FILE_SAVE_DIR: &'static str = "orcanet/file_store_dest";
-    pub const FILES_LISTING: &'static str = "orcanet/provided_files.json";
+    pub const FILE_SAVE_DIR: &'static str = "file_store_dest";
 
     pub fn get_bootstrap_peer_id() -> PeerId {
         "12D3KooWQd1K1k8XA9xVEzSAu7HUCodC7LJB6uW5Kw4VwkRdstPE"
@@ -139,30 +138,6 @@ impl Utils {
             }
             Err(_) => PeerId::from_str(input).unwrap()
         }
-    }
-
-    pub fn dump_provided_files(app_data_path: &String, files_map: &HashMap<String, String>) {
-        let path = Path::new(app_data_path).join(OrcaNetConfig::FILES_LISTING);
-        if !path.exists() {
-            return;
-        }
-
-        let json = serde_json::to_string(files_map)
-            .expect("files_map must be serializable");
-        let _ = std::fs::write(path, json);
-    }
-
-    pub fn load_provided_files(app_data_path: &String) -> HashMap<String, String> {
-        let path = Path::new(app_data_path).join(OrcaNetConfig::FILES_LISTING);
-        if !path.exists() {
-            return Default::default();
-        }
-
-        let json = std::fs::read_to_string(path).unwrap();
-        let map: HashMap<String, String> = serde_json::from_str(&json)
-            .unwrap_or(Default::default());
-
-        return map;
     }
 }
 

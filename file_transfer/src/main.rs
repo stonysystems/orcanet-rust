@@ -159,6 +159,8 @@ async fn handle_input_line(
         Some("exit") => {
             exit(0);
         }
-        _ => {}
+        _ => {
+            eprintln!("Invalid command {:?}", command);
+        }
     }
 }

@@ -46,6 +46,7 @@ impl RequestHandlerLoop {
                 println!("Received request for file_id: {}", file_id);
                 // TODO: Add proper error handling
                 let file_info = db_client.get_provided_file_info(file_id.as_str());
+                println!("File info for request {} {:?}", file_id, file_info);
 
                 let file_resp = match file_info {
                     Ok(file_info) => {
