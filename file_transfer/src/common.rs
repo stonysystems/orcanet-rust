@@ -144,6 +144,7 @@ pub enum OrcaNetEvent {
         file_id: String,
         file_path: String,
     },
+    // GetProvidedFiles,
 }
 
 // Simple file exchange protocol
@@ -154,4 +155,9 @@ pub struct FileRequest(pub String);
 pub struct FileResponse {
     pub file_name: String,
     pub content: Vec<u8>,
+}
+
+
+struct DBClient {
+
 }

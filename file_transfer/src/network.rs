@@ -11,7 +11,7 @@ use libp2p::kad::store::{MemoryStore, MemoryStoreConfig};
 use libp2p::request_response::ProtocolSupport;
 use serde::{Deserialize, Serialize};
 
-use crate::client::NetworkClient;
+use crate::network_client::NetworkClient;
 use crate::common::{FileRequest, FileResponse, OrcaNetCommand, OrcaNetConfig, OrcaNetEvent, Utils};
 
 #[derive(NetworkBehaviour)]
@@ -96,13 +96,13 @@ pub async fn new(
         .behaviour_mut()
         .kademlia
         .set_mode(Some(kad::Mode::Server));
-    swarm
-        .behaviour_mut()
-        .kademlia
-        .add_address(&bootstrap_peer_id, boostrap_addr.clone());
-
-    // Dial the bootstrap node
-    swarm.dial(boostrap_addr.clone()).unwrap();
+    // swarm
+    //     .behaviour_mut()
+    //     .kademlia
+    //     .add_address(&bootstrap_peer_id, boostrap_addr.clone());
+    //
+    // // Dial the bootstrap node
+    // swarm.dial(boostrap_addr.clone()).unwrap();
 
     let (command_sender, command_receiver) = mpsc::channel(0);
 

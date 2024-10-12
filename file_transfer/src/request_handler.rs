@@ -5,7 +5,7 @@ use futures::channel::mpsc;
 use futures::StreamExt;
 use tokio::select;
 
-use crate::client::NetworkClient;
+use crate::network_client::NetworkClient;
 use crate::common::{FileResponse, OrcaNetEvent, Utils};
 
 pub struct RequestHandlerLoop {

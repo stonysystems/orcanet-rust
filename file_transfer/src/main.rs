@@ -11,14 +11,15 @@ use tokio::{io, select};
 use tokio::io::AsyncBufReadExt;
 use tracing_subscriber::EnvFilter;
 
-use crate::client::NetworkClient;
+use crate::network_client::NetworkClient;
 use crate::common::{OrcaNetConfig, OrcaNetEvent, Utils};
 use crate::request_handler::RequestHandlerLoop;
 
 mod request_handler;
-mod client;
+mod network_client;
 mod network;
 mod common;
+mod db_client;
 
 #[derive(Parser)]
 struct Opts {
