@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use futures::channel::oneshot;
@@ -8,6 +8,7 @@ use libp2p::{identity, Multiaddr, PeerId};
 use libp2p::multiaddr::Protocol;
 use libp2p::request_response::ResponseChannel;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 pub struct OrcaNetConfig;
 
@@ -15,6 +16,8 @@ impl OrcaNetConfig {
     pub const NAMESPACE: &'static str = "/orcanet";
     pub const STREAM_PROTOCOL: &'static str = "/orcanet/p2p";
     pub const SECRET_KEY_SEED: u64 = 4;
+    // pub const CONFIG_FILE_PATH: PathBuf = dirs::home_dir().unwrap().join("/.orcanet/config.json");
+    pub const CONFIG_FILE_REL_PATH: &'static str = ".orcanet/config.json";
     pub const FILE_SAVE_DIR: &'static str = "orcanet/file_store_dest";
     pub const FILES_LISTING: &'static str = "orcanet/provided_files.json";
 
@@ -36,6 +39,31 @@ impl OrcaNetConfig {
     pub fn get_relay_address() -> Multiaddr {
         "/ip4/130.245.173.221/tcp/4001/p2p/12D3KooWDpJ7As7BWAwRMfu1VU2WCqNjvq387JEYKDBj4kx6nXTN"
             .parse().unwrap()
+    }
+
+    pub fn get_config_file_path() -> PathBuf {
+        let home_dir = dirs::home_dir().unwrap();
+        home_dir.join(Self::CONFIG_FILE_REL_PATH)
+    }
+
+    pub fn get_from_config(key: &str) -> Option<Value> {
+        let json_str = std::fs::read_to_string(Self::get_config_file_path())
+            .expect(format!("Config file to be present at $HOME/{}", &Self::CONFIG_FILE_REL_PATH).as_str());
+        let json: Value = serde_json::from_str(&json_str).unwrap();
+
+        return json.get(key).cloned();
+    }
+
+    pub fn get_db_path() -> String {
+        return Self::get_from_config("db_path")
+            .expect("db_path to be present in config")
+            .to_string();
+    }
+
+    pub fn get_app_data_path() -> String {
+        return Self::get_from_config("app_data_path")
+            .expect("app_data_path to be present in config")
+            .to_string();
     }
 }
 
@@ -67,14 +95,14 @@ pub enum OrcaNetCommand {
         key: String,
         sender: oneshot::Sender<Result<Vec<u8>, Box<dyn Error + Send>>>,
     },
-    RequestFile {
-        file_id: String,
+    Request {
+        request: OrcaNetRequest,
         peer: PeerId,
-        sender: oneshot::Sender<Result<FileResponse, Box<dyn Error + Send>>>,
+        sender: oneshot::Sender<Result<OrcaNetResponse, Box<dyn Error + Send>>>,
     },
-    RespondFile {
-        file_resp: FileResponse,
-        channel: ResponseChannel<FileResponse>,
+    Respond {
+        response: OrcaNetResponse,
+        channel: ResponseChannel<OrcaNetResponse>,
     },
 }
 
@@ -138,26 +166,30 @@ impl Utils {
 pub enum OrcaNetEvent {
     FileRequest {
         file_id: String,
-        channel: ResponseChannel<FileResponse>,
+        channel: ResponseChannel<OrcaNetResponse>,
     },
     ProvideFile {
         file_id: String,
         file_path: String,
     },
+    StopProvidingFile {
+        file_id: String
+    },
     // GetProvidedFiles,
 }
 
-// Simple file exchange protocol
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct FileRequest(pub String);
+pub enum OrcaNetRequest {
+    FileRequest { file_id: String }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct FileResponse {
-    pub file_name: String,
-    pub content: Vec<u8>,
+pub enum OrcaNetResponse {
+    FileResponse {
+        file_name: String,
+        content: Vec<u8>,
+    }
 }
 
 
-struct DBClient {
-
-}
+struct DBClient {}

@@ -11,8 +11,8 @@ use libp2p::kad::store::{MemoryStore, MemoryStoreConfig};
 use libp2p::request_response::ProtocolSupport;
 use serde::{Deserialize, Serialize};
 
+use crate::common::{OrcaNetCommand, OrcaNetConfig, OrcaNetEvent, OrcaNetRequest, OrcaNetResponse, Utils};
 use crate::network_client::NetworkClient;
-use crate::common::{FileRequest, FileResponse, OrcaNetCommand, OrcaNetConfig, OrcaNetEvent, Utils};
 
 #[derive(NetworkBehaviour)]
 struct Behaviour {
@@ -21,7 +21,7 @@ struct Behaviour {
     identify: identify::Behaviour,
     kademlia: kad::Behaviour<MemoryStore>,
     stream: libp2p_stream::Behaviour,
-    request_response: request_response::cbor::Behaviour<FileRequest, FileResponse>,
+    request_response: request_response::cbor::Behaviour<OrcaNetRequest, OrcaNetResponse>,
 }
 
 /// Creates the network components, namely:
@@ -34,7 +34,7 @@ struct Behaviour {
 /// - The network task driving the network itself.
 pub async fn new(
     secret_key_seed: u64,
-    event_sender: mpsc::Sender<OrcaNetEvent>
+    event_sender: mpsc::Sender<OrcaNetEvent>,
 ) -> Result<(NetworkClient, EventLoop), Box<dyn Error>> {
     let keypair = Utils::generate_ed25519(secret_key_seed);
     let relay_address = OrcaNetConfig::get_relay_address();
@@ -121,7 +121,7 @@ pub struct EventLoop {
     pending_dial: HashMap<PeerId, oneshot::Sender<Result<(), Box<dyn Error + Send>>>>,
     pending_start_providing: HashMap<kad::QueryId, oneshot::Sender<()>>,
     pending_get_providers: HashMap<kad::QueryId, oneshot::Sender<HashSet<PeerId>>>,
-    pending_request_file: HashMap<OutboundRequestId, oneshot::Sender<Result<FileResponse, Box<dyn Error + Send>>>>,
+    pending_request_file: HashMap<OutboundRequestId, oneshot::Sender<Result<OrcaNetResponse, Box<dyn Error + Send>>>>,
     pending_put_kv: HashMap<kad::QueryId, oneshot::Sender<Result<(), Box<dyn Error + Send>>>>,
     pending_get_value: HashMap<kad::QueryId, oneshot::Sender<Result<Vec<u8>, Box<dyn Error + Send>>>>,
 }
@@ -186,19 +186,32 @@ impl EventLoop {
                 } => {
                     tracing::info!(?request, "Received request");
 
-                    self.event_sender
-                        .send(OrcaNetEvent::FileRequest {
-                            file_id: request.0,
-                            channel,
-                        })
-                        .await
-                        .expect("Event receiver not to be dropped.");
+                    match request {
+                        OrcaNetRequest::FileRequest { file_id } => {
+                            self.event_sender
+                                .send(OrcaNetEvent::FileRequest {
+                                    file_id,
+                                    channel,
+                                })
+                                .await
+                                .expect("Event receiver not to be dropped.");
+                        }
+                    }
+
+                    // self.event_sender
+                    //     .send(OrcaNetEvent::FileRequest {
+                    //         file_id: request.0,
+                    //         channel,
+                    //     })
+                    //     .await
+                    //     .expect("Event receiver not to be dropped.");
                 }
                 request_response::Message::Response {
                     request_id,
                     response,
                 } => {
                     tracing::debug!(?response, "Received file");
+
 
                     let _ = self
                         .pending_request_file
@@ -384,24 +397,27 @@ impl EventLoop {
                     .get_providers(file_id.into_bytes().into());
                 self.pending_get_providers.insert(query_id, sender);
             }
-            OrcaNetCommand::RequestFile {
-                file_id,
+            OrcaNetCommand::Request {
+                request,
                 peer,
                 sender,
             } => {
                 let request_id = self.swarm
                     .behaviour_mut()
                     .request_response
-                    .send_request(&peer, FileRequest(file_id));
-                println!("Sent file request");
+                    .send_request(&peer, request);
                 self.pending_request_file.insert(request_id, sender);
+
+                println!("Sent request to {:?}", peer);
             }
-            OrcaNetCommand::RespondFile { file_resp, channel } => {
+            OrcaNetCommand::Respond { response, channel } => {
                 self.swarm
                     .behaviour_mut()
                     .request_response
-                    .send_response(channel, file_resp)
+                    .send_response(channel, response)
                     .expect("Connection to peer to be still open.");
+
+                println!("Sent response");
             }
             OrcaNetCommand::PutKV { key, value, sender } => {
                 let record = kad::Record {

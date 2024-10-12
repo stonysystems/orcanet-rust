@@ -1,5 +1,7 @@
 use rusqlite::{Connection, params, Result as QueryResult};
 
+use crate::common::OrcaNetConfig;
+
 pub struct DBClient {
     conn: Connection,
 }
@@ -14,13 +16,15 @@ pub struct FileInfo {
 
 impl Clone for DBClient {
     fn clone(&self) -> Self {
-        DBClient::new(self.conn.path().unwrap())
+        DBClient::new(Some(String::from(self.conn.path().unwrap())))
     }
 }
 
 impl DBClient {
-    pub fn new(db_path: &str) -> Self {
-        let conn = match Connection::open(db_path) {
+    pub fn new(db_path: Option<String>) -> Self {
+        let _db_path = db_path.unwrap_or(OrcaNetConfig::get_db_path());
+
+        let conn = match Connection::open(_db_path) {
             Ok(conn) => {
                 println!("Opened connection");
                 conn
@@ -40,7 +44,7 @@ impl DBClient {
         let mut stmt = self.conn.prepare("SELECT name FROM sqlite_master WHERE type='table'")?;
         let table_names = stmt.query_map([], |row| row.get(0))?;
 
-        Ok(table_names.collect::<Result<_, _>>()?)
+        Ok(table_names.collect::<QueryResult<_>>()?)
     }
 
     pub fn get_provided_files(&self) -> QueryResult<Vec<FileInfo>> {
@@ -54,7 +58,22 @@ impl DBClient {
             })
         })?;
 
-        Ok(files.collect::<Result<_, _>>()?)
+        Ok(files.collect::<QueryResult<_>>()?)
+    }
+
+    pub fn get_provided_file_info(&self, file_id: &str) -> QueryResult<FileInfo> {
+        let mut stmt = self.conn.prepare(
+            "SELECT * FROM provided_files WHERE file_id=?1")?;
+        let file = stmt.query_row([file_id], |row| {
+            Ok(FileInfo {
+                file_id: row.get::<_, String>(0)?,
+                file_path: row.get::<_, String>(1)?,
+                file_name: row.get::<_, String>(2)?,
+                downloads_count: row.get::<_, usize>(3)?,
+            })
+        });
+
+        return file;
     }
 
     pub fn insert_provided_file(&self, file_info: FileInfo) -> QueryResult<()> {

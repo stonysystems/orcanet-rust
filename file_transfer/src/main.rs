@@ -11,8 +11,8 @@ use tokio::{io, select};
 use tokio::io::AsyncBufReadExt;
 use tracing_subscriber::EnvFilter;
 
+use crate::common::{OrcaNetEvent, OrcaNetResponse, Utils};
 use crate::network_client::NetworkClient;
-use crate::common::{OrcaNetConfig, OrcaNetEvent, Utils};
 use crate::request_handler::RequestHandlerLoop;
 
 mod request_handler;
@@ -132,15 +132,19 @@ async fn handle_input_line(
             let file_id = expect_input!(args.next(), "file_id", Utils::get_key_with_ns);
             let peer_id = expect_input!(args.next(), "peer_id", Utils::get_peer_id_from_input);
 
-            match client.request_file(peer_id, file_id).await {
+            match client.send_request(peer_id, file_id).await {
                 Ok(res) => {
                     // println!("Got file name: {}, content: {}", res.file_name,
                     //          String::from_utf8(res.content).unwrap());
 
-                    let path = Path::new(app_data_path).join(res.file_name.clone());
-                    match std::fs::write(&path, &res.content) {
-                        Ok(_) => println!("Wrote file {} to {:?}", res.file_name, path),
-                        Err(e) => eprintln!("Error writing file {:?}", e)
+                    match res {
+                        OrcaNetResponse::FileResponse { file_name, content } => {
+                            let path = Path::new(app_data_path).join(file_name.clone());
+                            match std::fs::write(&path, &content) {
+                                Ok(_) => println!("Wrote file {} to {:?}", file_name, path),
+                                Err(e) => eprintln!("Error writing file {:?}", e)
+                            }
+                        }
                     }
                 }
                 Err(e) => eprintln!("Error when getting file: {:?}", e)

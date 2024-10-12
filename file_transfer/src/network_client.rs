@@ -1,13 +1,12 @@
 use std::collections::HashSet;
 use std::error::Error;
-use std::io::Write;
 
-use futures::{FutureExt, SinkExt};
 use futures::channel::{mpsc, oneshot};
+use futures::SinkExt;
 use libp2p::{Multiaddr, PeerId};
 use libp2p::request_response::ResponseChannel;
 
-use crate::common::{FileResponse, OrcaNetCommand};
+use crate::common::{OrcaNetCommand, OrcaNetRequest, OrcaNetResponse};
 
 #[derive(Clone)]
 pub struct NetworkClient {
@@ -64,24 +63,6 @@ impl NetworkClient {
             .await
             .expect("Command receiver not to be dropped.");
         receiver.await.expect("Sender not to be dropped.")
-    }
-
-    /// Request the content of the given file from the given peer.
-    pub async fn request_file(
-        &mut self,
-        peer: PeerId,
-        file_id: String,
-    ) -> Result<FileResponse, Box<dyn Error + Send>> {
-        let (sender, receiver) = oneshot::channel();
-        self.sender
-            .send(OrcaNetCommand::RequestFile {
-                file_id,
-                peer,
-                sender,
-            })
-            .await
-            .expect("Command receiver not to be dropped.");
-        receiver.await.expect("Sender not be dropped.")
     }
 
     /// Put the given KV pair to the DHT
@@ -146,14 +127,32 @@ impl NetworkClient {
     //     Ok(())
     // }
 
-    /// Respond with the provided file content to the given request.
-    pub async fn respond_file(
+    /// Send request to the given peer.
+    pub async fn send_request(
         &mut self,
-        file_resp: FileResponse,
-        channel: ResponseChannel<FileResponse>,
+        peer: PeerId,
+        file_id: String,
+    ) -> Result<OrcaNetResponse, Box<dyn Error + Send>> {
+        let (sender, receiver) = oneshot::channel();
+        self.sender
+            .send(OrcaNetCommand::Request {
+                request: OrcaNetRequest::FileRequest { file_id },
+                peer,
+                sender,
+            })
+            .await
+            .expect("Command receiver not to be dropped.");
+        receiver.await.expect("Sender not be dropped.")
+    }
+
+    /// Send response through the given channel
+    pub async fn respond(
+        &mut self,
+        response: OrcaNetResponse,
+        channel: ResponseChannel<OrcaNetResponse>,
     ) {
         self.sender
-            .send( OrcaNetCommand::RespondFile { file_resp, channel })
+            .send(OrcaNetCommand::Respond { response, channel })
             .await
             .expect("Command receiver not to be dropped.");
     }
