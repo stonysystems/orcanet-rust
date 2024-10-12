@@ -6,7 +6,7 @@ use futures::SinkExt;
 use libp2p::{Multiaddr, PeerId};
 use libp2p::request_response::ResponseChannel;
 
-use crate::common::{OrcaNetCommand, OrcaNetRequest, OrcaNetResponse};
+use crate::common::{OrcaNetCommand, OrcaNetRequest, OrcaNetResponse, Utils};
 use crate::db_client::DBClient;
 
 #[derive(Clone)]
@@ -165,7 +165,8 @@ impl NetworkClient {
         match db_client.get_provided_files() {
             Ok(provided_files) => {
                 for file_info in provided_files {
-                    self.start_providing(file_info.file_id).await;
+                    let key = Utils::get_key_with_ns(file_info.file_id.as_str());
+                    self.start_providing(key).await;
                 }
             }
             _ => {}
