@@ -132,7 +132,13 @@ async fn handle_input_line(
                     //          String::from_utf8(res.content).unwrap());
 
                     match res {
-                        OrcaNetResponse::FileResponse { file_name, content } => {
+                        OrcaNetResponse::FileResponse {
+                            file_name,
+                            fee_rate_per_kb,
+                            recipient_address,
+                            content
+                        } => {
+                            // Write file
                             let path = Path::new(&OrcaNetConfig::get_app_data_path()).
                                 join(file_name.clone());
 
@@ -140,7 +146,17 @@ async fn handle_input_line(
                                 Ok(_) => println!("Wrote file {} to {:?}", file_name, path),
                                 Err(e) => eprintln!("Error writing file {:?}", e)
                             }
+
+                            let size = content.len() / 1000;
+                            println!("Received file with size {} KB", size);
+                            // Send payment after computing size
                         }
+                        OrcaNetResponse::Error { message } => {
+                            println!("Failed to fetch file {}", message);
+                        }
+                        // _ => {
+                        //     panic!("Wrong response for file request")
+                        // }
                     }
                 }
                 Err(e) => eprintln!("Error when getting file: {:?}", e)

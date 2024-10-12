@@ -4,7 +4,7 @@ use futures::channel::mpsc;
 use futures::StreamExt;
 use tokio::select;
 
-use crate::common::{OrcaNetEvent, OrcaNetResponse};
+use crate::common::{OrcaNetConfig, OrcaNetEvent, OrcaNetResponse};
 use crate::db_client::{DBClient, FileInfo};
 use crate::network_client::NetworkClient;
 
@@ -16,7 +16,7 @@ pub struct RequestHandlerLoop {
 impl RequestHandlerLoop {
     pub fn new(
         network_client: NetworkClient,
-        event_receiver: mpsc::Receiver<OrcaNetEvent>
+        event_receiver: mpsc::Receiver<OrcaNetEvent>,
     ) -> Self {
         RequestHandlerLoop {
             network_client,
@@ -51,7 +51,6 @@ impl RequestHandlerLoop {
                 let file_resp = match file_info {
                     Ok(file_info) => {
                         let path = Path::new(file_info.file_path.as_str());
-                        let file_name = String::from(path.file_name().unwrap().to_str().unwrap());
                         let content = std::fs::read(path).unwrap_or_else(|e| {
                             eprintln!("Couldn't read file: {:?}", e);
                             "Can't read it".as_bytes().into()
@@ -60,13 +59,14 @@ impl RequestHandlerLoop {
                         let _ = db_client.increment_download_count(file_id.as_str());
 
                         OrcaNetResponse::FileResponse {
-                            file_name,
+                            file_name: file_info.file_name,
+                            fee_rate_per_kb: OrcaNetConfig::get_fee_rate(),
+                            recipient_address: OrcaNetConfig::get_receiver_btc_address(),
                             content,
                         }
                     }
-                    Err(_) => OrcaNetResponse::FileResponse {
-                        file_name: "no_name".to_string(),
-                        content: "Can't find it".as_bytes().into(),
+                    Err(_) => OrcaNetResponse::Error {
+                        message: "Can't find it".parse().unwrap()
                     }
                 };
 

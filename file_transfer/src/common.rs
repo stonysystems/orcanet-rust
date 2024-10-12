@@ -1,8 +1,9 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::error::Error;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::str::FromStr;
 
+use bitcoincore_rpc::bitcoin::Amount;
 use futures::channel::oneshot;
 use libp2p::{identity, Multiaddr, PeerId};
 use libp2p::multiaddr::Protocol;
@@ -54,19 +55,31 @@ impl OrcaNetConfig {
     }
 
     pub fn get_db_path() -> String {
-        return Self::get_from_config("db_path")
+        Self::get_from_config("db_path")
             .expect("db_path to be present in config")
             .as_str()
             .unwrap()
-            .to_string();
+            .to_string()
     }
 
     pub fn get_app_data_path() -> String {
-        return Self::get_from_config("app_data_path")
+        Self::get_from_config("app_data_path")
             .expect("app_data_path to be present in config")
             .as_str()
             .unwrap()
-            .to_string();
+            .to_string()
+    }
+
+    pub fn get_fee_rate() -> Amount {
+        Amount::from_btc(0.15).unwrap()
+    }
+
+    pub fn get_receiver_btc_address() -> String {
+        Self::get_from_config("btc_address")
+            .expect("btc_address to be present in config")
+            .as_str()
+            .unwrap()
+            .to_string()
     }
 }
 
@@ -166,8 +179,13 @@ pub enum OrcaNetRequest {
 pub enum OrcaNetResponse {
     FileResponse {
         file_name: String,
+        fee_rate_per_kb: Amount,
+        recipient_address: String,
         content: Vec<u8>,
-    }
+    },
+    Error {
+        message: String
+    },
 }
 
 
