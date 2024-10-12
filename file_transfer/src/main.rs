@@ -123,7 +123,7 @@ async fn handle_input_line(
             println!("Got providers for {} {:?}", key, providers);
         }
         Some("getfile") => {
-            let file_id = expect_input!(args.next(), "file_id", Utils::get_key_with_ns);
+            let file_id = expect_input!(args.next(), "file_id", String::from);
             let peer_id = expect_input!(args.next(), "peer_id", Utils::get_peer_id_from_input);
 
             match client.send_request(peer_id, file_id).await {

@@ -57,6 +57,8 @@ impl RequestHandlerLoop {
                             "Can't read it".as_bytes().into()
                         });
 
+                        let _ = db_client.increment_download_count(file_id.as_str());
+
                         OrcaNetResponse::FileResponse {
                             file_name,
                             content,

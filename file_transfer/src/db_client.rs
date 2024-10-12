@@ -84,4 +84,13 @@ impl DBClient {
 
         Ok(())
     }
+
+    pub fn increment_download_count(&self, file_id: &str) -> QueryResult<()> {
+        self.conn.execute(
+            "UPDATE provided_files SET downloads_count = downloads_count + 1 WHERE file_id = ?1",
+            params![file_id],
+        )?;
+
+        Ok(())
+    }
 }
