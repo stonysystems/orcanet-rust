@@ -4,7 +4,7 @@ use futures::channel::mpsc;
 use futures::StreamExt;
 use tokio::select;
 
-use crate::common::{OrcaNetConfig, OrcaNetEvent, OrcaNetResponse};
+use crate::common::{OrcaNetConfig, OrcaNetEvent, OrcaNetRequest, OrcaNetResponse};
 use crate::db_client::{DBClient, FileInfo};
 use crate::network_client::NetworkClient;
 
@@ -42,13 +42,46 @@ impl RequestHandlerLoop {
         let db_client = DBClient::new(None);
 
         match event {
-            OrcaNetEvent::FileRequest { file_id, channel } => {
+            OrcaNetEvent::Request { request, channel } => {
+                let response = self.handle_request(request, &db_client);
+                self.network_client
+                    .respond(response, channel)
+                    .await;
+            }
+            OrcaNetEvent::ProvideFile { file_id, file_path } => {
+                let path = Path::new(&file_path);
+                let file_name = String::from(Path::new(file_path.as_str()).file_name()
+                    .unwrap().to_str()
+                    .unwrap());
+
+                if path.exists() {
+                    let resp = db_client.insert_provided_file(FileInfo {
+                        file_id,
+                        file_name,
+                        file_path,
+                        downloads_count: 0,
+                    });
+
+                    if resp.is_err() {
+                        println!("Failed to insert into DB");
+                    }
+                }
+            }
+            OrcaNetEvent::StopProvidingFile { file_id } => {
+                // TODO: Remove from table
+            }
+        }
+    }
+
+    fn handle_request(&mut self, request: OrcaNetRequest, db_client: &DBClient) -> OrcaNetResponse {
+        match request {
+            OrcaNetRequest::FileRequest { file_id } => {
                 println!("Received request for file_id: {}", file_id);
                 // TODO: Add proper error handling
                 let file_info = db_client.get_provided_file_info(file_id.as_str());
                 println!("File info for request {} {:?}", file_id, file_info);
 
-                let file_resp = match file_info {
+                let resp = match file_info {
                     Ok(file_info) => {
                         let path = Path::new(file_info.file_path.as_str());
                         match std::fs::read(path) {
@@ -75,30 +108,7 @@ impl RequestHandlerLoop {
                     }
                 };
 
-                self.network_client
-                    .respond(file_resp, channel)
-                    .await;
-            }
-            OrcaNetEvent::ProvideFile { file_id, file_path } => {
-                let path = Path::new(&file_path);
-                let file_name = String::from(Path::new(file_path.as_str()).file_name()
-                    .unwrap().to_str()
-                    .unwrap());
-                if path.exists() {
-                    let resp = db_client.insert_provided_file(FileInfo {
-                        file_id,
-                        file_name,
-                        file_path,
-                        downloads_count: 0,
-                    });
-
-                    if resp.is_err() {
-                        println!("Failed to insert into DB");
-                    }
-                }
-            }
-            OrcaNetEvent::StopProvidingFile { file_id } => {
-                // TODO: Remove from table
+                resp
             }
         }
     }

@@ -186,17 +186,13 @@ impl EventLoop {
                 } => {
                     tracing::info!(?request, "Received request");
 
-                    match request {
-                        OrcaNetRequest::FileRequest { file_id } => {
-                            self.event_sender
-                                .send(OrcaNetEvent::FileRequest {
-                                    file_id,
-                                    channel,
-                                })
-                                .await
-                                .expect("Event receiver not to be dropped.");
-                        }
-                    }
+                    self.event_sender
+                        .send(OrcaNetEvent::Request {
+                            request,
+                            channel,
+                        })
+                        .await
+                        .expect("Event receiver not to be dropped.");
                 }
                 request_response::Message::Response {
                     request_id,
@@ -254,7 +250,6 @@ impl EventLoop {
                 ..
             } => tracing::info!("Dialing {peer_id}"),
             _ => {}
-            // e => panic!("{e:?}"),
         }
     }
 
@@ -288,11 +283,6 @@ impl EventLoop {
                                                                               ..
                                                                           })
                                         )) => {
-                // println!(
-                //     "Got record {:?} {:?}",
-                //     std::str::from_utf8(key.as_ref()).unwrap(),
-                //     std::str::from_utf8(&value).unwrap(),
-                // );
                 if let Some(sender) = self.pending_get_value.remove(&query_id) {
                     sender.send(Ok(value)).expect("Receiver not to be dropped");
                 }
@@ -349,16 +339,16 @@ impl EventLoop {
                 peer_addr,
                 sender,
             } => {
-                self.swarm
-                    .behaviour_mut()
-                    .kademlia
-                    .add_address(&peer_id, peer_addr.clone());
+                // self.swarm
+                //     .behaviour_mut()
+                //     .kademlia
+                //     .add_address(&peer_id, peer_addr.clone());
 
                 if let hash_map::Entry::Vacant(e) = self.pending_dial.entry(peer_id) {
-                    // self.swarm
-                    //     .behaviour_mut()
-                    //     .kademlia
-                    //     .add_address(&peer_id, peer_addr.clone());
+                    self.swarm
+                        .behaviour_mut()
+                        .kademlia
+                        .add_address(&peer_id, peer_addr.clone());
 
                     match self.swarm.dial(peer_addr.clone()) {
                         Ok(()) => {

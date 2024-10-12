@@ -156,8 +156,8 @@ impl Utils {
 
 #[derive(Debug)]
 pub enum OrcaNetEvent {
-    FileRequest {
-        file_id: String,
+    Request {
+        request: OrcaNetRequest,
         channel: ResponseChannel<OrcaNetResponse>,
     },
     ProvideFile {
