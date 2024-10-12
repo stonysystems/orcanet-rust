@@ -121,7 +121,7 @@ pub struct EventLoop {
     pending_dial: HashMap<PeerId, oneshot::Sender<Result<(), Box<dyn Error + Send>>>>,
     pending_start_providing: HashMap<kad::QueryId, oneshot::Sender<()>>,
     pending_get_providers: HashMap<kad::QueryId, oneshot::Sender<HashSet<PeerId>>>,
-    pending_request_file: HashMap<OutboundRequestId, oneshot::Sender<Result<OrcaNetResponse, Box<dyn Error + Send>>>>,
+    pending_request: HashMap<OutboundRequestId, oneshot::Sender<Result<OrcaNetResponse, Box<dyn Error + Send>>>>,
     pending_put_kv: HashMap<kad::QueryId, oneshot::Sender<Result<(), Box<dyn Error + Send>>>>,
     pending_get_value: HashMap<kad::QueryId, oneshot::Sender<Result<Vec<u8>, Box<dyn Error + Send>>>>,
 }
@@ -139,7 +139,7 @@ impl EventLoop {
             pending_dial: Default::default(),
             pending_start_providing: Default::default(),
             pending_get_providers: Default::default(),
-            pending_request_file: Default::default(),
+            pending_request: Default::default(),
             pending_put_kv: Default::default(),
             pending_get_value: Default::default(),
         }
@@ -197,14 +197,6 @@ impl EventLoop {
                                 .expect("Event receiver not to be dropped.");
                         }
                     }
-
-                    // self.event_sender
-                    //     .send(OrcaNetEvent::FileRequest {
-                    //         file_id: request.0,
-                    //         channel,
-                    //     })
-                    //     .await
-                    //     .expect("Event receiver not to be dropped.");
                 }
                 request_response::Message::Response {
                     request_id,
@@ -212,9 +204,8 @@ impl EventLoop {
                 } => {
                     tracing::debug!(?response, "Received file");
 
-
                     let _ = self
-                        .pending_request_file
+                        .pending_request
                         .remove(&request_id)
                         .expect("Request to still be pending.")
                         .send(Ok(response));
@@ -228,7 +219,7 @@ impl EventLoop {
                 tracing::info!(?error, "Request response outbound failure:");
 
                 let _ = self
-                    .pending_request_file
+                    .pending_request
                     .remove(&request_id)
                     .expect("Request to still be pending.")
                     .send(Err(Box::new(error)));
@@ -406,7 +397,7 @@ impl EventLoop {
                     .behaviour_mut()
                     .request_response
                     .send_request(&peer, request);
-                self.pending_request_file.insert(request_id, sender);
+                self.pending_request.insert(request_id, sender);
 
                 println!("Sent request to {:?}", peer);
             }

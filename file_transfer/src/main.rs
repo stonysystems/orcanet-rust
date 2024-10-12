@@ -147,7 +147,7 @@ async fn handle_input_line(
                                 Err(e) => eprintln!("Error writing file {:?}", e)
                             }
 
-                            let size = content.len() / 1000;
+                            let size = (content.len() as f64) / 1000f64;
                             println!("Received file with size {} KB", size);
                             // Send payment after computing size
                         }

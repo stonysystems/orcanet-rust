@@ -51,22 +51,27 @@ impl RequestHandlerLoop {
                 let file_resp = match file_info {
                     Ok(file_info) => {
                         let path = Path::new(file_info.file_path.as_str());
-                        let content = std::fs::read(path).unwrap_or_else(|e| {
-                            eprintln!("Couldn't read file: {:?}", e);
-                            "Can't read it".as_bytes().into()
-                        });
+                        match std::fs::read(path) {
+                            Ok(content) => {
+                                let _ = db_client.increment_download_count(file_id.as_str());
 
-                        let _ = db_client.increment_download_count(file_id.as_str());
-
-                        OrcaNetResponse::FileResponse {
-                            file_name: file_info.file_name,
-                            fee_rate_per_kb: OrcaNetConfig::get_fee_rate(),
-                            recipient_address: OrcaNetConfig::get_receiver_btc_address(),
-                            content,
+                                OrcaNetResponse::FileResponse {
+                                    file_name: file_info.file_name,
+                                    fee_rate_per_kb: OrcaNetConfig::get_fee_rate(),
+                                    recipient_address: OrcaNetConfig::get_receiver_btc_address(),
+                                    content,
+                                }
+                            }
+                            Err(e) => {
+                                eprintln!("Error reading file: {:?}", e);
+                                OrcaNetResponse::Error {
+                                    message: "Error while reading file".parse().unwrap()
+                                }
+                            }
                         }
                     }
                     Err(_) => OrcaNetResponse::Error {
-                        message: "Can't find it".parse().unwrap()
+                        message: "File can't be provided".parse().unwrap()
                     }
                 };
 
