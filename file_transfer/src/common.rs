@@ -57,12 +57,16 @@ impl OrcaNetConfig {
     pub fn get_db_path() -> String {
         return Self::get_from_config("db_path")
             .expect("db_path to be present in config")
+            .as_str()
+            .unwrap()
             .to_string();
     }
 
     pub fn get_app_data_path() -> String {
         return Self::get_from_config("app_data_path")
             .expect("app_data_path to be present in config")
+            .as_str()
+            .unwrap()
             .to_string();
     }
 }

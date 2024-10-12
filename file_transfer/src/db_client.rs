@@ -29,8 +29,8 @@ impl DBClient {
                 println!("Opened connection");
                 conn
             }
-            Err(_) => {
-                eprintln!("Failed to open connection");
+            Err(e) => {
+                eprintln!("Failed to open connection: {:?}", e);
                 panic!("Oops");
             }
         };

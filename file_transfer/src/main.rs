@@ -153,7 +153,7 @@ async fn handle_input_line(
             let _ = client.start_providing(file_id.clone()).await;
             let _ = event_sender.send(OrcaNetEvent::ProvideFile { file_id, file_path }).await;
         }
-        Some("advert") => {
+        Some("advertise") => {
             let _ = client.advertise_provided_files().await;
         }
         Some("exit") => {
