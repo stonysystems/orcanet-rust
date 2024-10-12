@@ -16,8 +16,7 @@ pub struct RequestHandlerLoop {
 impl RequestHandlerLoop {
     pub fn new(
         network_client: NetworkClient,
-        event_receiver: mpsc::Receiver<OrcaNetEvent>,
-        app_data_path: String,
+        event_receiver: mpsc::Receiver<OrcaNetEvent>
     ) -> Self {
         RequestHandlerLoop {
             network_client,
@@ -74,10 +73,13 @@ impl RequestHandlerLoop {
             }
             OrcaNetEvent::ProvideFile { file_id, file_path } => {
                 let path = Path::new(&file_path);
+                let file_name = String::from(Path::new(file_path.as_str()).file_name()
+                    .unwrap().to_str()
+                    .unwrap());
                 if path.exists() {
                     let resp = db_client.insert_provided_file(FileInfo {
                         file_id,
-                        file_name: Path::new(file_path.as_str()).file_name().unwrap().to_str().unwrap().to_string(),
+                        file_name,
                         file_path,
                         downloads_count: 0,
                     });

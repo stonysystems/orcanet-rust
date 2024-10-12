@@ -11,7 +11,7 @@ use tokio::{io, select};
 use tokio::io::AsyncBufReadExt;
 use tracing_subscriber::EnvFilter;
 
-use crate::common::{OrcaNetEvent, OrcaNetResponse, Utils};
+use crate::common::{OrcaNetConfig, OrcaNetEvent, OrcaNetResponse, Utils};
 use crate::network_client::NetworkClient;
 use crate::request_handler::RequestHandlerLoop;
 
@@ -25,9 +25,6 @@ mod db_client;
 struct Opts {
     #[arg(long, default_value_t = 4)]
     seed: u64,
-
-    #[arg(long, required = true)]
-    app_data_path: String,
 }
 
 macro_rules! expect_input {
@@ -53,8 +50,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let (mut event_sender, event_receiver) = mpsc::channel::<OrcaNetEvent>(0);
     let (mut network_client, network_event_loop) = network::new(opts.seed, event_sender.clone()).await?;
-    let mut request_handler_loop = RequestHandlerLoop::new(
-        network_client.clone(), event_receiver, opts.app_data_path.clone());
+    let mut request_handler_loop = RequestHandlerLoop::new(network_client.clone(), event_receiver);
 
     // Network event loop
     tokio::task::spawn(network_event_loop.run());
@@ -69,8 +65,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             select! {
                 Ok(Some(line)) = stdin.next_line() => {
                     // handle_input_line(&mut swarm.behaviour_mut().kademlia, line);
-                    handle_input_line(&mut network_client, &mut event_sender,
-                        &opts.app_data_path, line).await;
+                    handle_input_line(&mut network_client, &mut event_sender, line).await;
                 }
             }
         }
@@ -82,7 +77,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
 async fn handle_input_line(
     client: &mut NetworkClient,
     event_sender: &mut mpsc::Sender<OrcaNetEvent>,
-    app_data_path: &String,
     line: String,
 ) {
     let mut args = line.split(' ');
@@ -139,7 +133,9 @@ async fn handle_input_line(
 
                     match res {
                         OrcaNetResponse::FileResponse { file_name, content } => {
-                            let path = Path::new(app_data_path).join(file_name.clone());
+                            let path = Path::new(&OrcaNetConfig::get_app_data_path()).
+                                join(file_name.clone());
+
                             match std::fs::write(&path, &content) {
                                 Ok(_) => println!("Wrote file {} to {:?}", file_name, path),
                                 Err(e) => eprintln!("Error writing file {:?}", e)
@@ -156,6 +152,9 @@ async fn handle_input_line(
 
             let _ = client.start_providing(file_id.clone()).await;
             let _ = event_sender.send(OrcaNetEvent::ProvideFile { file_id, file_path }).await;
+        }
+        Some("advert") => {
+            let _ = client.advertise_provided_files().await;
         }
         Some("exit") => {
             exit(0);

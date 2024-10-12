@@ -7,6 +7,7 @@ use libp2p::{Multiaddr, PeerId};
 use libp2p::request_response::ResponseChannel;
 
 use crate::common::{OrcaNetCommand, OrcaNetRequest, OrcaNetResponse};
+use crate::db_client::DBClient;
 
 #[derive(Clone)]
 pub struct NetworkClient {
@@ -155,5 +156,19 @@ impl NetworkClient {
             .send(OrcaNetCommand::Respond { response, channel })
             .await
             .expect("Command receiver not to be dropped.");
+    }
+
+    /// Advertise all provided files to the network
+    pub async fn advertise_provided_files(&mut self) {
+        let db_client = DBClient::new(None);
+
+        match db_client.get_provided_files() {
+            Ok(provided_files) => {
+                for file_info in provided_files {
+                    self.start_providing(file_info.file_id).await;
+                }
+            }
+            _ => {}
+        }
     }
 }
