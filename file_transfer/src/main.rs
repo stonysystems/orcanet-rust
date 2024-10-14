@@ -4,6 +4,7 @@ use std::process::exit;
 use std::str::FromStr;
 
 use async_std::task::block_on;
+use bitcoin::Amount;
 use clap::Parser;
 use futures::{SinkExt, StreamExt};
 use futures::channel::mpsc;
@@ -143,8 +144,9 @@ async fn handle_input_line(
                             // Send payment after computing size
                             let btc_wrapper = RPCWrapper::new(BTCNetwork::RegTest);
                             let btc_addr = OrcaNetConfig::get_str_from_config(ConfigKey::BTCAddress);
-                            let cost = fee_rate_per_kb * (size_kb as u64); // TODO: Not sure if it's fine, change
-                            btc_wrapper.send_to_address(recipient_address.as_str(), cost);
+                            let cost_btc = Amount::from_btc(fee_rate_per_kb * size_kb)
+                                .unwrap();
+                            btc_wrapper.send_to_address(recipient_address.as_str(), cost_btc);
                             btc_wrapper.generate_to_address(btc_addr.as_str());
                         }
                         OrcaNetResponse::Error { message } => {

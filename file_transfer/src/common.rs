@@ -4,7 +4,6 @@ use std::fmt::{self, Display};
 use std::path::PathBuf;
 use std::str::FromStr;
 
-use bitcoincore_rpc::bitcoin::Amount;
 use futures::channel::oneshot;
 use libp2p::{identity, Multiaddr, PeerId};
 use libp2p::multiaddr::Protocol;
@@ -91,10 +90,11 @@ impl OrcaNetConfig {
         Ok(())
     }
 
-    pub fn get_fee_rate() -> Amount {
+    pub fn get_fee_rate() -> f64 {
         let amt_str = Self::get_str_from_config(ConfigKey::FeeRatePerKB);
-        Amount::from_str(amt_str.as_str())
-            .expect("fee_rate to be valid amount string")
+
+        amt_str.parse()
+            .expect("Amount to be valid floating point value in BTC")
     }
 }
 
@@ -190,11 +190,11 @@ pub enum OrcaNetRequest {
     FileRequest { file_id: String }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum OrcaNetResponse {
     FileResponse {
         file_name: String,
-        fee_rate_per_kb: Amount,
+        fee_rate_per_kb: f64,
         recipient_address: String,
         content: Vec<u8>,
     },
