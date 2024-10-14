@@ -2,6 +2,7 @@ use std::collections::HashSet;
 use std::error::Error;
 
 use futures::channel::{mpsc, oneshot};
+use futures::FutureExt;
 use futures::SinkExt;
 use libp2p::{Multiaddr, PeerId};
 use libp2p::request_response::ResponseChannel;
@@ -102,31 +103,33 @@ impl NetworkClient {
         receiver.await.expect("Sender not be dropped.")
     }
 
-    // pub async fn get_file(
-    //     &mut self,
-    //     file_id: String,
-    // ) -> Result<(), dyn Error> {
-    //     let providers = self.get_providers(file_id.clone()).await;
-    //     if providers.is_empty() {
-    //         return Err(format!("Could not find provider for file {name}.").into());
-    //     }
-    //
-    //     // Request the content of the file from each node.
-    //     let requests = providers.into_iter().map(|p| {
-    //         let mut network_client = self.clone();
-    //         let name = file_id.clone();
-    //         async move { network_client.request_file(p, name).await }.boxed()
-    //     });
-    //
-    //     // Await the requests, ignore the remaining once a single one succeeds.
-    //     let file_content = futures::future::select_ok(requests)
-    //         .await
-    //         .map_err(|_| "None of the providers returned file.")?
-    //         .0;
-    //
-    //     std::io::stdout().write_all(&file_content)?;
-    //     Ok(())
-    // }
+    /// Get the given file from one of the providers (if any)
+    pub async fn get_file(
+        &mut self,
+        file_id: String,
+    ) -> Result<(), Box<dyn Error>> {
+        let file_id_with_ns = Utils::get_key_with_ns(file_id.as_str());
+        let providers = self.get_providers(file_id_with_ns).await;
+        if providers.is_empty() {
+            return Err(format!("Could not find provider for file {file_id}.").into());
+        }
+
+        // Request the content of the file from each node.
+        let requests = providers.into_iter().map(|peer| {
+            let mut network_client = self.clone();
+            let name = file_id.clone();
+            async move { network_client.send_request(peer, name).await }.boxed()
+        });
+
+        // Await the requests, ignore the remaining once a single one succeeds.
+        let file_response: OrcaNetResponse = futures::future::select_ok(requests)
+            .await
+            .map_err(|_| "None of the providers returned file.")?
+            .0;
+
+        Utils::handle_file_response(file_response);
+        Ok(())
+    }
 
     /// Send request to the given peer.
     pub async fn send_request(
@@ -169,7 +172,9 @@ impl NetworkClient {
                     self.start_providing(key).await;
                 }
             }
-            _ => {}
+            Err(e) => {
+                eprintln!("Error getting provided files {:?}", e);
+            }
         }
     }
 }

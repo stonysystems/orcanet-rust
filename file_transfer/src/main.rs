@@ -12,8 +12,8 @@ use tokio::{io, select};
 use tokio::io::AsyncBufReadExt;
 use tracing_subscriber::EnvFilter;
 
-use crate::btc_rpc::{RPCWrapper};
-use crate::common::{ConfigKey, OrcaNetConfig, OrcaNetEvent, OrcaNetResponse, Utils, BTCNetwork};
+use crate::btc_rpc::RPCWrapper;
+use crate::common::{BTCNetwork, ConfigKey, OrcaNetConfig, OrcaNetEvent, OrcaNetResponse, Utils};
 use crate::network_client::NetworkClient;
 use crate::request_handler::RequestHandlerLoop;
 
@@ -114,48 +114,23 @@ async fn handle_input_line(
         }
         Some("getfile") => {
             let file_id = expect_input!(args.next(), "file_id", String::from);
-            let peer_id = expect_input!(args.next(), "peer_id", Utils::get_peer_id_from_input);
+            // let peer_id = expect_input!(args.next(), "peer_id", Utils::get_peer_id_from_input);
 
-            match client.send_request(peer_id, file_id).await {
-                Ok(res) => {
-                    // println!("Got file name: {}, content: {}", res.file_name,
-                    //          String::from_utf8(res.content).unwrap());
-
-                    match res {
-                        OrcaNetResponse::FileResponse {
-                            file_name,
-                            fee_rate_per_kb,
-                            recipient_address,
-                            content
-                        } => {
-                            // Write file
-                            let app_data_path = OrcaNetConfig::get_str_from_config(ConfigKey::AppDataPath);
-                            let path = Path::new(&app_data_path)
-                                .join(file_name.clone());
-
-                            match std::fs::write(&path, &content) {
-                                Ok(_) => println!("Wrote file {} to {:?}", file_name, path),
-                                Err(e) => eprintln!("Error writing file {:?}", e)
-                            }
-
-                            let size_kb = (content.len() as f64) / 1000f64;
-                            println!("Received file with size {} KB", size_kb);
-
-                            // Send payment after computing size
-                            let btc_wrapper = RPCWrapper::new(BTCNetwork::RegTest);
-                            let btc_addr = OrcaNetConfig::get_str_from_config(ConfigKey::BTCAddress);
-                            let cost_btc = Amount::from_btc(fee_rate_per_kb * size_kb)
-                                .unwrap();
-                            btc_wrapper.send_to_address(recipient_address.as_str(), cost_btc);
-                            btc_wrapper.generate_to_address(btc_addr.as_str());
-                        }
-                        OrcaNetResponse::Error { message } => {
-                            println!("Failed to fetch file {}", message);
-                        }
-                    }
-                }
-                Err(e) => eprintln!("Error when getting file: {:?}", e)
+            if let Err(e) = client.get_file(file_id).await {
+                eprintln!("Error getting file: {:?}", e);
+            } else {
+                println!("Got file");
             }
+
+
+            // match client.send_request(peer_id, file_id).await {
+            //     Ok(resp) => {
+            //         // println!("Got file name: {}, content: {}", res.file_name,
+            //         //          String::from_utf8(res.content).unwrap());
+            //         Utils::handle_file_response(resp);
+            //     }
+            //     Err(e) => eprintln!("Error when getting file: {:?}", e)
+            // }
         }
         Some("providefile") => {
             let file_id = expect_input!(args.next(), "file_id", Utils::get_key_with_ns);

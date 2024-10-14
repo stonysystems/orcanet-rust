@@ -1,5 +1,4 @@
 use std::str::FromStr;
-use std::thread;
 
 use bitcoin::{Address, Amount};
 use bitcoincore_rpc::{Auth, Client, RpcApi};

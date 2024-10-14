@@ -1,9 +1,10 @@
 use std::collections::HashSet;
 use std::error::Error;
 use std::fmt::{self, Display};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
+use bitcoin::Amount;
 use futures::channel::oneshot;
 use libp2p::{identity, Multiaddr, PeerId};
 use libp2p::multiaddr::Protocol;
@@ -11,6 +12,7 @@ use libp2p::request_response::ResponseChannel;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
+use crate::btc_rpc::RPCWrapper;
 use crate::impl_str_serde;
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -165,6 +167,43 @@ impl Utils {
                 keypair.public().to_peer_id()
             }
             Err(_) => PeerId::from_str(input).unwrap()
+        }
+    }
+
+    pub fn handle_file_response(resp: OrcaNetResponse) {
+        match resp {
+            OrcaNetResponse::FileResponse {
+                file_name,
+                fee_rate_per_kb,
+                content,
+                recipient_address
+            } => {
+                let app_data_path = OrcaNetConfig::get_str_from_config(ConfigKey::AppDataPath);
+                let path = Path::new(&app_data_path)
+                    .join(file_name.clone());
+
+                match std::fs::write(&path, &content) {
+                    Ok(_) => println!("Wrote file {} to {:?}", file_name, path),
+                    Err(e) => eprintln!("Error writing file {:?}", e)
+                }
+
+                let size_kb = (content.len() as f64) / 1000f64;
+                println!("Received file with size {} KB", size_kb);
+
+                // Send payment after computing size
+                let btc_wrapper = RPCWrapper::new(BTCNetwork::RegTest);
+                let btc_addr = OrcaNetConfig::get_str_from_config(ConfigKey::BTCAddress);
+                let cost_btc = Amount::from_btc(fee_rate_per_kb * size_kb)
+                    .unwrap();
+                btc_wrapper.send_to_address(recipient_address.as_str(), cost_btc);
+                btc_wrapper.generate_to_address(btc_addr.as_str());
+            }
+            OrcaNetResponse::Error { message } => {
+                eprintln!("Failed to fetch file: {message}");
+            }
+            // e => {
+            //     eprintln!("Expected file response but got {:?}", e)
+            // }
         }
     }
 }
