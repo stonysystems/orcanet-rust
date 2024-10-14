@@ -4,7 +4,6 @@ use std::fmt::{self, Display};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
-use bitcoin::Amount;
 use futures::channel::oneshot;
 use libp2p::{identity, Multiaddr, PeerId};
 use libp2p::multiaddr::Protocol;
@@ -22,6 +21,7 @@ pub enum ConfigKey {
     BTCAddress,
     FeeRatePerKB,
     NetworkType,
+    RunHTTPServer,
 }
 
 impl_str_serde!(ConfigKey);
@@ -98,6 +98,18 @@ impl OrcaNetConfig {
         amt_str.parse()
             .expect("Amount to be valid floating point value in BTC")
     }
+
+    pub fn get_network_type() -> BTCNetwork {
+        OrcaNetConfig::get_str_from_config(ConfigKey::NetworkType)
+            .as_str().parse()
+            .expect("Expect network to be a valid value in config")
+    }
+
+    pub fn should_start_http_server() -> bool {
+        Self::get_from_config(ConfigKey::RunHTTPServer)
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+    }
 }
 
 #[derive(Debug)]
@@ -170,6 +182,14 @@ impl Utils {
         }
     }
 
+    pub async fn start_async_block_gen() {
+        let address = OrcaNetConfig::get_str_from_config(ConfigKey::BTCAddress);
+        tokio::task::spawn(async move {
+            let rpc_wrapper = RPCWrapper::new(OrcaNetConfig::get_network_type());
+            let _ = rpc_wrapper.generate_to_address(address.as_str());
+        });
+    }
+
     pub fn handle_file_response(resp: OrcaNetResponse) {
         match resp {
             OrcaNetResponse::FileResponse {
@@ -195,12 +215,19 @@ impl Utils {
                 // Send payment after computing size
                 let btc_wrapper = RPCWrapper::new(BTCNetwork::RegTest);
                 let btc_addr = OrcaNetConfig::get_str_from_config(ConfigKey::BTCAddress);
-                let cost_btc = Amount::from_btc(fee_rate_per_kb * size_kb)
-                    .unwrap();
-                println!("Initiating transfer of {:?} BTC to {}", cost_btc.to_btc(), btc_addr);
+                let cost_btc = fee_rate_per_kb * size_kb;
+                println!("Initiating transfer of {:?} BTC to {}", cost_btc, btc_addr);
 
-                btc_wrapper.send_to_address(recipient_address.as_str(), cost_btc);
-                btc_wrapper.generate_to_address(btc_addr.as_str());
+                match btc_wrapper.send_to_address(recipient_address.as_str(), cost_btc) {
+                    Ok(tx_id) => {
+                        println!("sendtoaddress created transaction: {}", tx_id);
+                        // TODO: Handle error case ?
+                        let _ = btc_wrapper.generate_to_address(btc_addr.as_str());
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to send btc: {:?}", e);
+                    }
+                }
             }
             OrcaNetResponse::Error { message } => {
                 eprintln!("Failed to fetch file: {message}");

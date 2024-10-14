@@ -32,7 +32,7 @@ impl DBClient {
             }
             Err(e) => {
                 eprintln!("Failed to open connection: {:?}", e);
-                panic!("Oops");
+                panic!("Can't proceed without DB connection");
             }
         };
 

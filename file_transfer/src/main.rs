@@ -1,3 +1,8 @@
+#![feature(proc_macro_hygiene, decl_macro)]
+
+#[macro_use]
+extern crate rocket;
+
 use std::error::Error;
 use std::process::exit;
 use std::str::FromStr;
@@ -10,7 +15,8 @@ use tokio::{io, select};
 use tokio::io::AsyncBufReadExt;
 use tracing_subscriber::EnvFilter;
 
-use crate::common::{OrcaNetEvent, Utils};
+use crate::common::{OrcaNetConfig, OrcaNetEvent, Utils};
+use crate::http_server::start_http_server;
 use crate::network_client::NetworkClient;
 use crate::request_handler::RequestHandlerLoop;
 
@@ -21,6 +27,7 @@ mod common;
 mod db_client;
 mod btc_rpc;
 mod macros;
+mod http_server;
 
 #[derive(Parser)]
 struct Opts {
@@ -45,13 +52,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // OrcaNet requests event loop
     tokio::task::spawn(request_handler_loop.run());
 
+    // Start HTTP server
+    if OrcaNetConfig::should_start_http_server() {
+        tokio::task::spawn(start_http_server());
+    }
+
     let mut stdin = io::BufReader::new(io::stdin()).lines();
 
     block_on(async {
         loop {
             select! {
                 Ok(Some(line)) = stdin.next_line() => {
-                    // handle_input_line(&mut swarm.behaviour_mut().kademlia, line);
                     handle_input_line(&mut network_client, &mut event_sender, line).await;
                 }
             }

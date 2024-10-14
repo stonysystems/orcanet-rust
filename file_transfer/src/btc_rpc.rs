@@ -1,7 +1,7 @@
-use std::str::FromStr;
 use std::fmt::{self, Display};
+use std::str::FromStr;
 
-use bitcoin::{Address, Amount};
+use bitcoin::{Address, Amount, BlockHash, Txid};
 use bitcoincore_rpc::{Auth, Client, RpcApi};
 use serde::{Deserialize, Serialize};
 
@@ -42,19 +42,16 @@ impl RPCWrapper {
         };
     }
 
-    pub fn send_to_address(&self, address_string: &str, amount: Amount) {
-        let recipient_address = match Address::from_str(address_string) {
-            Ok(addr) => addr.assume_checked(),
-            Err(e) => {
-                eprintln!("Error parsing address {:?}", e);
-                return;
-            }
-        };
+    /// Send given amount (BTC) to address
+    pub fn send_to_address(&self, address_string: &str, btc_amount: f64) -> Result<Txid, String> {
+        let recipient_address = Address::from_str(address_string)
+            .map_err(|e| e.to_string())?
+            .assume_checked();
+        let amount = Amount::from_btc(btc_amount)
+            .map_err(|e| e.to_string())?;
 
-        match self.rpc_client.send_to_address(&recipient_address, amount, None, None, None, None, None, None) {
-            Ok(tx_id) => println!("TxID: {}", tx_id),
-            Err(e) => println!("Failed to send amount to address {}. Error {:?}", address_string, e)
-        }
+        self.rpc_client.send_to_address(&recipient_address, amount, None, None, None, None, None, None)
+            .map_err(|e| e.to_string())
     }
 
     pub fn load_wallet(&self, wallet: &str) {
@@ -77,15 +74,17 @@ impl RPCWrapper {
     }
 
     /// Generate a single block with given address as coinbase recipient
-    pub fn generate_to_address(&self, address_string: &str) {
-        let recipient_address = match Address::from_str(address_string) {
-            Ok(addr) => addr.assume_checked(),
-            Err(e) => {
-                eprintln!("Error parsing address {:?}", e);
-                return;
-            }
-        };
+    pub fn generate_to_address(&self, address_string: &str) -> Result<BlockHash, String> {
+        let recipient_address = Address::from_str(address_string)
+            .map_err(|e| e.to_string())?
+            .assume_checked();
 
-        let _ = self.rpc_client.generate_to_address(1, &recipient_address);
+        self.rpc_client.generate_to_address(1, &recipient_address)
+            .map_err(|e| e.to_string())
+            .map(|hashes| hashes[0])
+    }
+
+    pub fn get_client(&self) -> &Client {
+        return &self.rpc_client;
     }
 }
