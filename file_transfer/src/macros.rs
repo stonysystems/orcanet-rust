@@ -21,13 +21,18 @@ macro_rules! impl_str_serde {
             type Err = serde_json::Error;
 
             fn from_str(s: &str) -> Result<Self, Self::Err> {
-                serde_json::from_str(s)
+                if !s.starts_with("\"") {
+                    serde_json::from_str(format!("\"{s}\"").as_str())
+                } else {
+                    serde_json::from_str(s)
+                }
             }
         }
 
         impl Display for $name {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                write!(f, "{}", serde_json::to_string(self).unwrap())
+                let s = serde_json::to_string(self).unwrap();
+                write!(f, "{}", &s[1..(s.len()-1)])
             }
         }
     };
