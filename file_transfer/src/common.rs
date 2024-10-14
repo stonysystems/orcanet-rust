@@ -178,8 +178,10 @@ impl Utils {
                 content,
                 recipient_address
             } => {
+                // Store the file
                 let app_data_path = OrcaNetConfig::get_str_from_config(ConfigKey::AppDataPath);
                 let path = Path::new(&app_data_path)
+                    .join(OrcaNetConfig::FILE_SAVE_DIR)
                     .join(file_name.clone());
 
                 match std::fs::write(&path, &content) {
@@ -195,6 +197,8 @@ impl Utils {
                 let btc_addr = OrcaNetConfig::get_str_from_config(ConfigKey::BTCAddress);
                 let cost_btc = Amount::from_btc(fee_rate_per_kb * size_kb)
                     .unwrap();
+                println!("Initiating transfer of {:?} to {}", cost_btc, btc_addr);
+
                 btc_wrapper.send_to_address(recipient_address.as_str(), cost_btc);
                 btc_wrapper.generate_to_address(btc_addr.as_str());
             }
