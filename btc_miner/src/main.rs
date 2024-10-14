@@ -1,12 +1,14 @@
-pub mod btc_rpc;
-
 use std::str::FromStr;
 
+use bitcoin::Amount;
 use bitcoincore_rpc::{Client, RpcApi};
 use clap::Parser;
 use futures::{AsyncReadExt, stream::StreamExt};
 use tokio::io::AsyncBufReadExt;
-use btc_rpc::{BTCNetwork, RPCWrapper};
+
+use crate::btc_rpc::{BTCNetwork, RPCWrapper};
+
+pub mod btc_rpc;
 
 macro_rules! conditional_print {
     ($condition:expr, $($arg:tt)*) => {
@@ -76,12 +78,18 @@ fn generate_blocks_if_required(rpc_client: &Client, do_print: bool) {
 
 #[tokio::main]
 async fn main() {
-    let rpc_wrapper = RPCWrapper::new(BTCNetwork::MainNet);
-    let opts = Opts::parse();
-    rpc_wrapper.load_wallet(opts.wallet_name.as_str());
-
-    rpc_wrapper.check_block_count();
+    let rpc_wrapper = RPCWrapper::new(BTCNetwork::RegTest);
+    rpc_wrapper.load_wallet("bob");
     rpc_wrapper.check_balance();
+    // rpc_wrapper.send_to_address("bcrt1qpqfqvzztul2yyxa8jxu35ru8k57sxwjqdg8qtd", Amount::from_btc(10f64).unwrap());
+    // let opts = Opts::parse();
+    // rpc_wrapper.load_wallet(opts.wallet_name.as_str());
+    //
+    // rpc_wrapper.check_block_count();
+    // rpc_wrapper.check_balance();
+
+    // println!("{}", Amount::from_btc(0.15).unwrap().to_string());
+    // println!("{:?}", Amount::from_btc("0.25".parse().unwrap()).unwrap());
     // println!("-- TYPE COMMANDS --");
 
     // let mut stdin = io::BufReader::new(io::stdin()).lines();

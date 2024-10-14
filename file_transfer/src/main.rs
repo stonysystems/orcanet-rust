@@ -1,10 +1,8 @@
 use std::error::Error;
-use std::path::Path;
 use std::process::exit;
 use std::str::FromStr;
 
 use async_std::task::block_on;
-use bitcoin::Amount;
 use clap::Parser;
 use futures::{SinkExt, StreamExt};
 use futures::channel::mpsc;
@@ -12,8 +10,7 @@ use tokio::{io, select};
 use tokio::io::AsyncBufReadExt;
 use tracing_subscriber::EnvFilter;
 
-use crate::btc_rpc::RPCWrapper;
-use crate::common::{BTCNetwork, ConfigKey, OrcaNetConfig, OrcaNetEvent, OrcaNetResponse, Utils};
+use crate::common::{OrcaNetEvent, Utils};
 use crate::network_client::NetworkClient;
 use crate::request_handler::RequestHandlerLoop;
 

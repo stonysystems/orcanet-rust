@@ -17,7 +17,7 @@ impl BTCNetwork {
         match self {
             BTCNetwork::MainNet => String::from("http://127.0.0.1:8332"),
             BTCNetwork::TestNet => String::from("http://127.0.0.1:18334"),
-            BTCNetwork::RegTest => String::from("http://127.0.0.1:18444")
+            BTCNetwork::RegTest => String::from("http://127.0.0.1:18443")
         }
     }
 }

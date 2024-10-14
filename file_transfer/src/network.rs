@@ -256,12 +256,12 @@ impl EventLoop {
     fn handle_kademlia_events(&mut self, query_id: kad::QueryId, result: kad::QueryResult) {
         match result {
             kad::QueryResult::GetProviders(Ok(kad::GetProvidersOk::FoundProviders { key, providers, .. })) => {
-                for peer in &providers {
-                    println!(
-                        "Peer {peer:?} provides key {:?}",
-                        std::str::from_utf8(key.as_ref()).unwrap()
-                    );
-                }
+                // for peer in &providers {
+                //     println!(
+                //         "Peer {peer:?} provides key {:?}",
+                //         std::str::from_utf8(key.as_ref()).unwrap()
+                //     );
+                // }
                 if let Some(sender) = self.pending_get_providers.remove(&query_id) {
                     sender.send(providers).expect("Receiver not to be dropped");
 

@@ -12,7 +12,7 @@ use libp2p::request_response::ResponseChannel;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-use crate::btc_rpc::RPCWrapper;
+use crate::btc_rpc::{BTCNetwork, RPCWrapper};
 use crate::impl_str_serde;
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -240,23 +240,4 @@ pub enum OrcaNetResponse {
     Error {
         message: String
     },
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub enum BTCNetwork {
-    MainNet,
-    TestNet,
-    RegTest,
-}
-
-impl_str_serde!(BTCNetwork);
-
-impl BTCNetwork {
-    pub fn get_rpc_url(self) -> String {
-        match self {
-            BTCNetwork::MainNet => String::from("http://127.0.0.1:8332"),
-            BTCNetwork::TestNet => String::from("http://127.0.0.1:18334"),
-            BTCNetwork::RegTest => String::from("http://127.0.0.1:18444")
-        }
-    }
 }

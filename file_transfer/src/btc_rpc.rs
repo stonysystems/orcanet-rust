@@ -1,9 +1,30 @@
 use std::str::FromStr;
+use std::fmt::{self, Display};
 
 use bitcoin::{Address, Amount};
 use bitcoincore_rpc::{Auth, Client, RpcApi};
+use serde::{Deserialize, Serialize};
 
-use crate::common::BTCNetwork;
+use crate::impl_str_serde;
+
+#[derive(Serialize, Deserialize, Debug)]
+pub enum BTCNetwork {
+    MainNet,
+    TestNet,
+    RegTest,
+}
+
+impl_str_serde!(BTCNetwork);
+
+impl BTCNetwork {
+    pub fn get_rpc_url(self) -> String {
+        match self {
+            BTCNetwork::MainNet => String::from("http://127.0.0.1:8332"),
+            BTCNetwork::TestNet => String::from("http://127.0.0.1:18334"),
+            BTCNetwork::RegTest => String::from("http://127.0.0.1:18443")
+        }
+    }
+}
 
 pub struct RPCWrapper {
     rpc_client: Client,
