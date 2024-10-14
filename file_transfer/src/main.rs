@@ -11,7 +11,8 @@ use tokio::{io, select};
 use tokio::io::AsyncBufReadExt;
 use tracing_subscriber::EnvFilter;
 
-use crate::common::{OrcaNetConfig, OrcaNetEvent, OrcaNetResponse, Utils};
+use crate::btc_rpc::{RPCWrapper};
+use crate::common::{ConfigKey, OrcaNetConfig, OrcaNetEvent, OrcaNetResponse, Utils, BTCNetwork};
 use crate::network_client::NetworkClient;
 use crate::request_handler::RequestHandlerLoop;
 
@@ -20,25 +21,13 @@ mod network_client;
 mod network;
 mod common;
 mod db_client;
+mod btc_rpc;
+mod macros;
 
 #[derive(Parser)]
 struct Opts {
     #[arg(long, default_value_t = 4)]
     seed: u64,
-}
-
-macro_rules! expect_input {
-    ($exp:expr, $name:literal, $func:expr) => {
-        {
-            match $exp {
-                Some(input) => $func(input),
-                None => {
-                    eprintln!("Expected {}", $name);
-                    return;
-                }
-            }
-        }
-    };
 }
 
 #[tokio::main]
@@ -139,24 +128,28 @@ async fn handle_input_line(
                             content
                         } => {
                             // Write file
-                            let path = Path::new(&OrcaNetConfig::get_app_data_path()).
-                                join(file_name.clone());
+                            let app_data_path = OrcaNetConfig::get_str_from_config(ConfigKey::AppDataPath);
+                            let path = Path::new(&app_data_path)
+                                .join(file_name.clone());
 
                             match std::fs::write(&path, &content) {
                                 Ok(_) => println!("Wrote file {} to {:?}", file_name, path),
                                 Err(e) => eprintln!("Error writing file {:?}", e)
                             }
 
-                            let size = (content.len() as f64) / 1000f64;
-                            println!("Received file with size {} KB", size);
+                            let size_kb = (content.len() as f64) / 1000f64;
+                            println!("Received file with size {} KB", size_kb);
+
                             // Send payment after computing size
+                            let btc_wrapper = RPCWrapper::new(BTCNetwork::RegTest);
+                            let btc_addr = OrcaNetConfig::get_str_from_config(ConfigKey::BTCAddress);
+                            let cost = fee_rate_per_kb * (size_kb as u64); // TODO: Not sure if it's fine, change
+                            btc_wrapper.send_to_address(recipient_address.as_str(), cost);
+                            btc_wrapper.generate_to_address(btc_addr.as_str());
                         }
                         OrcaNetResponse::Error { message } => {
                             println!("Failed to fetch file {}", message);
                         }
-                        // _ => {
-                        //     panic!("Wrong response for file request")
-                        // }
                     }
                 }
                 Err(e) => eprintln!("Error when getting file: {:?}", e)

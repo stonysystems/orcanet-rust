@@ -4,7 +4,7 @@ use futures::channel::mpsc;
 use futures::StreamExt;
 use tokio::select;
 
-use crate::common::{OrcaNetConfig, OrcaNetEvent, OrcaNetRequest, OrcaNetResponse};
+use crate::common::{ConfigKey, OrcaNetConfig, OrcaNetEvent, OrcaNetRequest, OrcaNetResponse};
 use crate::db_client::{DBClient, FileInfo};
 use crate::network_client::NetworkClient;
 
@@ -84,14 +84,16 @@ impl RequestHandlerLoop {
                 let resp = match file_info {
                     Ok(file_info) => {
                         let path = Path::new(file_info.file_path.as_str());
+
                         match std::fs::read(path) {
                             Ok(content) => {
                                 let _ = db_client.increment_download_count(file_id.as_str());
+                                let recipient_address = OrcaNetConfig::get_str_from_config(ConfigKey::BTCAddress);
 
                                 OrcaNetResponse::FileResponse {
                                     file_name: file_info.file_name,
                                     fee_rate_per_kb: OrcaNetConfig::get_fee_rate(),
-                                    recipient_address: OrcaNetConfig::get_receiver_btc_address(),
+                                    recipient_address,
                                     content,
                                 }
                             }

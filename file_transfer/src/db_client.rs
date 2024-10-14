@@ -1,6 +1,6 @@
 use rusqlite::{Connection, params, Result as QueryResult};
 
-use crate::common::OrcaNetConfig;
+use crate::common::{ConfigKey, OrcaNetConfig};
 
 pub struct DBClient {
     conn: Connection,
@@ -22,7 +22,8 @@ impl Clone for DBClient {
 
 impl DBClient {
     pub fn new(db_path: Option<String>) -> Self {
-        let _db_path = db_path.unwrap_or(OrcaNetConfig::get_db_path());
+        let _db_path = db_path
+            .unwrap_or_else(|| OrcaNetConfig::get_str_from_config(ConfigKey::DBPath));
 
         let conn = match Connection::open(_db_path) {
             Ok(conn) => {

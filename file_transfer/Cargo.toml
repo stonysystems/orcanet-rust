@@ -21,3 +21,4 @@ serde = { version = "1.0.210", features = ["derive"] }
 rusqlite = "0.32.1"
 dirs = "5.0.1"
 bitcoin = { version = "0.32.2", features = ["rand-std", "serde"] }
+anyhow = "1.0.89"

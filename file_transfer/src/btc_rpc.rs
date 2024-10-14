@@ -1,25 +1,13 @@
-use bitcoincore_rpc::{Auth, Client, RpcApi};
-use bitcoin::{Address, Amount};
 use std::str::FromStr;
+use std::thread;
 
-pub enum BTCNetwork {
-    MainNet,
-    TestNet,
-    RegTest
-}
+use bitcoin::{Address, Amount};
+use bitcoincore_rpc::{Auth, Client, RpcApi};
+
+use crate::common::BTCNetwork;
 
 pub struct RPCWrapper {
     rpc_client: Client,
-}
-
-impl BTCNetwork {
-    pub fn get_rpc_url(self) -> String {
-        match self {
-            BTCNetwork::MainNet => String::from("http://127.0.0.1:8332"),
-            BTCNetwork::TestNet => String::from("http://127.0.0.1:18334"),
-            BTCNetwork::RegTest => String::from("http://127.0.0.1:18444")
-        }
-    }
 }
 
 impl RPCWrapper {
@@ -66,5 +54,18 @@ impl RPCWrapper {
     pub fn check_balance(&self) {
         let balance = self.rpc_client.get_balance(None, None).expect("Failed to get balance");
         println!("Current balance: {}", balance);
+    }
+
+    /// Generate a single block with given address as coinbase recipient
+    pub fn generate_to_address(&self, address_string: &str) {
+        let recipient_address = match Address::from_str(address_string) {
+            Ok(addr) => addr.assume_checked(),
+            Err(e) => {
+                eprintln!("Error parsing address {:?}", e);
+                return;
+            }
+        };
+
+        let _ = self.rpc_client.generate_to_address(1, &recipient_address);
     }
 }
