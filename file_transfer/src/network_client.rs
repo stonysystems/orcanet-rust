@@ -115,6 +115,8 @@ impl NetworkClient {
         }
 
         // Request the content of the file from each node.
+        // TODO: Convert this to series of requests based on dial success because we can't ask everyone
+        // Then we'll have to pay everyone
         let requests = providers.into_iter().map(|peer| {
             let mut network_client = self.clone();
             let name = file_id.clone();

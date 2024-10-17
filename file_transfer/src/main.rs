@@ -54,7 +54,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // Start HTTP server
     if OrcaNetConfig::should_start_http_server() {
-        tokio::task::spawn(start_http_server());
+        let client_clone = network_client.clone();
+        tokio::task::spawn(start_http_server(client_clone));
     }
 
     let mut stdin = io::BufReader::new(io::stdin()).lines();
