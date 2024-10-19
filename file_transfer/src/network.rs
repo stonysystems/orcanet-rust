@@ -364,26 +364,29 @@ impl EventLoop {
                 }
             }
             OrcaNetCommand::StartProviding { file_id, sender } => {
+                let key = Utils::get_key_with_ns(file_id.as_str());
                 let query_id = self.swarm
                     .behaviour_mut()
                     .kademlia
-                    .start_providing(file_id.into_bytes().into())
+                    .start_providing(key.into_bytes().into())
                     .expect("No store error.");
 
                 self.pending_start_providing.insert(query_id, sender);
             }
             OrcaNetCommand::StopProviding { file_id } => {
-                let key = kad::RecordKey::new(&file_id.into_bytes());
+                let file_id_with_ns = Utils::get_key_with_ns(file_id.as_str());
+                let key_with_ns = kad::RecordKey::new(&file_id_with_ns.into_bytes());
                 self.swarm
                     .behaviour_mut()
                     .kademlia
-                    .stop_providing(&key);
+                    .stop_providing(&key_with_ns);
             }
             OrcaNetCommand::GetProviders { file_id, sender } => {
+                let key = Utils::get_key_with_ns(file_id.as_str());
                 let query_id = self.swarm
                     .behaviour_mut()
                     .kademlia
-                    .get_providers(file_id.into_bytes().into());
+                    .get_providers(key.into_bytes().into());
                 self.pending_get_providers.insert(query_id, sender);
             }
             OrcaNetCommand::Request {
@@ -409,8 +412,9 @@ impl EventLoop {
                 println!("Sent response");
             }
             OrcaNetCommand::PutKV { key, value, sender } => {
+                let key_with_ns = Utils::get_key_with_ns(key.as_str());
                 let record = kad::Record {
-                    key: kad::RecordKey::new(&key.as_str()),
+                    key: kad::RecordKey::new(&key_with_ns.as_str()),
                     value: value.into(),
                     publisher: None,
                     expires: None,
@@ -423,10 +427,11 @@ impl EventLoop {
                 self.pending_put_kv.insert(request_id, sender);
             }
             OrcaNetCommand::GetValue { key, sender } => {
+                let key_with_ns = Utils::get_key_with_ns(key.as_str());
                 let request_id = self.swarm
                     .behaviour_mut()
                     .kademlia
-                    .get_record(kad::RecordKey::new(&key.as_str()));
+                    .get_record(kad::RecordKey::new(&key_with_ns.as_str()));
 
                 self.pending_get_value.insert(request_id, sender);
             }

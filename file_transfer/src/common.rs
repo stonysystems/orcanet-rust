@@ -176,7 +176,11 @@ impl Utils {
     }
 
     pub fn get_key_with_ns(key: &str) -> String {
-        format!("{}/{}", OrcaNetConfig::NAMESPACE, key)
+        if key.starts_with(OrcaNetConfig::NAMESPACE) {
+            key.to_string()
+        } else {
+            format!("{}/{}", OrcaNetConfig::NAMESPACE, key)
+        }
     }
 
     pub fn get_peer_id_from_input(input: &str) -> PeerId {
@@ -231,7 +235,7 @@ impl Utils {
                 let app_data_path = OrcaNetConfig::get_str_from_config(ConfigKey::AppDataPath);
                 let path = Path::new(&app_data_path)
                     .join(OrcaNetConfig::FILE_SAVE_DIR)
-                    .join(format!("{}_{}", file_id, file_name.clone())); // Use file_id and name 
+                    .join(format!("{}_{}", file_id, file_name.clone())); // Use file_id and name
 
                 match std::fs::write(&path, &content) {
                     Ok(_) => println!("Wrote file {} to {:?}", file_name, path),

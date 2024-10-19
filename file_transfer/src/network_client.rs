@@ -115,8 +115,7 @@ impl NetworkClient {
         &mut self,
         file_id: String,
     ) -> Result<(), Box<dyn Error>> {
-        let file_id_with_ns = Utils::get_key_with_ns(file_id.as_str());
-        let providers = self.get_providers(file_id_with_ns).await;
+        let providers = self.get_providers(file_id.clone()).await;
 
         println!("Got providers: {:?}", providers);
 
@@ -135,6 +134,7 @@ impl NetworkClient {
                 peer.clone(),
                 OrcaNetRequest::FileRequest { file_id: file_id.clone() },
             ).await {
+                println!("Got file from peer {:?}", peer);
                 Utils::handle_file_response(resp);
                 return Ok(());
             }
@@ -198,8 +198,7 @@ impl NetworkClient {
         match db_client.get_provided_files() {
             Ok(provided_files) => {
                 for file_info in provided_files {
-                    let key = Utils::get_key_with_ns(file_info.file_id.as_str());
-                    self.start_providing(key).await;
+                    self.start_providing(file_info.file_id).await;
                 }
             }
             Err(e) => {

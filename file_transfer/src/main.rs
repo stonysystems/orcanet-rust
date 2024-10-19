@@ -4,6 +4,7 @@
 extern crate rocket;
 
 use std::error::Error;
+use std::path::Path;
 use std::process::exit;
 use std::str::FromStr;
 
@@ -88,13 +89,13 @@ async fn handle_input_line(
 
     match command {
         Some("put") => {
-            let key = expect_input!(args.next(), "key", Utils::get_key_with_ns);
+            let key = expect_input!(args.next(), "key", String::from);
             let value = expect_input!(args.next(), "value", |value: &str| value.as_bytes().to_vec());
 
             let _ = client.put_kv_pair(key, value).await;
         }
         Some("get") => {
-            let key = expect_input!(args.next(), "key", Utils::get_key_with_ns);
+            let key = expect_input!(args.next(), "key", String::from);
 
             match client.get_value(key).await {
                 Ok(v) => {
@@ -110,12 +111,12 @@ async fn handle_input_line(
             let _ = client.dial(peer_id, peer_addr).await;
         }
         Some("startproviding") => {
-            let key = expect_input!(args.next(), "key", Utils::get_key_with_ns);
+            let key = expect_input!(args.next(), "key", String::from);
 
             let _ = client.start_providing(key).await;
         }
         Some("getproviders") => {
-            let key = expect_input!(args.next(), "key", Utils::get_key_with_ns);
+            let key = expect_input!(args.next(), "key", String::from);
 
             let providers = client.get_providers(key.clone()).await;
             println!("Got providers for {} {:?}", key, providers);
@@ -141,10 +142,16 @@ async fn handle_input_line(
             // }
         }
         Some("providefile") => {
-            let file_id = expect_input!(args.next(), "file_id", Utils::get_key_with_ns);
             let file_path = expect_input!(args.next(), "file_path", String::from);
+            let path = Path::new(file_path.as_str());
 
-            let _ = event_sender.send(OrcaNetEvent::ProvideFile { file_id, file_path }).await;
+            if !path.exists() {
+                return;
+            }
+
+            if let Ok(file_id) = Utils::sha256_digest(path) {
+                let _ = event_sender.send(OrcaNetEvent::ProvideFile { file_id, file_path }).await;
+            }
         }
         Some("advertise") => {
             let _ = client.advertise_provided_files().await;
