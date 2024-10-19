@@ -10,6 +10,10 @@ use libp2p::multiaddr::Protocol;
 use libp2p::request_response::ResponseChannel;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use data_encoding::HEXUPPER;
+use ring::digest::{Context, Digest, SHA256};
+use std::fs::File;
+use std::io::{BufReader, Read, Write};
 
 use crate::btc_rpc::{BTCNetwork, RPCWrapper};
 use crate::impl_str_serde;
@@ -34,6 +38,7 @@ impl OrcaNetConfig {
     pub const SECRET_KEY_SEED: u64 = 4;
     pub const CONFIG_FILE_REL_PATH: &'static str = ".orcanet/config.json";
     pub const FILE_SAVE_DIR: &'static str = "file_store_dest";
+    pub const MAX_FILE_SIZE_BYTES: u64 = 10 * 1024 * 1024; // 10 MB
 
     pub fn get_bootstrap_peer_id() -> PeerId {
         "12D3KooWQd1K1k8XA9xVEzSAu7HUCodC7LJB6uW5Kw4VwkRdstPE"
@@ -127,6 +132,9 @@ pub enum OrcaNetCommand {
         file_id: String,
         sender: oneshot::Sender<()>,
     },
+    StopProviding {
+        file_id: String,
+    },
     GetProviders {
         file_id: String,
         sender: oneshot::Sender<HashSet<PeerId>>,
@@ -190,6 +198,26 @@ impl Utils {
         });
     }
 
+    pub fn sha256_digest(file_path: &Path) -> Result<String, std::io::Error> {
+        let input = File::open(file_path)?;
+        let mut reader = BufReader::new(input);
+        let mut context = Context::new(&SHA256);
+        let mut buffer = [0; 1024];
+
+        loop {
+            let count = reader.read(&mut buffer)?;
+            if count == 0 {
+                break;
+            }
+            context.update(&buffer[..count]);
+        }
+
+        let digest = context.finish();
+        Ok(hex::encode(digest.as_ref()))
+    }
+
+
+    //TODO: Move to a better struct
     pub fn handle_file_response(resp: OrcaNetResponse) {
         match resp {
             OrcaNetResponse::FileResponse {

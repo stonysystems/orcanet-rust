@@ -54,8 +54,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // Start HTTP server
     if OrcaNetConfig::should_start_http_server() {
-        let client_clone = network_client.clone();
-        tokio::task::spawn(start_http_server(client_clone));
+        tokio::task::spawn(start_http_server(network_client.clone(), event_sender.clone()));
     }
 
     let mut stdin = io::BufReader::new(io::stdin()).lines();
@@ -125,7 +124,7 @@ async fn handle_input_line(
             let file_id = expect_input!(args.next(), "file_id", String::from);
             // let peer_id = expect_input!(args.next(), "peer_id", Utils::get_peer_id_from_input);
 
-            if let Err(e) = client.get_file(file_id).await {
+            if let Err(e) = client.download_file(file_id).await {
                 eprintln!("Error getting file: {:?}", e);
             } else {
                 println!("Got file");
@@ -145,7 +144,6 @@ async fn handle_input_line(
             let file_id = expect_input!(args.next(), "file_id", Utils::get_key_with_ns);
             let file_path = expect_input!(args.next(), "file_path", String::from);
 
-            let _ = client.start_providing(file_id.clone()).await;
             let _ = event_sender.send(OrcaNetEvent::ProvideFile { file_id, file_path }).await;
         }
         Some("advertise") => {

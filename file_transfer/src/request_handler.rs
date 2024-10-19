@@ -56,19 +56,24 @@ impl RequestHandlerLoop {
 
                 if path.exists() {
                     let resp = db_client.insert_provided_file(FileInfo {
-                        file_id,
+                        file_id: file_id.clone(),
                         file_name,
                         file_path,
                         downloads_count: 0,
                     });
 
                     if resp.is_err() {
-                        println!("Failed to insert into DB");
+                        eprintln!("Failed to insert into DB");
                     }
                 }
+
+                self.network_client.start_providing(file_id).await;
             }
             OrcaNetEvent::StopProvidingFile { file_id } => {
-                // TODO: Remove from table
+                db_client.remove_provided_file(file_id.as_str()).unwrap_or_else(
+                    |_| eprintln!("Deletion failed for {}", file_id.as_str())
+                );
+                self.network_client.stop_providing(file_id).await;
             }
         }
     }

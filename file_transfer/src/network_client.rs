@@ -57,6 +57,14 @@ impl NetworkClient {
         receiver.await.expect("Sender not to be dropped.");
     }
 
+    /// Stop providing: Stop re-publishing provider record for given file_id
+    pub async fn stop_providing(&mut self, file_id: String) {
+        self.sender
+            .send(OrcaNetCommand::StopProviding { file_id })
+            .await
+            .expect("Command receiver not to be dropped.");
+    }
+
     /// Find the providers for the given file on the DHT.
     pub async fn get_providers(&mut self, file_id: String) -> HashSet<PeerId> {
         let (sender, receiver) = oneshot::channel();
@@ -103,8 +111,8 @@ impl NetworkClient {
         receiver.await.expect("Sender not be dropped.")
     }
 
-    /// Get the given file from one of the providers (if any)
-    pub async fn get_file(
+    /// Download the given file from one of the providers (if any)
+    pub async fn download_file(
         &mut self,
         file_id: String,
     ) -> Result<(), Box<dyn Error>> {

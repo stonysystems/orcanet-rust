@@ -1,4 +1,4 @@
-use rusqlite::{Connection, params, Result as QueryResult};
+use rusqlite::{Connection, params, Result as QueryResult, Row};
 
 use crate::common::{ConfigKey, OrcaNetConfig};
 
@@ -12,6 +12,17 @@ pub struct FileInfo {
     pub file_path: String,
     pub file_name: String,
     pub downloads_count: usize,
+}
+
+impl FileInfo {
+    pub fn from_row(row: &Row) -> QueryResult<Self> {
+        Ok(Self {
+            file_id: row.get::<_, String>(0)?,
+            file_path: row.get::<_, String>(1)?,
+            file_name: row.get::<_, String>(2)?,
+            downloads_count: row.get::<_, usize>(3)?,
+        })
+    }
 }
 
 impl Clone for DBClient {
@@ -50,14 +61,7 @@ impl DBClient {
 
     pub fn get_provided_files(&self) -> QueryResult<Vec<FileInfo>> {
         let mut stmt = self.conn.prepare("SELECT * FROM provided_files")?;
-        let files = stmt.query_map([], |row| {
-            Ok(FileInfo {
-                file_id: row.get::<_, String>(0)?,
-                file_path: row.get::<_, String>(1)?,
-                file_name: row.get::<_, String>(2)?,
-                downloads_count: row.get::<_, usize>(3)?,
-            })
-        })?;
+        let files = stmt.query_map([], FileInfo::from_row)?;
 
         Ok(files.collect::<QueryResult<_>>()?)
     }
@@ -65,14 +69,7 @@ impl DBClient {
     pub fn get_provided_file_info(&self, file_id: &str) -> QueryResult<FileInfo> {
         let mut stmt = self.conn.prepare(
             "SELECT * FROM provided_files WHERE file_id=?1")?;
-        let file = stmt.query_row([file_id], |row| {
-            Ok(FileInfo {
-                file_id: row.get::<_, String>(0)?,
-                file_path: row.get::<_, String>(1)?,
-                file_name: row.get::<_, String>(2)?,
-                downloads_count: row.get::<_, usize>(3)?,
-            })
-        });
+        let file = stmt.query_row([file_id], FileInfo::from_row);
 
         return file;
     }
@@ -81,6 +78,15 @@ impl DBClient {
         self.conn.execute(
             "INSERT INTO provided_files VALUES (?1, ?2, ?3, ?4)",
             params![file_info.file_id, file_info.file_path, file_info.file_name, file_info.downloads_count],
+        )?;
+
+        Ok(())
+    }
+
+    pub fn remove_provided_file(&self, file_id: &str) -> QueryResult<()> {
+        self.conn.execute(
+            "DELETE FROM provided_files WHERE file_id = ?1",
+            params![file_id],
         )?;
 
         Ok(())

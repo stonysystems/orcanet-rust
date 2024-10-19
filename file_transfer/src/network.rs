@@ -7,6 +7,7 @@ use futures::channel::{mpsc, oneshot};
 use futures::prelude::*;
 use futures::StreamExt;
 use libp2p::{identify, kad, multiaddr::Protocol, noise, PeerId, ping, relay, request_response::{self, OutboundRequestId, ResponseChannel}, StreamProtocol, swarm::{NetworkBehaviour, Swarm, SwarmEvent}, tcp, yamux};
+use libp2p::bytes::Bytes;
 use libp2p::kad::store::{MemoryStore, MemoryStoreConfig};
 use libp2p::request_response::ProtocolSupport;
 use serde::{Deserialize, Serialize};
@@ -371,6 +372,13 @@ impl EventLoop {
 
                 self.pending_start_providing.insert(query_id, sender);
             }
+            OrcaNetCommand::StopProviding { file_id } => {
+                let key = kad::RecordKey::new(&file_id.into_bytes());
+                self.swarm
+                    .behaviour_mut()
+                    .kademlia
+                    .stop_providing(&key);
+            }
             OrcaNetCommand::GetProviders { file_id, sender } => {
                 let query_id = self.swarm
                     .behaviour_mut()
@@ -419,6 +427,7 @@ impl EventLoop {
                     .behaviour_mut()
                     .kademlia
                     .get_record(kad::RecordKey::new(&key.as_str()));
+
                 self.pending_get_value.insert(request_id, sender);
             }
         }

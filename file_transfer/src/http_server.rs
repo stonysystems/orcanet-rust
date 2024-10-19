@@ -1,12 +1,17 @@
 use bitcoincore_rpc::RpcApi;
+use futures::channel::mpsc;
+use futures::SinkExt;
+use ring::digest::digest;
 use rocket::{get, routes, State};
+use rocket::time::format_description::parse;
 
 use crate::btc_rpc::RPCWrapper;
-use crate::common::{ConfigKey, OrcaNetConfig, Utils};
+use crate::common::{ConfigKey, OrcaNetConfig, OrcaNetEvent, Utils};
 use crate::network_client::NetworkClient;
 
 pub struct AppState {
     pub network_client: NetworkClient,
+    pub event_sender: mpsc::Sender<OrcaNetEvent>,
 }
 
 // Wallet
@@ -80,8 +85,7 @@ async fn generate_block() -> String {
 #[get("/dial?<peer_id>")]
 async fn dial(state: &State<AppState>, peer_id: String) -> String {
     let addr = Utils::get_address_through_relay(&peer_id.parse().unwrap(), None);
-    let dial_resp = state.network_client
-        .clone()
+    let dial_resp = state.network_client.clone()
         .dial(peer_id.parse().unwrap(), addr)
         .await;
 
@@ -93,14 +97,52 @@ async fn dial(state: &State<AppState>, peer_id: String) -> String {
 
 // File sharing
 #[get("/provide-file?<file_path>")]
-fn provide_file(state: &State<AppState>, file_path: String) -> String {
+async fn provide_file(state: &State<AppState>, file_path: String) -> String {
+    // Validate path and size
+    let path = std::path::Path::new(file_path.as_str());
+    if !path.exists() {
+        return "Path does not exist".parse().unwrap();
+    }
+
+    if path.metadata().unwrap().len() > OrcaNetConfig::MAX_FILE_SIZE_BYTES {
+        return format!("File size exceeds threshold of {} bytes", OrcaNetConfig::MAX_FILE_SIZE_BYTES);
+    }
+
     // Compute hash
+    let file_id = match Utils::sha256_digest(&path) {
+        Ok(digest) => digest,
+        _ => {
+            return "Error computing digest".parse().unwrap();
+        }
+    };
+
     // Start providing
+    let _ = state.event_sender.clone()
+        .send(OrcaNetEvent::ProvideFile { file_id, file_path })
+        .await;
+
+    "Started providing".parse().unwrap()
+}
+
+#[get("/stop-providing?<file_id>")]
+async fn stop_providing(state: &State<AppState>, file_id: String) -> String {
+    let _ = state.event_sender.clone()
+        .send(OrcaNetEvent::StopProvidingFile { file_id })
+        .await;
+
+    "Stopped".parse().unwrap()
+}
+
+#[get("/download-file?<file_id>")]
+fn download_file(state: &State<AppState>, file_id: String) -> String {
     "".parse().unwrap()
 }
 
 
-pub async fn start_http_server(network_client: NetworkClient) {
+pub async fn start_http_server(
+    network_client: NetworkClient,
+    event_sender: mpsc::Sender<OrcaNetEvent>,
+) {
     rocket::build()
         .mount("/", routes![
             get_block_count,
@@ -111,7 +153,8 @@ pub async fn start_http_server(network_client: NetworkClient) {
             dial
         ])
         .manage(AppState {
-            network_client
+            network_client,
+            event_sender,
         })
         .launch()
         .await
