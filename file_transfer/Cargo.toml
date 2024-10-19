@@ -22,6 +22,6 @@ rusqlite = "0.32.1"
 #diesel = {version = "2.2.4", features = ["sqlite"]}
 dirs = "5.0.1"
 bitcoin = { version = "0.32.2", features = ["rand-std", "serde"] }
-rocket = "0.5.1"
+rocket = { version = "0.5.1", features = ["json"] }
 data-encoding = "2.6.0"
 ring = "0.17.8"
