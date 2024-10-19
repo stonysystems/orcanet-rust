@@ -1,6 +1,8 @@
 use std::collections::HashSet;
 use std::error::Error;
 use std::fmt::{self, Display};
+use std::fs::File;
+use std::io::{BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
@@ -8,12 +10,9 @@ use futures::channel::oneshot;
 use libp2p::{identity, Multiaddr, PeerId};
 use libp2p::multiaddr::Protocol;
 use libp2p::request_response::ResponseChannel;
+use ring::digest::{Context, SHA256};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use data_encoding::HEXUPPER;
-use ring::digest::{Context, Digest, SHA256};
-use std::fs::File;
-use std::io::{BufReader, Read, Write};
 
 use crate::btc_rpc::{BTCNetwork, RPCWrapper};
 use crate::impl_str_serde;
@@ -218,9 +217,11 @@ impl Utils {
 
 
     //TODO: Move to a better struct
+    //TODO: Saved file path
     pub fn handle_file_response(resp: OrcaNetResponse) {
         match resp {
             OrcaNetResponse::FileResponse {
+                file_id,
                 file_name,
                 fee_rate_per_kb,
                 content,
@@ -230,7 +231,7 @@ impl Utils {
                 let app_data_path = OrcaNetConfig::get_str_from_config(ConfigKey::AppDataPath);
                 let path = Path::new(&app_data_path)
                     .join(OrcaNetConfig::FILE_SAVE_DIR)
-                    .join(file_name.clone());
+                    .join(format!("{}_{}", file_id, file_name.clone())); // Use file_id and name 
 
                 match std::fs::write(&path, &content) {
                     Ok(_) => println!("Wrote file {} to {:?}", file_name, path),
@@ -291,6 +292,7 @@ pub enum OrcaNetRequest {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum OrcaNetResponse {
     FileResponse {
+        file_id: String,
         file_name: String,
         fee_rate_per_kb: f64,
         recipient_address: String,

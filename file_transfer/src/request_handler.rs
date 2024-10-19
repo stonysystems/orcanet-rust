@@ -96,6 +96,7 @@ impl RequestHandlerLoop {
                                 let recipient_address = OrcaNetConfig::get_str_from_config(ConfigKey::BTCAddress);
 
                                 OrcaNetResponse::FileResponse {
+                                    file_id,
                                     file_name: file_info.file_name,
                                     fee_rate_per_kb: OrcaNetConfig::get_fee_rate(),
                                     recipient_address,
