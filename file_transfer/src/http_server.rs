@@ -6,6 +6,7 @@ use rocket::{get, routes, State};
 use rocket::serde::{json::Json, Serialize};
 use rocket::time::format_description::parse;
 use serde_json::json;
+use tracing_subscriber::fmt::format;
 
 use crate::btc_rpc::RPCWrapper;
 use crate::common::{ConfigKey, OrcaNetConfig, OrcaNetEvent, Utils};
@@ -114,11 +115,18 @@ async fn generate_block() -> Json<Response> {
     // }
 }
 
-#[get("/dial/<peer_id>")]
-async fn dial(state: &State<AppState>, peer_id: String) -> Json<Response> {
-    let addr = Utils::get_address_through_relay(&peer_id.parse().unwrap(), None);
+#[get("/dial/<peer_id_str>")]
+async fn dial(state: &State<AppState>, peer_id_str: String) -> Json<Response> {
+    let peer_id = match peer_id_str.parse() {
+        Ok(id) => id,
+        Err(e) => {
+            return Response::error(format!("Error parsing peer_id: {:?}", e));
+        }
+    };
+
+    let addr = Utils::get_address_through_relay(&peer_id, None);
     let dial_resp = state.network_client.clone()
-        .dial(peer_id.parse().unwrap(), addr)
+        .dial(peer_id, addr)
         .await;
 
     match dial_resp {

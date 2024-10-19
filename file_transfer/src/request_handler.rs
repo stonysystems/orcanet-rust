@@ -4,7 +4,7 @@ use futures::channel::mpsc;
 use futures::StreamExt;
 use tokio::select;
 
-use crate::common::{ConfigKey, OrcaNetConfig, OrcaNetEvent, OrcaNetRequest, OrcaNetResponse, Utils};
+use crate::common::{ConfigKey, OrcaNetConfig, OrcaNetEvent, OrcaNetRequest, OrcaNetResponse};
 use crate::db_client::{DBClient, FileInfo};
 use crate::network_client::NetworkClient;
 
@@ -62,12 +62,13 @@ impl RequestHandlerLoop {
                         downloads_count: 0,
                     });
 
-                    if resp.is_err() {
-                        eprintln!("Failed to insert into DB");
+                    match resp {
+                        Ok(_) => self.network_client.start_providing(file_id).await,
+                        Err(e) => {
+                            eprintln!("Failed to insert into DB: {:?}", e);
+                        }
                     }
                 }
-
-                self.network_client.start_providing(file_id).await;
             }
             OrcaNetEvent::StopProvidingFile { file_id } => {
                 db_client.remove_provided_file(file_id.as_str()).unwrap_or_else(
