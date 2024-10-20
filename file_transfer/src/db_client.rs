@@ -1,4 +1,5 @@
 use rusqlite::{Connection, params, Result as QueryResult, Row};
+use serde::Serialize;
 
 use crate::common::{ConfigKey, OrcaNetConfig};
 
@@ -6,7 +7,7 @@ pub struct DBClient {
     conn: Connection,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct FileInfo {
     pub file_id: String,
     pub file_path: String,

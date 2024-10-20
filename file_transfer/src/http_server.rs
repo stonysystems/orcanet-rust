@@ -10,6 +10,7 @@ use tracing_subscriber::fmt::format;
 
 use crate::btc_rpc::RPCWrapper;
 use crate::common::{ConfigKey, OrcaNetConfig, OrcaNetEvent, Utils};
+use crate::db_client::DBClient;
 use crate::network_client::NetworkClient;
 
 pub struct AppState {
@@ -43,6 +44,8 @@ impl Response {
         })
     }
 }
+
+// TODO: All HTTP endpoints are currently GET. Some of them should be POST/PUT. Change later
 
 // Wallet
 #[get("/blocks-count")]
@@ -136,6 +139,15 @@ async fn dial(state: &State<AppState>, peer_id_str: String) -> Json<Response> {
 }
 
 // File sharing
+#[get("/get-provided-files")]
+async fn get_provided_files(state: &State<AppState>) -> Json<Response> {
+    let db_client = DBClient::new(None);
+    match db_client.get_provided_files() {
+        Ok(files) => Response::success(json!(files)),
+        Err(e) => Response::error(format!("Error getting files: {:?}", e))
+    }
+}
+
 #[get("/provide-file?<file_path>")]
 async fn provide_file(state: &State<AppState>, file_path: String) -> Json<Response> {
     // Validate path and size
@@ -190,12 +202,15 @@ pub async fn start_http_server(
 ) {
     rocket::build()
         .mount("/", routes![
+            // Wallet
             get_block_count,
             get_balance,
             load_wallet,
             send_to_address,
             generate_block,
             dial,
+            // File sharing
+            get_provided_files,
             provide_file,
             stop_providing,
             download_file
