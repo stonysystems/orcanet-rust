@@ -460,6 +460,7 @@ impl EventLoop {
             }
             OrcaNetCommand::SendInStream { peer_id, request } => {
                 let mut control = self.swarm.behaviour_mut().stream.new_control();
+                println!("Sending {} bytes", request.len());
 
                 let protocol_future = async move {
                     match control
@@ -467,7 +468,7 @@ impl EventLoop {
                         .await {
                         Ok(mut stream) => {
                             println!("Opened stream");
-                            match stream.write(request.as_slice()).await {
+                            match stream.write_all(request.as_slice()).await {
                                 Ok(_) => println!("Wrote successfully"),
                                 Err(e) => eprintln!("Failed to write to stream: {:?}", e)
                             }
