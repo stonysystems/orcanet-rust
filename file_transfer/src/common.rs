@@ -25,7 +25,7 @@ pub enum ConfigKey {
     FeeRatePerKB,
     NetworkType,
     RunHTTPServer,
-    TstFileSavePath // For testing, remove later
+    TstFileSavePath, // For testing, remove later
 }
 
 impl_str_serde!(ConfigKey);
@@ -159,8 +159,8 @@ pub enum OrcaNetCommand {
     },
     SendInStream {
         peer_id: PeerId,
-        request: Vec<u8>
-    }
+        stream_content: StreamContent,
+    },
 }
 
 pub struct Utils;
@@ -290,6 +290,10 @@ pub enum OrcaNetEvent {
         request: OrcaNetRequest,
         channel: ResponseChannel<OrcaNetResponse>,
     },
+    StreamRequest {
+        request: OrcaNetRequest,
+        sender: oneshot::Sender<OrcaNetResponse>,
+    },
     ProvideFile {
         file_id: String,
         file_path: String,
@@ -300,7 +304,13 @@ pub enum OrcaNetEvent {
     // GetProvidedFiles,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+pub enum StreamContent {
+    Request(OrcaNetRequest),
+    Response(OrcaNetResponse),
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum OrcaNetRequest {
     FileRequest { file_id: String }
 }

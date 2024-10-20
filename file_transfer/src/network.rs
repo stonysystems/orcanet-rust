@@ -3,6 +3,7 @@ use std::default::Default;
 use std::error::Error;
 use std::time::Duration;
 
+use bincode;
 use futures::channel::{mpsc, oneshot};
 use futures::prelude::*;
 use futures::StreamExt;
@@ -10,9 +11,10 @@ use libp2p::{identify, kad, multiaddr::Protocol, noise, PeerId, ping, relay, req
 use libp2p::bytes::Bytes;
 use libp2p::kad::store::{MemoryStore, MemoryStoreConfig};
 use libp2p::request_response::ProtocolSupport;
+use libp2p_swarm::Stream;
 use serde::{Deserialize, Serialize};
 
-use crate::common::{ConfigKey, OrcaNetCommand, OrcaNetConfig, OrcaNetEvent, OrcaNetRequest, OrcaNetResponse, Utils};
+use crate::common::{ConfigKey, OrcaNetCommand, OrcaNetConfig, OrcaNetEvent, OrcaNetRequest, OrcaNetResponse, StreamContent, Utils};
 use crate::network_client::NetworkClient;
 
 #[derive(NetworkBehaviour)]
@@ -165,17 +167,7 @@ impl EventLoop {
                     Some((peer_id, mut stream)) => {
                         println!("Received stream from {:?}", peer_id);
 
-                        let mut buffer = Vec::new();
-                        if let Err(e) = stream.read_to_end(&mut buffer).await {
-                            eprintln!("Failed to read from stream: {:?}", e);
-                            return;
-                        }
-
-                        let tst_file = OrcaNetConfig::get_str_from_config(ConfigKey::TstFileSavePath);
-                        match std::fs::write(tst_file.as_str(), buffer) {
-                            Ok(_) => println!("Wrote to file: {}", tst_file),
-                            Err(e) => eprintln!("Error writing to file {:?}", e)
-                        }
+                        self.handle_stream_req(peer_id, &mut stream).await;
                     }
                     None => {}
                 }
@@ -458,9 +450,10 @@ impl EventLoop {
 
                 self.pending_get_value.insert(request_id, sender);
             }
-            OrcaNetCommand::SendInStream { peer_id, request } => {
+            OrcaNetCommand::SendInStream { peer_id, stream_content } => {
                 let mut control = self.swarm.behaviour_mut().stream.new_control();
-                println!("Sending {} bytes", request.len());
+                let content_bytes = bincode::serialize(&stream_content).unwrap();
+                println!("Sending {} bytes", content_bytes.len());
 
                 let protocol_future = async move {
                     match control
@@ -468,7 +461,7 @@ impl EventLoop {
                         .await {
                         Ok(mut stream) => {
                             println!("Opened stream");
-                            match stream.write_all(request.as_slice()).await {
+                            match stream.write_all(content_bytes.as_slice()).await {
                                 Ok(_) => println!("Wrote successfully"),
                                 Err(e) => eprintln!("Failed to write to stream: {:?}", e)
                             }
@@ -480,6 +473,44 @@ impl EventLoop {
                 };
 
                 protocol_future.await;
+            }
+        }
+    }
+
+    async fn handle_stream_req(&mut self, peer_id: PeerId, stream: &mut Stream) {
+        let mut buffer = Vec::new();
+        if let Err(e) = stream.read_to_end(&mut buffer).await {
+            eprintln!("Failed to read from stream: {:?}", e);
+            return;
+        }
+
+        let stream_content: StreamContent = bincode::deserialize(buffer.as_slice())
+            .unwrap();
+
+        match stream_content {
+            StreamContent::Request(request) => {
+                println!("Received request: {:?}", request);
+                let (sender, receiver) = oneshot::channel();
+
+                self.event_sender
+                    .send(OrcaNetEvent::StreamRequest { request, sender })
+                    .await
+                    .expect("Command receiver not to be dropped");
+
+                let response = receiver.await
+                    .expect("Sender not to be dropped");
+
+                let resp_content = StreamContent::Response(response);
+                let content_bytes = bincode::serialize(&resp_content).unwrap();
+
+                match stream.write_all(content_bytes.as_slice()).await {
+                    Ok(_) => println!("Wrote response for {}", peer_id),
+                    Err(e) => eprintln!("Error writing back response: {:?}", e)
+                }
+            }
+            StreamContent::Response(response) => {
+                println!("Received response: {:?}", response);
+                Utils::handle_file_response(response);
             }
         }
     }

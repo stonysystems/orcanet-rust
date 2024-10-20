@@ -6,7 +6,7 @@ use futures::SinkExt;
 use libp2p::{Multiaddr, PeerId};
 use libp2p::request_response::ResponseChannel;
 
-use crate::common::{OrcaNetCommand, OrcaNetRequest, OrcaNetResponse, Utils};
+use crate::common::{OrcaNetCommand, OrcaNetRequest, OrcaNetResponse, StreamContent, Utils};
 use crate::db_client::DBClient;
 
 #[derive(Clone)]
@@ -125,10 +125,14 @@ impl NetworkClient {
 
         for peer in providers {
             let addr = Utils::get_address_through_relay(&peer, None);
-            if self.dial(peer.clone(), addr).await.is_err() {
+            if self.dial(peer.clone(), addr.clone()).await.is_err() {
                 // Peer not available, skip it
                 continue;
             }
+
+            let _ = self.send_in_stream(peer.clone(), addr.clone(), StreamContent::Request(
+                OrcaNetRequest::FileRequest { file_id: file_id.clone() }
+            )).await;
 
             if let Ok(resp) = self.send_request(
                 peer.clone(),
@@ -208,10 +212,21 @@ impl NetworkClient {
     }
 
     /// Advertise all provided files to the network
-    pub async fn send_in_stream(&mut self, peer_id: PeerId, request: Vec<u8>) {
+    pub async fn send_in_stream(
+        &mut self,
+        peer_id: PeerId,
+        peer_addr: Multiaddr,
+        stream_content: StreamContent) -> Result<(), Box<dyn Error + Send>> {
+        // Dial to make sure that peer is reachable
+        self.dial(peer_id.clone(), peer_addr).await?;
+
+        // let (sender, receiver) = oneshot::channel();
+
         self.sender
-            .send(OrcaNetCommand::SendInStream { peer_id, request })
+            .send(OrcaNetCommand::SendInStream { peer_id, stream_content })
             .await
             .expect("Command receiver not to be dropped.");
+
+        Ok(())
     }
 }

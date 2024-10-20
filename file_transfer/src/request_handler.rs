@@ -48,6 +48,10 @@ impl RequestHandlerLoop {
                     .respond(response, channel)
                     .await;
             }
+            OrcaNetEvent::StreamRequest {request, sender} => {
+                let response = self.handle_request(request, &db_client);
+                let _ = sender.send(response);
+            }
             OrcaNetEvent::ProvideFile { file_id, file_path } => {
                 let path = Path::new(&file_path);
                 let file_name = String::from(Path::new(file_path.as_str()).file_name()

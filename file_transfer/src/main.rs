@@ -161,12 +161,13 @@ async fn handle_input_line(
             let peer_id = expect_input!(args.next(), "file_path", PeerId::from_str).unwrap();
             let file_path = expect_input!(args.next(), "file_path", String::from);
 
-            match std::fs::read(file_path.as_str()) {
-                Ok(content) => {
-                    client.send_in_stream(peer_id, content).await;
-                }
-                Err(e) => eprintln!("Error reading file: {:?}", e)
-            }
+            // match std::fs::read(file_path.as_str()) {
+            //     Ok(content) => {
+            //         let addr = Utils::get_address_through_relay(&peer_id, None);
+            //         client.send_in_stream(peer_id, addr, content).await;
+            //     }
+            //     Err(e) => eprintln!("Error reading file: {:?}", e)
+            // }
         }
         Some("exit") => {
             exit(0);
