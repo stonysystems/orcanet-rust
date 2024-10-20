@@ -457,7 +457,7 @@ impl EventLoop {
 
                 let protocol_future = async move {
                     match control
-                        .open_stream(peer_id, StreamProtocol::new(OrcaNetConfig::STREAM_PROTOCOL))
+                        .open_stream(peer_id.clone(), StreamProtocol::new(OrcaNetConfig::STREAM_PROTOCOL))
                         .await {
                         Ok(mut stream) => {
                             println!("Opened stream");
@@ -465,6 +465,9 @@ impl EventLoop {
                                 Ok(_) => println!("Wrote successfully"),
                                 Err(e) => eprintln!("Failed to write to stream: {:?}", e)
                             }
+
+                            // Handle response
+                            self.handle_stream_req(peer_id, &mut stream).await;
                         }
                         Err(e) => {
                             eprintln!("Failed to open stream: {:?}", e)
