@@ -140,11 +140,20 @@ async fn dial(state: &State<AppState>, peer_id_str: String) -> Json<Response> {
 
 // File sharing
 #[get("/get-provided-files")]
-async fn get_provided_files(state: &State<AppState>) -> Json<Response> {
+async fn get_provided_files() -> Json<Response> {
     let db_client = DBClient::new(None);
     match db_client.get_provided_files() {
         Ok(files) => Response::success(json!(files)),
         Err(e) => Response::error(format!("Error getting files: {:?}", e))
+    }
+}
+
+#[get("/get-file-info/<file_id>")]
+async fn get_file_info(file_id: String) -> Json<Response> {
+    let db_client = DBClient::new(None);
+    match db_client.get_provided_file_info(file_id.as_str()) {
+        Ok(file) => Response::success(json!(file)),
+        Err(e) => Response::error(format!("Error getting file: {:?}", e))
     }
 }
 
@@ -187,6 +196,7 @@ async fn stop_providing(state: &State<AppState>, file_id: String) -> Json<Respon
 
 #[get("/download-file/<file_id>")]
 async fn download_file(state: &State<AppState>, file_id: String) -> Json<Response> {
+    // TODO: Add a check to make sure it's not already downloaded or provided
     match state.network_client.clone()
         .download_file(file_id)
         .await {
@@ -211,6 +221,7 @@ pub async fn start_http_server(
             dial,
             // File sharing
             get_provided_files,
+            get_file_info,
             provide_file,
             stop_providing,
             download_file
