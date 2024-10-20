@@ -134,14 +134,14 @@ impl NetworkClient {
                 OrcaNetRequest::FileRequest { file_id: file_id.clone() }
             )).await;
 
-            if let Ok(resp) = self.send_request(
-                peer.clone(),
-                OrcaNetRequest::FileRequest { file_id: file_id.clone() },
-            ).await {
-                println!("Got file from peer {:?}", peer);
-                Utils::handle_file_response(resp);
-                return Ok(());
-            }
+            // if let Ok(resp) = self.send_request(
+            //     peer.clone(),
+            //     OrcaNetRequest::FileRequest { file_id: file_id.clone() },
+            // ).await {
+            //     println!("Got file from peer {:?}", peer);
+            //     Utils::handle_file_response(resp);
+            //     return Ok(());
+            // }
         }
 
         // // Request the content of the file from each node.
