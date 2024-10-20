@@ -12,7 +12,7 @@ use libp2p::kad::store::{MemoryStore, MemoryStoreConfig};
 use libp2p::request_response::ProtocolSupport;
 use serde::{Deserialize, Serialize};
 
-use crate::common::{OrcaNetCommand, OrcaNetConfig, OrcaNetEvent, OrcaNetRequest, OrcaNetResponse, Utils};
+use crate::common::{ConfigKey, OrcaNetCommand, OrcaNetConfig, OrcaNetEvent, OrcaNetRequest, OrcaNetResponse, Utils};
 use crate::network_client::NetworkClient;
 
 #[derive(NetworkBehaviour)]
@@ -164,6 +164,18 @@ impl EventLoop {
                 stream_event = incoming.next() => match stream_event {
                     Some((peer_id, mut stream)) => {
                         println!("Received stream from {:?}", peer_id);
+
+                        let mut buffer = Vec::new();
+                        if let Err(e) = stream.read_to_end(&mut buffer).await {
+                            eprintln!("Failed to read from stream: {:?}", e);
+                            return;
+                        }
+
+                        let tst_file = OrcaNetConfig::get_str_from_config(ConfigKey::TstFileSavePath);
+                        match std::fs::write(tst_file.as_str(), buffer) {
+                            Ok(_) => println!("Wrote to file: {}", tst_file),
+                            Err(e) => eprintln!("Error writing to file {:?}", e)
+                        }
                     }
                     None => {}
                 }
