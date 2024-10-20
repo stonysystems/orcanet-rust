@@ -25,6 +25,7 @@ pub enum ConfigKey {
     FeeRatePerKB,
     NetworkType,
     RunHTTPServer,
+    TstFileSavePath // For testing, remove later
 }
 
 impl_str_serde!(ConfigKey);
@@ -262,6 +263,13 @@ impl Utils {
                     }
                 }
             }
+            OrcaNetResponse::FileRaw(content) => {
+                let def_path = OrcaNetConfig::get_str_from_config(ConfigKey::TstFileSavePath);
+                match std::fs::write(def_path.as_str(), content) {
+                    Ok(_) => println!("Wrote file to {}", def_path),
+                    Err(e) => eprintln!("Error writing file: {:?}", e)
+                }
+            }
             OrcaNetResponse::Error { message } => {
                 eprintln!("Failed to fetch file: {message}");
             }
@@ -302,6 +310,7 @@ pub enum OrcaNetResponse {
         recipient_address: String,
         content: Vec<u8>,
     },
+    FileRaw(Vec<u8>),
     Error {
         message: String
     },
