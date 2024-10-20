@@ -515,7 +515,7 @@ impl EventLoop {
                 }).await;
             }
             StreamContent::Response(response) => {
-                println!("Received response: {:?}", response);
+                println!("Received stream response");
                 Utils::handle_file_response(response);
             }
         }
