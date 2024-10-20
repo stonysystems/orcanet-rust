@@ -13,6 +13,7 @@ use libp2p::request_response::ResponseChannel;
 use ring::digest::{Context, SHA256};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use uuid::Uuid;
 
 use crate::btc_rpc::{BTCNetwork, RPCWrapper};
 use crate::impl_str_serde;
@@ -159,7 +160,9 @@ pub enum OrcaNetCommand {
     },
     SendInStream {
         peer_id: PeerId,
-        stream_content: StreamContent,
+        request_id: String,
+        stream_data: StreamData,
+        sender: Option<oneshot::Sender<Result<OrcaNetResponse, Box<dyn Error + Send>>>>,
     },
 }
 
@@ -224,6 +227,10 @@ impl Utils {
         Ok(hex::encode(digest.as_ref()))
     }
 
+    pub fn new_uuid() -> String {
+        Uuid::new_v4().to_string()
+    }
+
 
     //TODO: Move to a better struct
     //TODO: Return saved file path?
@@ -267,13 +274,6 @@ impl Utils {
                     }
                 }
             }
-            OrcaNetResponse::FileRaw(content) => {
-                let def_path = OrcaNetConfig::get_str_from_config(ConfigKey::TstFileSavePath);
-                match std::fs::write(def_path.as_str(), content) {
-                    Ok(_) => println!("Wrote file to {}", def_path),
-                    Err(e) => eprintln!("Error writing file: {:?}", e)
-                }
-            }
             OrcaNetResponse::Error { message } => {
                 eprintln!("Failed to fetch file: {message}");
             }
@@ -301,18 +301,25 @@ pub enum OrcaNetEvent {
     StopProvidingFile {
         file_id: String
     },
-    // GetProvidedFiles,
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
-pub enum StreamContent {
-    Request(OrcaNetRequest),
-    Response(OrcaNetResponse),
+pub enum StreamData {
+    Request {
+        request_id: String,
+        request_content: OrcaNetRequest,
+    },
+    Response {
+        request_id: String,
+        response_content: OrcaNetResponse,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum OrcaNetRequest {
-    FileRequest { file_id: String }
+    FileRequest {
+        file_id: String,
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -324,7 +331,6 @@ pub enum OrcaNetResponse {
         recipient_address: String,
         content: Vec<u8>,
     },
-    FileRaw(Vec<u8>),
     Error {
         message: String
     },

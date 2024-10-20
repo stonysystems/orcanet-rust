@@ -107,7 +107,6 @@ impl RequestHandlerLoop {
                                     recipient_address,
                                     content,
                                 }
-                                // OrcaNetResponse::FileRaw(content)
                             }
                             Err(e) => {
                                 eprintln!("Error reading file: {:?}", e);

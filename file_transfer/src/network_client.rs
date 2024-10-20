@@ -6,7 +6,7 @@ use futures::SinkExt;
 use libp2p::{Multiaddr, PeerId};
 use libp2p::request_response::ResponseChannel;
 
-use crate::common::{OrcaNetCommand, OrcaNetRequest, OrcaNetResponse, StreamContent, Utils};
+use crate::common::{OrcaNetCommand, OrcaNetRequest, OrcaNetResponse, StreamData, Utils};
 use crate::db_client::DBClient;
 
 #[derive(Clone)]
@@ -130,18 +130,22 @@ impl NetworkClient {
                 continue;
             }
 
-            let _ = self.send_in_stream(peer.clone(), addr.clone(), StreamContent::Request(
-                OrcaNetRequest::FileRequest { file_id: file_id.clone() }
-            )).await;
+            let request_id = Utils::new_uuid();
+            let stream_data = StreamData::Request {
+                request_id: request_id.clone(),
+                request_content: OrcaNetRequest::FileRequest {
+                    file_id: file_id.clone(),
+                },
+            };
 
-            // if let Ok(resp) = self.send_request(
-            //     peer.clone(),
-            //     OrcaNetRequest::FileRequest { file_id: file_id.clone() },
-            // ).await {
-            //     println!("Got file from peer {:?}", peer);
-            //     Utils::handle_file_response(resp);
-            //     return Ok(());
-            // }
+            if let Some(resp) = self.send_in_stream(
+                peer.clone(), addr.clone(), request_id.clone(), stream_data, true).await {
+                if let Ok(resp) = resp {
+                    println!("Got file from peer {:?}", peer);
+                    Utils::handle_file_response(resp);
+                    return Ok(());
+                }
+            }
         }
 
         // // Request the content of the file from each node.
@@ -216,17 +220,39 @@ impl NetworkClient {
         &mut self,
         peer_id: PeerId,
         peer_addr: Multiaddr,
-        stream_content: StreamContent) -> Result<(), Box<dyn Error + Send>> {
+        request_id: String,
+        stream_data: StreamData,
+        expect_response: bool,
+    ) -> Option<Result<OrcaNetResponse, Box<dyn Error + Send>>> {
         // Dial to make sure that peer is reachable
-        self.dial(peer_id.clone(), peer_addr).await?;
+        self.dial(peer_id.clone(), peer_addr).await.ok()?;
 
-        // let (sender, receiver) = oneshot::channel();
+        if !expect_response {
+            self.sender
+                .send(OrcaNetCommand::SendInStream {
+                    peer_id,
+                    request_id,
+                    stream_data,
+                    sender: None,
+                })
+                .await
+                .expect("Command receiver not to be dropped.");
 
-        self.sender
-            .send(OrcaNetCommand::SendInStream { peer_id, stream_content })
-            .await
-            .expect("Command receiver not to be dropped.");
+            None
+        } else {
+            let (sender, receiver) = oneshot::channel();
 
-        Ok(())
+            self.sender
+                .send(OrcaNetCommand::SendInStream {
+                    peer_id,
+                    request_id,
+                    stream_data,
+                    sender: Some(sender),
+                })
+                .await
+                .expect("Command receiver not to be dropped.");
+
+            Some(receiver.await.expect("Sender not to be dropped"))
+        }
     }
 }

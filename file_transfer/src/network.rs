@@ -14,7 +14,7 @@ use libp2p::request_response::ProtocolSupport;
 use libp2p_swarm::Stream;
 use serde::{Deserialize, Serialize};
 
-use crate::common::{ConfigKey, OrcaNetCommand, OrcaNetConfig, OrcaNetEvent, OrcaNetRequest, OrcaNetResponse, StreamContent, Utils};
+use crate::common::{ConfigKey, OrcaNetCommand, OrcaNetConfig, OrcaNetEvent, OrcaNetRequest, OrcaNetResponse, StreamData, Utils};
 use crate::network_client::NetworkClient;
 
 #[derive(NetworkBehaviour)]
@@ -127,6 +127,7 @@ pub struct EventLoop {
     pending_request: HashMap<OutboundRequestId, oneshot::Sender<Result<OrcaNetResponse, Box<dyn Error + Send>>>>,
     pending_put_kv: HashMap<kad::QueryId, oneshot::Sender<Result<(), Box<dyn Error + Send>>>>,
     pending_get_value: HashMap<kad::QueryId, oneshot::Sender<Result<Vec<u8>, Box<dyn Error + Send>>>>,
+    pending_stream_requests: HashMap<String, oneshot::Sender<Result<OrcaNetResponse, Box<dyn Error + Send>>>>,
 }
 
 impl EventLoop {
@@ -145,6 +146,7 @@ impl EventLoop {
             pending_request: Default::default(),
             pending_put_kv: Default::default(),
             pending_get_value: Default::default(),
+            pending_stream_requests: Default::default(),
         }
     }
 
@@ -450,7 +452,7 @@ impl EventLoop {
 
                 self.pending_get_value.insert(request_id, sender);
             }
-            OrcaNetCommand::SendInStream { peer_id, stream_content } => {
+            OrcaNetCommand::SendInStream { peer_id, request_id, stream_data: stream_content, sender } => {
                 let mut control = self.swarm.behaviour_mut().stream.new_control();
                 let content_bytes = bincode::serialize(&stream_content).unwrap();
                 println!("Sending {} bytes", content_bytes.len());
@@ -464,6 +466,11 @@ impl EventLoop {
                             match stream.write_all(content_bytes.as_slice()).await {
                                 Ok(_) => {
                                     println!("Wrote successfully");
+
+                                    if let Some(sender) = sender {
+                                        self.pending_stream_requests
+                                            .insert(request_id, sender);
+                                    }
 
                                     let _ = stream.close().await;
                                 }
@@ -488,7 +495,7 @@ impl EventLoop {
             return;
         }
 
-        let stream_content: StreamContent = match bincode::deserialize(buffer.as_slice()) {
+        let stream_content: StreamData = match bincode::deserialize(buffer.as_slice()) {
             Ok(content) => content,
             Err(e) => {
                 eprintln!("Error deserializing stream response: {:?}", e);
@@ -497,12 +504,12 @@ impl EventLoop {
         };
 
         match stream_content {
-            StreamContent::Request(request) => {
-                println!("Received request: {:?}", request);
+            StreamData::Request { request_id, request_content } => {
+                println!("Received request: {:?}", request_content);
                 let (sender, receiver) = oneshot::channel();
 
                 self.event_sender
-                    .send(OrcaNetEvent::StreamRequest { request, sender })
+                    .send(OrcaNetEvent::StreamRequest { request: request_content, sender })
                     .await
                     .expect("Command receiver not to be dropped");
 
@@ -511,12 +518,19 @@ impl EventLoop {
 
                 self.handle_command(OrcaNetCommand::SendInStream {
                     peer_id,
-                    stream_content: StreamContent::Response(response),
+                    request_id: request_id.clone(),
+                    stream_data: StreamData::Response { request_id, response_content: response },
+                    sender: None,
                 }).await;
             }
-            StreamContent::Response(response) => {
+            StreamData::Response { request_id, response_content } => {
                 println!("Received stream response");
-                Utils::handle_file_response(response);
+                // Utils::handle_file_response(response_content);
+
+                if let Some(sender) = self.pending_stream_requests
+                    .remove(&request_id) {
+                    let _ = sender.send(Ok(response_content)).expect("Send to work");
+                }
             }
         }
     }

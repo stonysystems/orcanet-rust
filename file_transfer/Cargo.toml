@@ -27,3 +27,4 @@ rocket = { version = "0.5.1", features = ["json"] }
 data-encoding = "2.6.0"
 ring = "0.17.8"
 bincode = {version = "1.3.2"}
+uuid = { version = "1.11.0", features = ["v4"] }
