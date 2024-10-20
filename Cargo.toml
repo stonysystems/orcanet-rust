@@ -7,7 +7,8 @@ edition = "2021"
 members = [
     "btc_miner",
     "file_transfer",
-    "kademlia_node"
+    "kademlia_node",
+    "relay_server"
 ]
 
 [dependencies]
