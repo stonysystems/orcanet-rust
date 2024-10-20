@@ -462,12 +462,14 @@ impl EventLoop {
                         Ok(mut stream) => {
                             println!("Opened stream");
                             match stream.write_all(content_bytes.as_slice()).await {
-                                Ok(_) => println!("Wrote successfully"),
+                                Ok(_) => {
+                                    println!("Wrote successfully");
+
+                                    // Handle response
+                                    self.handle_stream_req(peer_id, &mut stream).await;
+                                }
                                 Err(e) => eprintln!("Failed to write to stream: {:?}", e)
                             }
-
-                            // Handle response
-                            self.handle_stream_req(peer_id, &mut stream).await;
                         }
                         Err(e) => {
                             eprintln!("Failed to open stream: {:?}", e)
@@ -487,8 +489,13 @@ impl EventLoop {
             return;
         }
 
-        let stream_content: StreamContent = bincode::deserialize(buffer.as_slice())
-            .unwrap();
+        let stream_content: StreamContent = match bincode::deserialize(buffer.as_slice()) {
+            Ok(content) => content,
+            Err(e) => {
+                eprintln!("Error deserializing stream response: {:?}", e);
+                return;
+            }
+        };
 
         match stream_content {
             StreamContent::Request(request) => {
