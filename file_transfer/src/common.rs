@@ -157,6 +157,10 @@ pub enum OrcaNetCommand {
         response: OrcaNetResponse,
         channel: ResponseChannel<OrcaNetResponse>,
     },
+    SendInStream {
+        peer_id: PeerId,
+        request: Vec<u8>
+    }
 }
 
 pub struct Utils;

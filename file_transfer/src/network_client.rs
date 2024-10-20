@@ -206,4 +206,12 @@ impl NetworkClient {
             }
         }
     }
+
+    /// Advertise all provided files to the network
+    pub async fn send_in_stream(&mut self, peer_id: PeerId, request: Vec<u8>) {
+        self.sender
+            .send(OrcaNetCommand::SendInStream { peer_id, request })
+            .await
+            .expect("Command receiver not to be dropped.");
+    }
 }

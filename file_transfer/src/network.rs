@@ -147,6 +147,10 @@ impl EventLoop {
     }
 
     pub async fn run(mut self) {
+        let stream_protocol = StreamProtocol::new(OrcaNetConfig::STREAM_PROTOCOL);
+        let mut control = self.swarm.behaviour().stream.new_control();
+        let mut incoming = control.accept(stream_protocol.clone()).unwrap();
+
         loop {
             tokio::select! {
                 event = self.swarm.select_next_some() => self.handle_event(event).await,
@@ -156,6 +160,13 @@ impl EventLoop {
                     // Command channel closed, thus shutting down the network event loop.
                     None=>  return,
                 },
+
+                stream_event = incoming.next() => match stream_event {
+                    Some((peer_id, mut stream)) => {
+                        println!("Received stream from {:?}", peer_id);
+                    }
+                    None => {}
+                }
             }
         }
     }
@@ -434,6 +445,22 @@ impl EventLoop {
                     .get_record(kad::RecordKey::new(&key_with_ns.as_str()));
 
                 self.pending_get_value.insert(request_id, sender);
+            }
+            OrcaNetCommand::SendInStream { peer_id, request } => {
+                let mut control = self.swarm.behaviour_mut().stream.new_control();
+
+                let protocol_future = async move {
+                    let mut stream = control
+                        .open_stream(peer_id, StreamProtocol::new("/my-protocol"))
+                        .await.unwrap();
+
+                    match stream.write(request.as_slice()).await {
+                        Ok(_) => println!("Wrote successfully"),
+                        Err(e) => eprintln!("Failed to write to stream: {:?}", e)
+                    }
+                };
+
+                protocol_future.await;
             }
         }
     }

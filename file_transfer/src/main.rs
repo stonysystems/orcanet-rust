@@ -12,6 +12,7 @@ use async_std::task::block_on;
 use clap::Parser;
 use futures::{SinkExt, StreamExt};
 use futures::channel::mpsc;
+use libp2p::PeerId;
 use tokio::{io, select};
 use tokio::io::AsyncBufReadExt;
 use tracing_subscriber::EnvFilter;
@@ -155,6 +156,17 @@ async fn handle_input_line(
         }
         Some("advertise") => {
             let _ = client.advertise_provided_files().await;
+        }
+        Some("sendinstream") => {
+            let peer_id = expect_input!(args.next(), "file_path", PeerId::from_str).unwrap();
+            let file_path = expect_input!(args.next(), "file_path", String::from);
+
+            match std::fs::read(file_path.as_str()) {
+                Ok(content) => {
+                    client.send_in_stream(peer_id, content).await;
+                }
+                Err(e) => eprintln!("Error reading file: {:?}", e)
+            }
         }
         Some("exit") => {
             exit(0);
