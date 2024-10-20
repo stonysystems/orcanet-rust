@@ -465,8 +465,7 @@ impl EventLoop {
                                 Ok(_) => {
                                     println!("Wrote successfully");
 
-                                    // Handle response
-                                    self.handle_stream_req(peer_id, &mut stream).await;
+                                    let _ = stream.close().await;
                                 }
                                 Err(e) => eprintln!("Failed to write to stream: {:?}", e)
                             }
@@ -510,13 +509,10 @@ impl EventLoop {
                 let response = receiver.await
                     .expect("Sender not to be dropped");
 
-                let resp_content = StreamContent::Response(response);
-                let content_bytes = bincode::serialize(&resp_content).unwrap();
-
-                match stream.write_all(content_bytes.as_slice()).await {
-                    Ok(_) => println!("Wrote response for {}", peer_id),
-                    Err(e) => eprintln!("Error writing back response: {:?}", e)
-                }
+                self.handle_command(OrcaNetCommand::SendInStream {
+                    peer_id,
+                    stream_content: StreamContent::Response(response),
+                }).await;
             }
             StreamContent::Response(response) => {
                 println!("Received response: {:?}", response);
