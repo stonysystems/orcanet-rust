@@ -450,13 +450,19 @@ impl EventLoop {
                 let mut control = self.swarm.behaviour_mut().stream.new_control();
 
                 let protocol_future = async move {
-                    let mut stream = control
-                        .open_stream(peer_id, StreamProtocol::new("/my-protocol"))
-                        .await.unwrap();
-
-                    match stream.write(request.as_slice()).await {
-                        Ok(_) => println!("Wrote successfully"),
-                        Err(e) => eprintln!("Failed to write to stream: {:?}", e)
+                    match control
+                        .open_stream(peer_id, StreamProtocol::new(OrcaNetConfig::STREAM_PROTOCOL))
+                        .await {
+                        Ok(mut stream) => {
+                            println!("Opened stream");
+                            match stream.write(request.as_slice()).await {
+                                Ok(_) => println!("Wrote successfully"),
+                                Err(e) => eprintln!("Failed to write to stream: {:?}", e)
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("Failed to open stream: {:?}", e)
+                        }
                     }
                 };
 
