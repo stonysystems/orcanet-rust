@@ -6,7 +6,7 @@ use futures::SinkExt;
 use libp2p::{Multiaddr, PeerId};
 use libp2p::request_response::ResponseChannel;
 
-use crate::common::{OrcaNetCommand, OrcaNetRequest, OrcaNetResponse, StreamData, Utils};
+use crate::common::{OrcaNetCommand, OrcaNetRequest, OrcaNetResponse, StreamData, StreamReq, Utils};
 use crate::db_client::DBClient;
 
 #[derive(Clone)]
@@ -131,40 +131,26 @@ impl NetworkClient {
             }
 
             let request_id = Utils::new_uuid();
-            let stream_data = StreamData::Request {
+            let stream_req = StreamReq {
                 request_id: request_id.clone(),
-                request_content: OrcaNetRequest::FileRequest {
-                    file_id: file_id.clone(),
-                },
+                stream_data: StreamData::Request(
+                    OrcaNetRequest::FileRequest {
+                        file_id: file_id.clone()
+                    }
+                ),
             };
 
-            if let Some(resp) = self.send_in_stream(
-                peer.clone(), addr.clone(), request_id.clone(), stream_data, true).await {
-                if let Ok(resp) = resp {
+            let resp = self.send_in_stream(peer.clone(), addr.clone(),
+                                           stream_req, true).await;
+
+            if let Some(response) = resp {
+                if let Ok(file_response) = response {
                     println!("Got file from peer {:?}", peer);
-                    Utils::handle_file_response(resp);
+                    Utils::handle_file_response(file_response);
                     return Ok(());
                 }
             }
         }
-
-        // // Request the content of the file from each node.
-        // // TODO: Convert this to series of requests based on dial success because we can't ask everyone
-        // // Then we'll have to pay everyone
-        // let requests = providers.into_iter().map(|peer| {
-        //     let mut network_client = self.clone();
-        //     let name = file_id.clone();
-        //     async move { network_client.send_request(peer, name).await }.boxed()
-        // });
-        //
-        // // Await the requests, ignore the remaining once a single one succeeds.
-        // let file_response: OrcaNetResponse = futures::future::select_ok(requests)
-        //     .await
-        //     .map_err(|_| "None of the providers returned file.")?
-        //     .0;
-
-        // Utils::handle_file_response(file_response);
-        // Ok(())
 
         Err(format!("Could not get file from any provider for {file_id}").into())
     }
@@ -220,8 +206,7 @@ impl NetworkClient {
         &mut self,
         peer_id: PeerId,
         peer_addr: Multiaddr,
-        request_id: String,
-        stream_data: StreamData,
+        stream_req: StreamReq,
         expect_response: bool,
     ) -> Option<Result<OrcaNetResponse, Box<dyn Error + Send>>> {
         // Dial to make sure that peer is reachable
@@ -231,8 +216,7 @@ impl NetworkClient {
             self.sender
                 .send(OrcaNetCommand::SendInStream {
                     peer_id,
-                    request_id,
-                    stream_data,
+                    stream_req,
                     sender: None,
                 })
                 .await
@@ -245,8 +229,7 @@ impl NetworkClient {
             self.sender
                 .send(OrcaNetCommand::SendInStream {
                     peer_id,
-                    request_id,
-                    stream_data,
+                    stream_req,
                     sender: Some(sender),
                 })
                 .await

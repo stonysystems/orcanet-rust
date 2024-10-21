@@ -124,23 +124,12 @@ async fn handle_input_line(
         }
         Some("getfile") => {
             let file_id = expect_input!(args.next(), "file_id", String::from);
-            // let peer_id = expect_input!(args.next(), "peer_id", Utils::get_peer_id_from_input);
 
             if let Err(e) = client.download_file(file_id).await {
                 eprintln!("Error getting file: {:?}", e);
             } else {
                 println!("Got file");
             }
-
-
-            // match client.send_request(peer_id, file_id).await {
-            //     Ok(resp) => {
-            //         // println!("Got file name: {}, content: {}", res.file_name,
-            //         //          String::from_utf8(res.content).unwrap());
-            //         Utils::handle_file_response(resp);
-            //     }
-            //     Err(e) => eprintln!("Error when getting file: {:?}", e)
-            // }
         }
         Some("providefile") => {
             let file_path = expect_input!(args.next(), "file_path", String::from);
@@ -156,18 +145,6 @@ async fn handle_input_line(
         }
         Some("advertise") => {
             let _ = client.advertise_provided_files().await;
-        }
-        Some("sendinstream") => {
-            let peer_id = expect_input!(args.next(), "file_path", PeerId::from_str).unwrap();
-            let file_path = expect_input!(args.next(), "file_path", String::from);
-
-            // match std::fs::read(file_path.as_str()) {
-            //     Ok(content) => {
-            //         let addr = Utils::get_address_through_relay(&peer_id, None);
-            //         client.send_in_stream(peer_id, addr, content).await;
-            //     }
-            //     Err(e) => eprintln!("Error reading file: {:?}", e)
-            // }
         }
         Some("exit") => {
             exit(0);

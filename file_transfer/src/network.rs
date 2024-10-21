@@ -14,7 +14,7 @@ use libp2p::request_response::ProtocolSupport;
 use libp2p_swarm::Stream;
 use serde::{Deserialize, Serialize};
 
-use crate::common::{ConfigKey, OrcaNetCommand, OrcaNetConfig, OrcaNetEvent, OrcaNetRequest, OrcaNetResponse, StreamData, Utils};
+use crate::common::{ConfigKey, OrcaNetCommand, OrcaNetConfig, OrcaNetEvent, OrcaNetRequest, OrcaNetResponse, StreamData, StreamReq, Utils};
 use crate::network_client::NetworkClient;
 
 #[derive(NetworkBehaviour)]
@@ -452,9 +452,9 @@ impl EventLoop {
 
                 self.pending_get_value.insert(request_id, sender);
             }
-            OrcaNetCommand::SendInStream { peer_id, request_id, stream_data: stream_content, sender } => {
+            OrcaNetCommand::SendInStream { peer_id, stream_req, sender } => {
                 let mut control = self.swarm.behaviour_mut().stream.new_control();
-                let content_bytes = bincode::serialize(&stream_content).unwrap();
+                let content_bytes = bincode::serialize(&stream_req).unwrap();
                 println!("Sending {} bytes", content_bytes.len());
 
                 let protocol_future = async move {
@@ -469,7 +469,7 @@ impl EventLoop {
 
                                     if let Some(sender) = sender {
                                         self.pending_stream_requests
-                                            .insert(request_id, sender);
+                                            .insert(stream_req.request_id, sender);
                                     }
 
                                     let _ = stream.close().await;
@@ -495,7 +495,7 @@ impl EventLoop {
             return;
         }
 
-        let stream_content: StreamData = match bincode::deserialize(buffer.as_slice()) {
+        let stream_req: StreamReq = match bincode::deserialize(buffer.as_slice()) {
             Ok(content) => content,
             Err(e) => {
                 eprintln!("Error deserializing stream response: {:?}", e);
@@ -503,13 +503,13 @@ impl EventLoop {
             }
         };
 
-        match stream_content {
-            StreamData::Request { request_id, request_content } => {
-                println!("Received request: {:?}", request_content);
+        match stream_req.stream_data {
+            StreamData::Request(request) => {
+                println!("Received request: {:?}", request);
                 let (sender, receiver) = oneshot::channel();
 
                 self.event_sender
-                    .send(OrcaNetEvent::StreamRequest { request: request_content, sender })
+                    .send(OrcaNetEvent::StreamRequest { request, sender })
                     .await
                     .expect("Command receiver not to be dropped");
 
@@ -518,18 +518,20 @@ impl EventLoop {
 
                 self.handle_command(OrcaNetCommand::SendInStream {
                     peer_id,
-                    request_id: request_id.clone(),
-                    stream_data: StreamData::Response { request_id, response_content: response },
+                    stream_req: StreamReq {
+                        request_id: stream_req.request_id.clone(),
+                        stream_data: StreamData::Response(response)
+                    },
                     sender: None,
                 }).await;
             }
-            StreamData::Response { request_id, response_content } => {
+            StreamData::Response(response) => {
                 println!("Received stream response");
                 // Utils::handle_file_response(response_content);
 
                 if let Some(sender) = self.pending_stream_requests
-                    .remove(&request_id) {
-                    let _ = sender.send(Ok(response_content)).expect("Send to work");
+                    .remove(&stream_req.request_id) {
+                    let _ = sender.send(Ok(response)).expect("Send to work");
                 }
             }
         }

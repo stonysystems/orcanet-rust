@@ -160,8 +160,7 @@ pub enum OrcaNetCommand {
     },
     SendInStream {
         peer_id: PeerId,
-        request_id: String,
-        stream_data: StreamData,
+        stream_req: StreamReq,
         sender: Option<oneshot::Sender<Result<OrcaNetResponse, Box<dyn Error + Send>>>>,
     },
 }
@@ -230,7 +229,6 @@ impl Utils {
     pub fn new_uuid() -> String {
         Uuid::new_v4().to_string()
     }
-
 
     //TODO: Move to a better struct
     //TODO: Return saved file path?
@@ -303,16 +301,16 @@ pub enum OrcaNetEvent {
     },
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct StreamReq {
+    pub request_id: String,
+    pub stream_data: StreamData,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum StreamData {
-    Request {
-        request_id: String,
-        request_content: OrcaNetRequest,
-    },
-    Response {
-        request_id: String,
-        response_content: OrcaNetResponse,
-    },
+    Request(OrcaNetRequest),
+    Response(OrcaNetResponse),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
