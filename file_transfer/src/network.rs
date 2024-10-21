@@ -498,7 +498,7 @@ impl EventLoop {
         let stream_req: StreamReq = match bincode::deserialize(buffer.as_slice()) {
             Ok(content) => content,
             Err(e) => {
-                eprintln!("Error deserializing stream response: {:?}", e);
+                eprintln!("Error deserializing stream request: {:?}", e);
                 return;
             }
         };

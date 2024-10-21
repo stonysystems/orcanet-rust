@@ -12,12 +12,11 @@ use async_std::task::block_on;
 use clap::Parser;
 use futures::{SinkExt, StreamExt};
 use futures::channel::mpsc;
-use libp2p::PeerId;
 use tokio::{io, select};
 use tokio::io::AsyncBufReadExt;
 use tracing_subscriber::EnvFilter;
 
-use crate::common::{OrcaNetConfig, OrcaNetEvent, Utils};
+use crate::common::{OrcaNetConfig, OrcaNetEvent, OrcaNetRequest, StreamData, StreamReq, Utils};
 use crate::http_server::start_http_server;
 use crate::network_client::NetworkClient;
 use crate::request_handler::RequestHandlerLoop;
@@ -146,6 +145,25 @@ async fn handle_input_line(
         Some("advertise") => {
             let _ = client.advertise_provided_files().await;
         }
+        // Some("tryserde") => {
+        //     let stream_req = StreamReq {
+        //         request_id: "abcd".to_string(),
+        //         stream_data: StreamData::Request(
+        //             OrcaNetRequest::FileRequest { file_id: "Abcd".to_string() }
+        //         ),
+        //     };
+        //
+        //     let vec = bincode::serialize(&stream_req).unwrap();
+        //     let deser: StreamReq = match bincode::deserialize(vec.as_slice()) {
+        //         Ok(content) => content,
+        //         Err(e) => {
+        //             eprintln!("Error deser: {:?}", e);
+        //             return;
+        //         }
+        //     };
+        //
+        //     println!("Deser val: {:?}", deser);
+        // }
         Some("exit") => {
             exit(0);
         }
