@@ -260,6 +260,11 @@ async fn download_file(state: &State<AppState>, request: Json<DownloadFileReques
     if path.exists() {
         return Response::error("A file with the same name already exists in the given path. Provide a different name or path.".to_string());
     }
+    
+    // Validate that parent exists
+    if path.parent().map_or(true, |v| !v.exists()) {
+        return Response::error("Invalid path. Either it's not a file path or the parent directory does not exist".to_string());
+    }
 
     let peer_id = match request.peer_id.parse() {
         Ok(id) => id,
