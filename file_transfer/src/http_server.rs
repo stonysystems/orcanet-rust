@@ -150,7 +150,8 @@ async fn generate_block() -> Json<Response> {
 fn list_transactions(start_offset: usize, end_offset: usize) -> Json<Response> {
     let rpc_wrapper = RPCWrapper::new(OrcaNetConfig::get_network_type());
 
-    match rpc_wrapper.get_client().list_transactions(None, Some(end_offset - start_offset), Some(start_offset - 1), None) {
+    match rpc_wrapper.get_client()
+        .list_transactions(None, Some(end_offset - start_offset), Some(start_offset - 1), None) {
         Ok(transactions) => Response::success(json!(transactions)),
         Err(e) => Response::error(format!("Error fetching transactions {:?}", e))
     }
@@ -166,7 +167,8 @@ fn get_transaction_info(tx_id: String) -> Json<Response> {
         }
     };
 
-    match rpc_wrapper.get_client().get_transaction(&tx_id_val, None) {
+    match rpc_wrapper.get_client()
+        .get_transaction(&tx_id_val, None) {
         Ok(transaction) => Response::success(json!(transaction)),
         Err(e) => Response::error(format!("Error fetching transactions {:?}", e))
     }
@@ -286,11 +288,12 @@ async fn get_providers(state: &State<AppState>, file_id: String) -> Json<Respons
         Response::success(json!([]));
     }
 
+    let file_request = OrcaNetRequest::FileMetadataRequest { file_id: file_id.clone() };
     let mut results = Vec::new();
 
     for peer_id in providers {
         let response = state.network_client.clone()
-            .send_stream_request(peer_id.clone(), OrcaNetRequest::FileMetadataRequest { file_id: file_id.clone() })
+            .send_stream_request(peer_id.clone(), file_request.clone())
             .await;
 
         match response {

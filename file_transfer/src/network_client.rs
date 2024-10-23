@@ -124,8 +124,11 @@ impl NetworkClient {
         }
 
         for peer_id in providers {
-            let resp = self.download_file_from_peer(file_id.clone(), peer_id.clone(), dest_path.clone())
-                .await;
+            let resp = self.download_file_from_peer(
+                file_id.clone(),
+                peer_id.clone(),
+                dest_path.clone(),
+            ).await;
 
             if resp.is_ok() {
                 return Ok(());
@@ -174,8 +177,7 @@ impl NetworkClient {
             stream_data: StreamData::Request(orca_net_request),
         };
 
-        let resp = self.send_in_stream(peer_id.clone(), addr.clone(),
-                                       stream_req, true).await;
+        let resp = self.send_in_stream(peer_id.clone(), addr.clone(), stream_req, true).await;
 
         match resp {
             Some(response) => {
