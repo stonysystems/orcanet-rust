@@ -274,26 +274,15 @@ impl EventLoop {
     fn handle_kademlia_events(&mut self, query_id: kad::QueryId, result: kad::QueryResult) {
         match result {
             kad::QueryResult::GetProviders(Ok(kad::GetProvidersOk::FoundProviders { key, providers, .. })) => {
-                // for peer in &providers {
-                //     println!(
-                //         "Peer {peer:?} provides key {:?}",
-                //         std::str::from_utf8(key.as_ref()).unwrap()
-                //     );
-                // }
                 if let Some(sender) = self.pending_get_providers.remove(&query_id) {
                     sender.send(providers).expect("Receiver not to be dropped");
-
-                    // Finish the query. We are only interested in the first result.
-                    self.swarm
-                        .behaviour_mut()
-                        .kademlia
-                        .query_mut(&query_id)
-                        .unwrap()
-                        .finish();
                 }
             }
             kad::QueryResult::GetProviders(Err(err)) => {
                 eprintln!("Failed to get providers: {err:?}");
+                if let Some(sender) = self.pending_get_providers.remove(&query_id) {
+                    sender.send(HashSet::new()).expect("Receiver not to be dropped");
+                }
             }
             kad::QueryResult::GetRecord(Ok(
                                             kad::GetRecordOk::FoundRecord(kad::PeerRecord {
@@ -339,6 +328,7 @@ impl EventLoop {
             }
             kad::QueryResult::StartProviding(Err(err)) => {
                 eprintln!("Failed to put provider record: {err:?}");
+                // TODO: May be add handling later ?
             }
             _ => {}
         }

@@ -151,7 +151,7 @@ impl NetworkClient {
         if let Ok(file_response) = response {
             println!("Got file from peer {:?}", peer_id);
             Utils::handle_file_content_response(file_response, dest_path);
-            
+
             return Ok(());
         }
 
