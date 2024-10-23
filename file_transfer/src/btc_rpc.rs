@@ -3,6 +3,7 @@ use std::str::FromStr;
 
 use bitcoin::{Address, Amount, BlockHash, Txid};
 use bitcoincore_rpc::{Auth, Client, RpcApi};
+use bitcoincore_rpc::json::ListTransactionResult;
 use serde::{Deserialize, Serialize};
 
 use crate::impl_str_serde;
@@ -43,14 +44,14 @@ impl RPCWrapper {
     }
 
     /// Send given amount (BTC) to address
-    pub fn send_to_address(&self, address_string: &str, btc_amount: f64) -> Result<Txid, String> {
+    pub fn send_to_address(&self, address_string: &str, btc_amount: f64, comment: Option<&str>) -> Result<Txid, String> {
         let recipient_address = Address::from_str(address_string)
             .map_err(|e| e.to_string())?
             .assume_checked();
         let amount = Amount::from_btc(btc_amount)
             .map_err(|e| e.to_string())?;
 
-        self.rpc_client.send_to_address(&recipient_address, amount, None, None, None, None, None, None)
+        self.rpc_client.send_to_address(&recipient_address, amount, comment, None, None, None, None, None)
             .map_err(|e| e.to_string())
     }
 

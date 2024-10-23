@@ -1,5 +1,8 @@
 use std::path::Path;
+use std::str::FromStr;
 
+use bitcoin::Txid;
+use bitcoincore_rpc::json::ListTransactionResult;
 use bitcoincore_rpc::RpcApi;
 use futures::channel::mpsc;
 use futures::SinkExt;
@@ -27,6 +30,7 @@ pub struct AppState {
 struct SendToAddressRequest {
     address: String,
     amount: f64,
+    comment: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -112,8 +116,9 @@ fn load_wallet(wallet_name: String) -> Json<Response> {
 #[post("/send-to-address", format = "application/json", data = "<request>")]
 fn send_to_address(request: Json<SendToAddressRequest>) -> Json<Response> {
     let rpc_wrapper = RPCWrapper::new(OrcaNetConfig::get_network_type());
+    let comment = request.comment.as_deref();
 
-    match rpc_wrapper.send_to_address(request.address.as_str(), request.amount) {
+    match rpc_wrapper.send_to_address(request.address.as_str(), request.amount, comment) {
         Ok(tx_id) => {
             Response::success(json!({
                 "tx_id": tx_id
@@ -141,6 +146,33 @@ async fn generate_block() -> Json<Response> {
     // }
 }
 
+#[get("/list-transactions?<start_offset>&<end_offset>")]
+fn list_transactions(start_offset: usize, end_offset: usize) -> Json<Response> {
+    let rpc_wrapper = RPCWrapper::new(OrcaNetConfig::get_network_type());
+
+    match rpc_wrapper.get_client().list_transactions(None, Some(end_offset - start_offset), Some(start_offset - 1), None) {
+        Ok(transactions) => Response::success(json!(transactions)),
+        Err(e) => Response::error(format!("Error fetching transactions {:?}", e))
+    }
+}
+
+#[get("/get-transaction-info/<tx_id>")]
+fn get_transaction_info(tx_id: String) -> Json<Response> {
+    let rpc_wrapper = RPCWrapper::new(OrcaNetConfig::get_network_type());
+    let tx_id_val: Txid = match tx_id.parse() {
+        Ok(tx_id) => tx_id,
+        Err(e) => {
+            return Response::error(format!("Error parsing tx_id: {:?}", e));
+        }
+    };
+
+    match rpc_wrapper.get_client().get_transaction(&tx_id_val, None) {
+        Ok(transaction) => Response::success(json!(transaction)),
+        Err(e) => Response::error(format!("Error fetching transactions {:?}", e))
+    }
+}
+
+// File sharing
 #[post("/dial/<peer_id_str>")]
 async fn dial(state: &State<AppState>, peer_id_str: String) -> Json<Response> {
     let peer_id = match peer_id_str.parse() {
@@ -161,7 +193,6 @@ async fn dial(state: &State<AppState>, peer_id_str: String) -> Json<Response> {
     }
 }
 
-// File sharing
 #[get("/get-provided-files")]
 async fn get_provided_files() -> Json<Response> {
     let db_client = DBClient::new(None);
@@ -292,8 +323,10 @@ pub async fn start_http_server(
             load_wallet,
             send_to_address,
             generate_block,
-            dial,
+            list_transactions,
+            get_transaction_info,
             // File sharing
+            dial,
             get_provided_files,
             get_file_info,
             provide_file,

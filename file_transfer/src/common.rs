@@ -278,9 +278,10 @@ impl Utils {
                 let btc_wrapper = RPCWrapper::new(BTCNetwork::RegTest);
                 let btc_addr = OrcaNetConfig::get_str_from_config(ConfigKey::BTCAddress);
                 let cost_btc = metadata.fee_rate_per_kb * size_kb;
+                let comment = format!("Payment for {}", metadata.file_id);
                 println!("Initiating transfer of {:?} BTC to {}", cost_btc, btc_addr);
 
-                match btc_wrapper.send_to_address(metadata.recipient_address.as_str(), cost_btc) {
+                match btc_wrapper.send_to_address(metadata.recipient_address.as_str(), cost_btc, Some(comment.as_str())) {
                     Ok(tx_id) => {
                         println!("sendtoaddress created transaction: {}", tx_id);
                         // TODO: Handle error case ?
