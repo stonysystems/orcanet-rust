@@ -161,16 +161,13 @@ impl NetworkClient {
         Err(format!("Could not get file from peer {peer_id}").into())
     }
 
+    /// Send a request using streams and get response
     pub async fn send_stream_request(
         &mut self,
         peer_id: PeerId,
         orca_net_request: OrcaNetRequest,
     ) -> Result<OrcaNetResponse, Box<dyn Error>> {
         let addr = Utils::get_address_through_relay(&peer_id, None);
-        if self.dial(peer_id.clone(), addr.clone()).await.is_err() {
-            return Err("Could not reach peer".into());
-        }
-
         let request_id = Utils::new_uuid();
         let stream_req = StreamReq {
             request_id: request_id.clone(),
@@ -234,7 +231,7 @@ impl NetworkClient {
         }
     }
 
-    /// Advertise all provided files to the network
+    /// Send stream req command
     pub async fn send_in_stream(
         &mut self,
         peer_id: PeerId,
