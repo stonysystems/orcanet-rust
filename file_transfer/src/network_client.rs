@@ -141,6 +141,28 @@ impl NetworkClient {
         peer_id: PeerId,
         dest_path: Option<String>,
     ) -> Result<(), Box<dyn Error>> {
+        let response = self.send_stream_request(
+            peer_id.clone(),
+            OrcaNetRequest::FileContentRequest {
+                file_id
+            },
+        ).await;
+
+        if let Ok(file_response) = response {
+            println!("Got file from peer {:?}", peer_id);
+            Utils::handle_file_content_response(file_response, dest_path);
+            
+            return Ok(());
+        }
+
+        Err(format!("Could not get file from peer {peer_id}").into())
+    }
+
+    pub async fn send_stream_request(
+        &mut self,
+        peer_id: PeerId,
+        orca_net_request: OrcaNetRequest,
+    ) -> Result<OrcaNetResponse, Box<dyn Error>> {
         let addr = Utils::get_address_through_relay(&peer_id, None);
         if self.dial(peer_id.clone(), addr.clone()).await.is_err() {
             return Err("Could not reach peer".into());
@@ -149,25 +171,19 @@ impl NetworkClient {
         let request_id = Utils::new_uuid();
         let stream_req = StreamReq {
             request_id: request_id.clone(),
-            stream_data: StreamData::Request(
-                OrcaNetRequest::FileRequest {
-                    file_id: file_id.clone()
-                }
-            ),
+            stream_data: StreamData::Request(orca_net_request),
         };
 
         let resp = self.send_in_stream(peer_id.clone(), addr.clone(),
                                        stream_req, true).await;
 
-        if let Some(response) = resp {
-            if let Ok(file_response) = response {
-                println!("Got file from peer {:?}", peer_id);
-                Utils::handle_file_response(file_response, dest_path);
-                return Ok(());
+        match resp {
+            Some(response) => {
+                response
+                    .map_err(|e| e as Box<dyn Error>)
             }
+            None => Err(format!("No valid response from peer {peer_id}").into())
         }
-
-        Err(format!("Could not file from peer {peer_id}").into())
     }
 
     /// Send request to the given peer.

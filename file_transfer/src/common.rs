@@ -16,6 +16,7 @@ use serde_json::{json, Value};
 use uuid::Uuid;
 
 use crate::btc_rpc::{BTCNetwork, RPCWrapper};
+use crate::db_client::{DBClient, FileInfo};
 use crate::impl_str_serde;
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -230,16 +231,29 @@ impl Utils {
         Uuid::new_v4().to_string()
     }
 
+    pub fn get_file_metadata(file_id: String, db_client: &DBClient) -> Option<(FileInfo, FileMetadata)> {
+        match db_client.get_provided_file_info(file_id.as_str()) {
+            Ok(file_info) => {
+                let file_name = file_info.file_name.clone();
+                Some((file_info, FileMetadata {
+                    file_id,
+                    file_name,
+                    fee_rate_per_kb: OrcaNetConfig::get_fee_rate(),
+                    recipient_address: OrcaNetConfig::get_str_from_config(ConfigKey::BTCAddress),
+                }))
+            }
+            Err(_) => None
+        }
+    }
+
     //TODO: Move to a better struct
     //TODO: Return saved file path?
-    pub fn handle_file_response(resp: OrcaNetResponse, dest_path: Option<String>) {
+    /// Expects the response to be a file content response. Saves the file in dest_path
+    pub fn handle_file_content_response(resp: OrcaNetResponse, dest_path: Option<String>) {
         match resp {
-            OrcaNetResponse::FileResponse {
-                file_id,
-                file_name,
-                fee_rate_per_kb,
-                content,
-                recipient_address
+            OrcaNetResponse::FileContentResponse {
+                metadata,
+                content
             } => {
                 let path = match dest_path {
                     Some(dest_path) => Path::new(&dest_path).to_path_buf(),
@@ -247,13 +261,13 @@ impl Utils {
                         let app_data_path = OrcaNetConfig::get_str_from_config(ConfigKey::AppDataPath);
                         Path::new(&app_data_path)
                             .join(OrcaNetConfig::FILE_SAVE_DIR)
-                            .join(format!("{}_{}", &file_id[..16], file_name.clone())) // Use file_id and name
+                            .join(format!("{}_{}", &metadata.file_id[..16], metadata.file_name.clone())) // Use file_id and name
                     }
                 };
-                
+
                 // Store the file
                 match std::fs::write(&path, &content) {
-                    Ok(_) => println!("Wrote file {} to {:?}", file_name, path),
+                    Ok(_) => println!("Wrote file {} to {:?}", metadata.file_name, path),
                     Err(e) => eprintln!("Error writing file {:?}", e)
                 }
 
@@ -263,10 +277,10 @@ impl Utils {
                 // Send payment after computing size
                 let btc_wrapper = RPCWrapper::new(BTCNetwork::RegTest);
                 let btc_addr = OrcaNetConfig::get_str_from_config(ConfigKey::BTCAddress);
-                let cost_btc = fee_rate_per_kb * size_kb;
+                let cost_btc = metadata.fee_rate_per_kb * size_kb;
                 println!("Initiating transfer of {:?} BTC to {}", cost_btc, btc_addr);
 
-                match btc_wrapper.send_to_address(recipient_address.as_str(), cost_btc) {
+                match btc_wrapper.send_to_address(metadata.recipient_address.as_str(), cost_btc) {
                     Ok(tx_id) => {
                         println!("sendtoaddress created transaction: {}", tx_id);
                         // TODO: Handle error case ?
@@ -281,7 +295,7 @@ impl Utils {
                 eprintln!("Failed to fetch file: {message}");
             }
             e => {
-                eprintln!("Expected file response but got {:?}", e)
+                eprintln!("Expected file content response but got {:?}", e)
             }
         }
     }
@@ -320,7 +334,10 @@ pub enum StreamData {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum OrcaNetRequest {
-    FileRequest {
+    FileMetadataRequest {
+        file_id: String,
+    },
+    FileContentRequest {
         file_id: String,
     },
     HTTPProxyRequest,
@@ -335,12 +352,18 @@ pub struct HTTPProxyResponse {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FileMetadata {
+    pub file_id: String,
+    pub file_name: String,
+    pub fee_rate_per_kb: f64,
+    pub recipient_address: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum OrcaNetResponse {
-    FileResponse {
-        file_id: String,
-        file_name: String,
-        fee_rate_per_kb: f64,
-        recipient_address: String,
+    FileMetadataResponse(FileMetadata),
+    FileContentResponse {
+        metadata: FileMetadata,
         content: Vec<u8>,
     },
     HTTPProxyResponse(Option<HTTPProxyResponse>),

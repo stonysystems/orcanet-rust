@@ -4,7 +4,7 @@ use futures::channel::mpsc;
 use futures::StreamExt;
 use tokio::select;
 
-use crate::common::{ConfigKey, OrcaNetConfig, OrcaNetEvent, OrcaNetRequest, OrcaNetResponse};
+use crate::common::{ConfigKey, FileMetadata, OrcaNetConfig, OrcaNetEvent, OrcaNetRequest, OrcaNetResponse, Utils};
 use crate::db_client::{DBClient, FileInfo};
 use crate::network_client::NetworkClient;
 
@@ -48,7 +48,7 @@ impl RequestHandlerLoop {
                     .respond(response, channel)
                     .await;
             }
-            OrcaNetEvent::StreamRequest {request, sender} => {
+            OrcaNetEvent::StreamRequest { request, sender } => {
                 let response = self.handle_request(request, &db_client);
                 let _ = sender.send(response);
             }
@@ -85,27 +85,46 @@ impl RequestHandlerLoop {
 
     fn handle_request(&mut self, request: OrcaNetRequest, db_client: &DBClient) -> OrcaNetResponse {
         match request {
-            OrcaNetRequest::FileRequest { file_id } => {
-                println!("Received request for file_id: {}", file_id);
-                // TODO: Add proper error handling
+            OrcaNetRequest::FileMetadataRequest { file_id } => {
+                println!("Received metadata request for file_id: {}", file_id);
+
+                match db_client.get_provided_file_info(file_id.as_str()) {
+                    Ok(file_info) => {
+                        OrcaNetResponse::FileMetadataResponse(FileMetadata {
+                            file_id,
+                            file_name: file_info.file_name,
+                            fee_rate_per_kb: OrcaNetConfig::get_fee_rate(),
+                            recipient_address: OrcaNetConfig::get_str_from_config(ConfigKey::BTCAddress),
+                        })
+                    }
+                    Err(_) => {
+                        eprintln!("Requested file not found in DB");
+                        OrcaNetResponse::Error {
+                            message: "File can't be provided".parse().unwrap()
+                        }
+                    }
+                }
+            }
+            OrcaNetRequest::FileContentRequest { file_id } => {
+                println!("Received content request for file_id: {}", file_id);
+
                 let file_info = db_client.get_provided_file_info(file_id.as_str());
                 println!("File info for request {} {:?}", file_id, file_info);
 
                 let resp = match file_info {
                     Ok(file_info) => {
-                        let path = Path::new(file_info.file_path.as_str());
-
-                        match std::fs::read(path) {
+                        match std::fs::read(&file_info.file_path) {
                             Ok(content) => {
                                 let _ = db_client.increment_download_count(file_id.as_str());
-                                let recipient_address = OrcaNetConfig::get_str_from_config(ConfigKey::BTCAddress);
 
-                                OrcaNetResponse::FileResponse {
-                                    file_id,
-                                    file_name: file_info.file_name,
-                                    fee_rate_per_kb: OrcaNetConfig::get_fee_rate(),
-                                    recipient_address,
-                                    content,
+                                OrcaNetResponse::FileContentResponse {
+                                    metadata: FileMetadata {
+                                        file_id,
+                                        file_name: file_info.file_name,
+                                        fee_rate_per_kb: OrcaNetConfig::get_fee_rate(),
+                                        recipient_address: OrcaNetConfig::get_str_from_config(ConfigKey::BTCAddress),
+                                    },
+                                    content
                                 }
                             }
                             Err(e) => {

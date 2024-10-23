@@ -1,6 +1,9 @@
+use std::path::Path;
+
 use bitcoincore_rpc::RpcApi;
 use futures::channel::mpsc;
 use futures::SinkExt;
+use libp2p_swarm::derive_prelude::PeerId;
 use ring::digest::digest;
 use rocket::{get, routes, State};
 use rocket::serde::{json::Json, Serialize};
@@ -8,11 +11,9 @@ use rocket::time::format_description::parse;
 use serde::Deserialize;
 use serde_json::json;
 use tracing_subscriber::fmt::format;
-use std::path::Path;
-use libp2p_swarm::derive_prelude::PeerId;
 
 use crate::btc_rpc::RPCWrapper;
-use crate::common::{ConfigKey, OrcaNetConfig, OrcaNetEvent, Utils};
+use crate::common::{ConfigKey, OrcaNetConfig, OrcaNetEvent, OrcaNetRequest, OrcaNetResponse, Utils};
 use crate::db_client::DBClient;
 use crate::network_client::NetworkClient;
 
@@ -224,7 +225,7 @@ async fn download_file(state: &State<AppState>, request: Json<DownloadFileReques
     let path = Path::new(&request.dest_path);
 
     if path.exists() {
-        return Response::error("Path already exists".to_string());
+        return Response::error("A file with the same name already exists in the given path. Provide a different name or path.".to_string());
     }
 
     let peer_id = match request.peer_id.parse() {
@@ -240,6 +241,40 @@ async fn download_file(state: &State<AppState>, request: Json<DownloadFileReques
         Ok(_) => Response::success(json!("Downloaded file")),
         Err(e) => Response::error(format!("Error downloading file: {:?}", e))
     }
+}
+
+#[get("/get-providers/<file_id>")]
+async fn get_providers(state: &State<AppState>, file_id: String) -> Json<Response> {
+    let providers = state.network_client.clone()
+        .get_providers(file_id.clone())
+        .await;
+
+    if providers.is_empty() {
+        Response::success(json!([]));
+    }
+
+    let mut results = Vec::new();
+
+    for peer_id in providers {
+        let response = state.network_client.clone()
+            .send_stream_request(peer_id.clone(), OrcaNetRequest::FileMetadataRequest { file_id: file_id.clone() })
+            .await;
+
+        match response {
+            Ok(orca_net_response) => {
+                if let OrcaNetResponse::FileMetadataResponse(metadata) = orca_net_response {
+                    results.push(json!({
+                        "file_name": metadata.file_name,
+                        "fee_rate_per_kb": metadata.fee_rate_per_kb,
+                        "peer_id": peer_id.to_string()
+                    }));
+                }
+            }
+            Err(e) => eprintln!("Error getting file metadata from peer {:?}", peer_id)
+        }
+    }
+
+    Response::success(json!(results))
 }
 
 
