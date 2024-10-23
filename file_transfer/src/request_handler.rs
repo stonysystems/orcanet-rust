@@ -123,6 +123,10 @@ impl RequestHandlerLoop {
 
                 resp
             }
+            OrcaNetRequest::HTTPProxyRequest => {
+                // Not providing
+                OrcaNetResponse::HTTPProxyResponse(None)
+            }
         }
     }
 }

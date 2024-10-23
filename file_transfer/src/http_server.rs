@@ -5,8 +5,11 @@ use ring::digest::digest;
 use rocket::{get, routes, State};
 use rocket::serde::{json::Json, Serialize};
 use rocket::time::format_description::parse;
+use serde::Deserialize;
 use serde_json::json;
 use tracing_subscriber::fmt::format;
+use std::path::Path;
+use libp2p_swarm::derive_prelude::PeerId;
 
 use crate::btc_rpc::RPCWrapper;
 use crate::common::{ConfigKey, OrcaNetConfig, OrcaNetEvent, Utils};
@@ -16,6 +19,25 @@ use crate::network_client::NetworkClient;
 pub struct AppState {
     pub network_client: NetworkClient,
     pub event_sender: mpsc::Sender<OrcaNetEvent>,
+}
+
+// Request structs
+#[derive(Serialize, Deserialize)]
+struct SendToAddressRequest {
+    address: String,
+    amount: f64,
+}
+
+#[derive(Serialize, Deserialize)]
+struct ProvideFileRequest {
+    file_path: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct DownloadFileRequest {
+    file_id: String,
+    peer_id: String,
+    dest_path: String,
 }
 
 #[derive(Serialize)]
@@ -86,11 +108,11 @@ fn load_wallet(wallet_name: String) -> Json<Response> {
     }
 }
 
-#[get("/send-to-address/<address>?<amt>")]
-fn send_to_address(address: String, amt: f64) -> Json<Response> {
+#[post("/send-to-address", format = "application/json", data = "<request>")]
+fn send_to_address(request: Json<SendToAddressRequest>) -> Json<Response> {
     let rpc_wrapper = RPCWrapper::new(OrcaNetConfig::get_network_type());
 
-    match rpc_wrapper.send_to_address(address.as_str(), amt) {
+    match rpc_wrapper.send_to_address(request.address.as_str(), request.amount) {
         Ok(tx_id) => {
             Response::success(json!({
                 "tx_id": tx_id
@@ -102,7 +124,7 @@ fn send_to_address(address: String, amt: f64) -> Json<Response> {
     }
 }
 
-#[get("/generate-block")]
+#[post("/generate-block")]
 async fn generate_block() -> Json<Response> {
     Utils::start_async_block_gen().await;
 
@@ -118,7 +140,7 @@ async fn generate_block() -> Json<Response> {
     // }
 }
 
-#[get("/dial/<peer_id_str>")]
+#[post("/dial/<peer_id_str>")]
 async fn dial(state: &State<AppState>, peer_id_str: String) -> Json<Response> {
     let peer_id = match peer_id_str.parse() {
         Ok(id) => id,
@@ -157,8 +179,10 @@ async fn get_file_info(file_id: String) -> Json<Response> {
     }
 }
 
-#[get("/provide-file?<file_path>")]
-async fn provide_file(state: &State<AppState>, file_path: String) -> Json<Response> {
+#[post("/provide-file", format = "application/json", data = "<request>")]
+async fn provide_file(state: &State<AppState>, request: Json<ProvideFileRequest>) -> Json<Response> {
+    let file_path = request.file_path.clone();
+
     // Validate path and size
     let path = std::path::Path::new(file_path.as_str());
     if !path.exists() {
@@ -185,7 +209,7 @@ async fn provide_file(state: &State<AppState>, file_path: String) -> Json<Respon
     Response::success(json!("Started providing file"))
 }
 
-#[get("/stop-providing/<file_id>")]
+#[post("/stop-providing/<file_id>")]
 async fn stop_providing(state: &State<AppState>, file_id: String) -> Json<Response> {
     let _ = state.event_sender.clone()
         .send(OrcaNetEvent::StopProvidingFile { file_id })
@@ -194,11 +218,24 @@ async fn stop_providing(state: &State<AppState>, file_id: String) -> Json<Respon
     Response::success(json!("Stopped providing file"))
 }
 
-#[get("/download-file/<file_id>")]
-async fn download_file(state: &State<AppState>, file_id: String) -> Json<Response> {
+#[post("/download-file", format = "application/json", data = "<request>")]
+async fn download_file(state: &State<AppState>, request: Json<DownloadFileRequest>) -> Json<Response> {
     // TODO: Add a check to make sure it's not already downloaded or provided
+    let path = Path::new(&request.dest_path);
+
+    if path.exists() {
+        return Response::error("Path already exists".to_string());
+    }
+
+    let peer_id = match request.peer_id.parse() {
+        Ok(id) => id,
+        Err(e) => {
+            return Response::error(format!("Error parsing peer_id: {:?}", e));
+        }
+    };
+
     match state.network_client.clone()
-        .download_file(file_id)
+        .download_file_from_peer(request.file_id.clone(), peer_id, Some(request.dest_path.clone()))
         .await {
         Ok(_) => Response::success(json!("Downloaded file")),
         Err(e) => Response::error(format!("Error downloading file: {:?}", e))

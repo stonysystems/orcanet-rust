@@ -114,45 +114,60 @@ impl NetworkClient {
     pub async fn download_file(
         &mut self,
         file_id: String,
+        dest_path: Option<String>,
     ) -> Result<(), Box<dyn Error>> {
         let providers = self.get_providers(file_id.clone()).await;
-
         println!("Got providers: {:?}", providers);
 
         if providers.is_empty() {
             return Err(format!("No peer provides {file_id}").into());
         }
 
-        for peer in providers {
-            let addr = Utils::get_address_through_relay(&peer, None);
-            if self.dial(peer.clone(), addr.clone()).await.is_err() {
-                // Peer not available, skip it
-                continue;
-            }
+        for peer_id in providers {
+            let resp = self.download_file_from_peer(file_id.clone(), peer_id.clone(), dest_path.clone())
+                .await;
 
-            let request_id = Utils::new_uuid();
-            let stream_req = StreamReq {
-                request_id: request_id.clone(),
-                stream_data: StreamData::Request(
-                    OrcaNetRequest::FileRequest {
-                        file_id: file_id.clone()
-                    }
-                ),
-            };
-
-            let resp = self.send_in_stream(peer.clone(), addr.clone(),
-                                           stream_req, true).await;
-
-            if let Some(response) = resp {
-                if let Ok(file_response) = response {
-                    println!("Got file from peer {:?}", peer);
-                    Utils::handle_file_response(file_response);
-                    return Ok(());
-                }
+            if resp.is_ok() {
+                return Ok(());
             }
         }
 
         Err(format!("Could not get file from any provider for {file_id}").into())
+    }
+
+    pub async fn download_file_from_peer(
+        &mut self,
+        file_id: String,
+        peer_id: PeerId,
+        dest_path: Option<String>,
+    ) -> Result<(), Box<dyn Error>> {
+        let addr = Utils::get_address_through_relay(&peer_id, None);
+        if self.dial(peer_id.clone(), addr.clone()).await.is_err() {
+            return Err("Could not reach peer".into());
+        }
+
+        let request_id = Utils::new_uuid();
+        let stream_req = StreamReq {
+            request_id: request_id.clone(),
+            stream_data: StreamData::Request(
+                OrcaNetRequest::FileRequest {
+                    file_id: file_id.clone()
+                }
+            ),
+        };
+
+        let resp = self.send_in_stream(peer_id.clone(), addr.clone(),
+                                       stream_req, true).await;
+
+        if let Some(response) = resp {
+            if let Ok(file_response) = response {
+                println!("Got file from peer {:?}", peer_id);
+                Utils::handle_file_response(file_response, dest_path);
+                return Ok(());
+            }
+        }
+
+        Err(format!("Could not file from peer {peer_id}").into())
     }
 
     /// Send request to the given peer.

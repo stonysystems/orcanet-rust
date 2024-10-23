@@ -232,7 +232,7 @@ impl Utils {
 
     //TODO: Move to a better struct
     //TODO: Return saved file path?
-    pub fn handle_file_response(resp: OrcaNetResponse) {
+    pub fn handle_file_response(resp: OrcaNetResponse, dest_path: Option<String>) {
         match resp {
             OrcaNetResponse::FileResponse {
                 file_id,
@@ -241,12 +241,17 @@ impl Utils {
                 content,
                 recipient_address
             } => {
+                let path = match dest_path {
+                    Some(dest_path) => Path::new(&dest_path).to_path_buf(),
+                    None => {
+                        let app_data_path = OrcaNetConfig::get_str_from_config(ConfigKey::AppDataPath);
+                        Path::new(&app_data_path)
+                            .join(OrcaNetConfig::FILE_SAVE_DIR)
+                            .join(format!("{}_{}", &file_id[..16], file_name.clone())) // Use file_id and name
+                    }
+                };
+                
                 // Store the file
-                let app_data_path = OrcaNetConfig::get_str_from_config(ConfigKey::AppDataPath);
-                let path = Path::new(&app_data_path)
-                    .join(OrcaNetConfig::FILE_SAVE_DIR)
-                    .join(format!("{}_{}", &file_id[..16], file_name.clone())); // Use file_id and name
-
                 match std::fs::write(&path, &content) {
                     Ok(_) => println!("Wrote file {} to {:?}", file_name, path),
                     Err(e) => eprintln!("Error writing file {:?}", e)
@@ -275,9 +280,9 @@ impl Utils {
             OrcaNetResponse::Error { message } => {
                 eprintln!("Failed to fetch file: {message}");
             }
-            // e => {
-            //     eprintln!("Expected file response but got {:?}", e)
-            // }
+            e => {
+                eprintln!("Expected file response but got {:?}", e)
+            }
         }
     }
 }
@@ -301,26 +306,35 @@ pub enum OrcaNetEvent {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StreamReq {
     pub request_id: String,
     pub stream_data: StreamData,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum StreamData {
     Request(OrcaNetRequest),
     Response(OrcaNetResponse),
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum OrcaNetRequest {
     FileRequest {
         file_id: String,
-    }
+    },
+    HTTPProxyRequest,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HTTPProxyResponse {
+    pub address: String,
+    pub port: u16,
+    pub fee_rate: f64,
+    pub recipient_address: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum OrcaNetResponse {
     FileResponse {
         file_id: String,
@@ -329,6 +343,7 @@ pub enum OrcaNetResponse {
         recipient_address: String,
         content: Vec<u8>,
     },
+    HTTPProxyResponse(Option<HTTPProxyResponse>),
     Error {
         message: String
     },

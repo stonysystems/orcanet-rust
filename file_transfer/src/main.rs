@@ -124,7 +124,7 @@ async fn handle_input_line(
         Some("getfile") => {
             let file_id = expect_input!(args.next(), "file_id", String::from);
 
-            if let Err(e) = client.download_file(file_id).await {
+            if let Err(e) = client.download_file(file_id, None).await {
                 eprintln!("Error getting file: {:?}", e);
             } else {
                 println!("Got file");
