@@ -1,34 +1,20 @@
-use rusqlite::{Connection, params, Result as QueryResult, Row};
+use diesel::{Connection, ExpressionMethods, Insertable, Queryable, QueryDsl, QueryResult, RunQueryDsl, Selectable, update};
+use diesel::dsl::{delete, insert_into};
+use diesel::prelude::SqliteConnection;
 use serde::Serialize;
+
+use schema::{downloaded_files, provided_files};
 
 use crate::common::{ConfigKey, OrcaNetConfig};
 
 pub struct DBClient {
-    conn: Connection,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct FileInfo {
-    pub file_id: String,
-    pub file_path: String,
-    pub file_name: String,
-    pub downloads_count: usize,
-}
-
-impl FileInfo {
-    pub fn from_row(row: &Row) -> QueryResult<Self> {
-        Ok(Self {
-            file_id: row.get::<_, String>(0)?,
-            file_path: row.get::<_, String>(1)?,
-            file_name: row.get::<_, String>(2)?,
-            downloads_count: row.get::<_, usize>(3)?,
-        })
-    }
+    conn: SqliteConnection,
+    db_path: String,
 }
 
 impl Clone for DBClient {
     fn clone(&self) -> Self {
-        DBClient::new(Some(String::from(self.conn.path().unwrap())))
+        DBClient::new(Some(self.db_path.clone()))
     }
 }
 
@@ -37,7 +23,7 @@ impl DBClient {
         let _db_path = db_path
             .unwrap_or_else(|| OrcaNetConfig::get_str_from_config(ConfigKey::DBPath));
 
-        let conn = match Connection::open(_db_path) {
+        let conn = match SqliteConnection::establish(_db_path.as_str()) {
             Ok(conn) => {
                 println!("Opened connection");
                 conn
@@ -49,56 +35,127 @@ impl DBClient {
         };
 
         DBClient {
-            conn
+            conn,
+            db_path: _db_path,
         }
     }
 
-    pub fn get_tables(&self) -> QueryResult<Vec<String>> {
-        let mut stmt = self.conn.prepare("SELECT name FROM sqlite_master WHERE type='table'")?;
-        let table_names = stmt.query_map([], |row| row.get(0))?;
+    //
+    // pub fn get_tables(&self) -> QueryResult<Vec<String>> {
+    //     let mut stmt = self.conn.prepare("SELECT name FROM sqlite_master WHERE type='table'")?;
+    //     let table_names = stmt.query_map([], |row| row.get(0))?;
+    //
+    //     Ok(table_names.collect::<QueryResult<_>>()?)
+    // }
 
-        Ok(table_names.collect::<QueryResult<_>>()?)
+    pub fn insert_provided_file(&mut self, file_info: FileInfo) -> QueryResult<usize> {
+        use schema::provided_files::dsl::*;
+
+        insert_into(provided_files)
+            .values(&file_info)
+            .execute(&mut self.conn)
     }
 
-    pub fn get_provided_files(&self) -> QueryResult<Vec<FileInfo>> {
-        let mut stmt = self.conn.prepare("SELECT * FROM provided_files")?;
-        let files = stmt.query_map([], FileInfo::from_row)?;
+    pub fn remove_provided_file(&mut self, target_file_id: &str) -> QueryResult<usize> {
+        use schema::provided_files::dsl::*;
 
-        Ok(files.collect::<QueryResult<_>>()?)
+        delete(provided_files.filter(file_id.eq(target_file_id)))
+            .execute(&mut self.conn)
     }
 
-    pub fn get_provided_file_info(&self, file_id: &str) -> QueryResult<FileInfo> {
-        let mut stmt = self.conn.prepare(
-            "SELECT * FROM provided_files WHERE file_id=?1")?;
-        let file = stmt.query_row([file_id], FileInfo::from_row);
+    pub fn get_provided_file_info(&mut self, target_file_id: &str) -> QueryResult<FileInfo> {
+        use schema::provided_files::dsl::*;
 
-        return file;
+        provided_files
+            .filter(file_id.eq(target_file_id))
+            .first::<FileInfo>(&mut self.conn)
     }
 
-    pub fn insert_provided_file(&self, file_info: FileInfo) -> QueryResult<()> {
-        self.conn.execute(
-            "INSERT INTO provided_files VALUES (?1, ?2, ?3, ?4)",
-            params![file_info.file_id, file_info.file_path, file_info.file_name, file_info.downloads_count],
-        )?;
+    pub fn get_provided_files(&mut self) -> QueryResult<Vec<FileInfo>> {
+        use schema::provided_files::dsl::*;
 
-        Ok(())
+        provided_files
+            .load::<FileInfo>(&mut self.conn)
     }
 
-    pub fn remove_provided_file(&self, file_id: &str) -> QueryResult<()> {
-        self.conn.execute(
-            "DELETE FROM provided_files WHERE file_id = ?1",
-            params![file_id],
-        )?;
+    pub fn increment_download_count(&mut self, target_file_id: &str) -> QueryResult<usize> {
+        use schema::provided_files::dsl::*;
 
-        Ok(())
+        update(provided_files.filter(file_id.eq(target_file_id)))
+            .set(downloads_count.eq(downloads_count + 1))
+            .execute(&mut self.conn)
     }
 
-    pub fn increment_download_count(&self, file_id: &str) -> QueryResult<()> {
-        self.conn.execute(
-            "UPDATE provided_files SET downloads_count = downloads_count + 1 WHERE file_id = ?1",
-            params![file_id],
-        )?;
+    pub fn insert_downloaded_file(&mut self, downloaded_file_info: DownloadedFileInfo) -> QueryResult<usize> {
+        use schema::downloaded_files::dsl::*;
 
-        Ok(())
+        insert_into(downloaded_files).values(&downloaded_file_info)
+            .execute(&mut self.conn)
     }
+
+    /// Get all downloads of a particular file_id
+    pub fn get_downloaded_file_info(&mut self, target_file_id: &str) -> QueryResult<Vec<DownloadedFileInfo>> {
+        use schema::downloaded_files::dsl::*;
+
+        downloaded_files
+            .filter(file_id.eq(&target_file_id))
+            .load::<DownloadedFileInfo>(&mut self.conn)
+    }
+
+    pub fn get_downloaded_files(&mut self) -> QueryResult<Vec<DownloadedFileInfo>> {
+        use schema::downloaded_files::dsl::*;
+
+        downloaded_files
+            .load::<DownloadedFileInfo>(&mut self.conn)
+    }
+}
+
+mod schema {
+    diesel::table! {
+        provided_files (file_id) {
+            file_id -> Text,
+            file_path -> Text,
+            file_name -> Text,
+            downloads_count -> Integer,
+        }
+    }
+
+    diesel::table! {
+        downloaded_files {
+            id -> Text,
+            file_id -> Text,
+            file_path -> Text,
+            file_name -> Text,
+            file_size_kb -> Float,
+            fee_rate_per_kb -> Nullable<Float>,
+            price -> Nullable<Float>,
+            payment_tx_id -> Nullable<Text>,
+            peer_id -> Text,
+            download_timestamp -> Integer
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Insertable, Queryable, Selectable)]
+#[diesel(table_name = provided_files)]
+pub struct FileInfo {
+    pub file_id: String,
+    pub file_path: String,
+    pub file_name: String,
+    pub downloads_count: i32,
+}
+
+#[derive(Debug, Clone, Serialize, Insertable, Queryable, Selectable)]
+#[diesel(table_name = downloaded_files)]
+pub struct DownloadedFileInfo {
+    pub id: String,
+    pub file_id: String,
+    pub file_path: String,
+    pub file_name: String,
+    pub file_size_kb: f32,
+    pub fee_rate_per_kb: Option<f32>, // May not be rate but fixed price
+    pub price: Option<f32>, // Size * rate if rate is present
+    pub payment_tx_id: Option<String>, // Transaction may not have started, so can be NULL ?
+    pub peer_id: String,
+    pub download_timestamp: i32,
 }

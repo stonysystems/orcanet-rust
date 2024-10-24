@@ -197,7 +197,8 @@ async fn dial(state: &State<AppState>, peer_id_str: String) -> Json<Response> {
 
 #[get("/get-provided-files")]
 async fn get_provided_files() -> Json<Response> {
-    let db_client = DBClient::new(None);
+    let mut db_client = DBClient::new(None);
+
     match db_client.get_provided_files() {
         Ok(files) => Response::success(json!(files)),
         Err(e) => Response::error(format!("Error getting files: {:?}", e))
@@ -206,7 +207,8 @@ async fn get_provided_files() -> Json<Response> {
 
 #[get("/get-file-info/<file_id>")]
 async fn get_file_info(file_id: String) -> Json<Response> {
-    let db_client = DBClient::new(None);
+    let mut db_client = DBClient::new(None);
+
     match db_client.get_provided_file_info(file_id.as_str()) {
         Ok(file) => Response::success(json!(file)),
         Err(e) => Response::error(format!("Error getting file: {:?}", e))
@@ -260,7 +262,7 @@ async fn download_file(state: &State<AppState>, request: Json<DownloadFileReques
     if path.exists() {
         return Response::error("A file with the same name already exists in the given path. Provide a different name or path.".to_string());
     }
-    
+
     // Validate that parent exists
     if path.parent().map_or(true, |v| !v.exists()) {
         return Response::error("Invalid path. Either it's not a file path or the parent directory does not exist".to_string());

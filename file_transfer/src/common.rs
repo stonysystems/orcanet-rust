@@ -231,20 +231,20 @@ impl Utils {
         Uuid::new_v4().to_string()
     }
 
-    pub fn get_file_metadata(file_id: String, db_client: &DBClient) -> Option<(FileInfo, FileMetadata)> {
-        match db_client.get_provided_file_info(file_id.as_str()) {
-            Ok(file_info) => {
-                let file_name = file_info.file_name.clone();
-                Some((file_info, FileMetadata {
-                    file_id,
-                    file_name,
-                    fee_rate_per_kb: OrcaNetConfig::get_fee_rate(),
-                    recipient_address: OrcaNetConfig::get_str_from_config(ConfigKey::BTCAddress),
-                }))
-            }
-            Err(_) => None
-        }
-    }
+    // pub fn get_file_metadata(file_id: String, db_client: &mut DBClient) -> Option<(FileInfo, FileMetadata)> {
+    //     match db_client.get_provided_file_info(file_id.as_str()) {
+    //         Ok(file_info) => {
+    //             let file_name = file_info.file_name.clone();
+    //             Some((file_info, FileMetadata {
+    //                 file_id,
+    //                 file_name,
+    //                 fee_rate_per_kb: OrcaNetConfig::get_fee_rate(),
+    //                 recipient_address: OrcaNetConfig::get_str_from_config(ConfigKey::BTCAddress),
+    //             }))
+    //         }
+    //         Err(_) => None
+    //     }
+    // }
 
     //TODO: Move to a better struct
     //TODO: Return saved file path?

@@ -217,7 +217,7 @@ impl NetworkClient {
 
     /// Advertise all provided files to the network
     pub async fn advertise_provided_files(&mut self) {
-        let db_client = DBClient::new(None);
+        let mut db_client = DBClient::new(None);
 
         match db_client.get_provided_files() {
             Ok(provided_files) => {

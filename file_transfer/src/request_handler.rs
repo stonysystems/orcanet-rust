@@ -4,7 +4,7 @@ use futures::channel::mpsc;
 use futures::StreamExt;
 use tokio::select;
 
-use crate::common::{ConfigKey, FileMetadata, OrcaNetConfig, OrcaNetEvent, OrcaNetRequest, OrcaNetResponse, Utils};
+use crate::common::{ConfigKey, FileMetadata, OrcaNetConfig, OrcaNetEvent, OrcaNetRequest, OrcaNetResponse};
 use crate::db_client::{DBClient, FileInfo};
 use crate::network_client::NetworkClient;
 
@@ -39,17 +39,17 @@ impl RequestHandlerLoop {
     }
 
     async fn handle_event(&mut self, event: OrcaNetEvent) {
-        let db_client = DBClient::new(None);
+        let mut db_client = DBClient::new(None);
 
         match event {
             OrcaNetEvent::Request { request, channel } => {
-                let response = self.handle_request(request, &db_client);
+                let response = self.handle_request(request, &mut db_client);
                 self.network_client
                     .respond(response, channel)
                     .await;
             }
             OrcaNetEvent::StreamRequest { request, sender } => {
-                let response = self.handle_request(request, &db_client);
+                let response = self.handle_request(request, &mut db_client);
                 let _ = sender.send(response);
             }
             OrcaNetEvent::ProvideFile { file_id, file_path } => {
@@ -75,15 +75,17 @@ impl RequestHandlerLoop {
                 }
             }
             OrcaNetEvent::StopProvidingFile { file_id } => {
-                db_client.remove_provided_file(file_id.as_str()).unwrap_or_else(
-                    |_| eprintln!("Deletion failed for {}", file_id.as_str())
-                );
+                db_client.remove_provided_file(file_id.as_str())
+                    .map(|_| ())
+                    .unwrap_or_else(
+                        |_| eprintln!("Deletion failed for {}", file_id.as_str())
+                    );
                 self.network_client.stop_providing(file_id).await;
             }
         }
     }
 
-    fn handle_request(&mut self, request: OrcaNetRequest, db_client: &DBClient) -> OrcaNetResponse {
+    fn handle_request(&mut self, request: OrcaNetRequest, db_client: &mut DBClient) -> OrcaNetResponse {
         match request {
             OrcaNetRequest::FileMetadataRequest { file_id } => {
                 println!("Received metadata request for file_id: {}", file_id);
@@ -124,7 +126,7 @@ impl RequestHandlerLoop {
                                         fee_rate_per_kb: OrcaNetConfig::get_fee_rate(),
                                         recipient_address: OrcaNetConfig::get_str_from_config(ConfigKey::BTCAddress),
                                     },
-                                    content
+                                    content,
                                 }
                             }
                             Err(e) => {
