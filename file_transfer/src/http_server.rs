@@ -17,7 +17,7 @@ use tracing_subscriber::fmt::format;
 
 use crate::btc_rpc::RPCWrapper;
 use crate::common::{ConfigKey, OrcaNetConfig, OrcaNetEvent, OrcaNetRequest, OrcaNetResponse, Utils};
-use crate::db_client::DBClient;
+use crate::db_client::{DBClient, DownloadedFileInfo};
 use crate::network_client::NetworkClient;
 
 pub struct AppState {
@@ -205,6 +205,16 @@ async fn get_provided_files() -> Json<Response> {
     }
 }
 
+#[get("/get-downloaded-files")]
+async fn get_downloaded_files() -> Json<Response> {
+    let mut db_client = DBClient::new(None);
+
+    match db_client.get_downloaded_files() {
+        Ok(files) => Response::success(json!(files)),
+        Err(e) => Response::error(format!("Error getting files: {:?}", e))
+    }
+}
+
 #[get("/get-file-info/<file_id>")]
 async fn get_file_info(file_id: String) -> Json<Response> {
     let mut db_client = DBClient::new(None);
@@ -297,6 +307,7 @@ async fn get_providers(state: &State<AppState>, file_id: String) -> Json<Respons
     let file_request = OrcaNetRequest::FileMetadataRequest { file_id: file_id.clone() };
     let mut results = Vec::new();
 
+    // TODO: Parallelize the metadata requests
     for peer_id in providers {
         let response = state.network_client.clone()
             .send_stream_request(peer_id.clone(), file_request.clone())
@@ -337,6 +348,7 @@ pub async fn start_http_server(
             // File sharing
             dial,
             get_provided_files,
+            get_downloaded_files,
             get_file_info,
             provide_file,
             stop_providing,
