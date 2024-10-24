@@ -4,8 +4,8 @@ use futures::channel::mpsc;
 use futures::StreamExt;
 use tokio::select;
 
-use crate::common::{ConfigKey, FileMetadata, OrcaNetConfig, OrcaNetEvent, OrcaNetRequest, OrcaNetResponse};
-use crate::db_client::{DBClient, FileInfo};
+use crate::common::{ConfigKey, FileMetadata, OrcaNetConfig, OrcaNetEvent, OrcaNetRequest, OrcaNetResponse, Utils};
+use crate::db_client::{DBClient, ProvidedFileInfo};
 use crate::network_client::NetworkClient;
 
 pub struct RequestHandlerLoop {
@@ -59,17 +59,19 @@ impl RequestHandlerLoop {
                     .unwrap());
 
                 if path.exists() {
-                    let resp = db_client.insert_provided_file(FileInfo {
+                    let resp = db_client.insert_provided_file(ProvidedFileInfo {
                         file_id: file_id.clone(),
                         file_name,
                         file_path,
                         downloads_count: 0,
+                        status: 1,
+                        provide_start_timestamp: Some(Utils::get_unix_timestamp())
                     });
 
                     match resp {
                         Ok(_) => self.network_client.start_providing(file_id).await,
                         Err(e) => {
-                            eprintln!("Failed to insert into DB: {:?}", e);
+                            tracing::error!("Failed to insert into DB: {:?}", e);
                         }
                     }
                 }
@@ -78,7 +80,7 @@ impl RequestHandlerLoop {
                 db_client.remove_provided_file(file_id.as_str())
                     .map(|_| ())
                     .unwrap_or_else(
-                        |_| eprintln!("Deletion failed for {}", file_id.as_str())
+                        |_| tracing::error!("Deletion failed for {}", file_id.as_str())
                     );
                 self.network_client.stop_providing(file_id).await;
             }
@@ -88,7 +90,7 @@ impl RequestHandlerLoop {
     fn handle_request(&mut self, request: OrcaNetRequest, db_client: &mut DBClient) -> OrcaNetResponse {
         match request {
             OrcaNetRequest::FileMetadataRequest { file_id } => {
-                println!("Received metadata request for file_id: {}", file_id);
+                tracing::info!("Received metadata request for file_id: {}", file_id);
 
                 match db_client.get_provided_file_info(file_id.as_str()) {
                     Ok(file_info) => {
@@ -100,7 +102,7 @@ impl RequestHandlerLoop {
                         })
                     }
                     Err(_) => {
-                        eprintln!("Requested file not found in DB");
+                        tracing::error!("Requested file not found in DB");
                         OrcaNetResponse::Error {
                             message: "File can't be provided".parse().unwrap()
                         }
@@ -108,10 +110,10 @@ impl RequestHandlerLoop {
                 }
             }
             OrcaNetRequest::FileContentRequest { file_id } => {
-                println!("Received content request for file_id: {}", file_id);
+                tracing::info!("Received content request for file_id: {}", file_id);
 
                 let file_info = db_client.get_provided_file_info(file_id.as_str());
-                println!("File info for request {} {:?}", file_id, file_info);
+                tracing::info!("File info for request {} {:?}", file_id, file_info);
 
                 let resp = match file_info {
                     Ok(file_info) => {
@@ -130,7 +132,7 @@ impl RequestHandlerLoop {
                                 }
                             }
                             Err(e) => {
-                                eprintln!("Error reading file: {:?}", e);
+                                tracing::error!("Error reading file: {:?}", e);
                                 OrcaNetResponse::Error {
                                     message: "Error while reading file".parse().unwrap()
                                 }

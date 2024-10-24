@@ -16,7 +16,7 @@ use serde_json::{json, Value};
 use uuid::Uuid;
 
 use crate::btc_rpc::{BTCNetwork, RPCWrapper};
-use crate::db_client::{DBClient, FileInfo};
+use crate::db_client::{DBClient, DownloadedFileInfo};
 use crate::impl_str_serde;
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -231,6 +231,10 @@ impl Utils {
         Uuid::new_v4().to_string()
     }
 
+    pub fn get_unix_timestamp() -> i64 {
+        chrono::Utc::now().timestamp()
+    }
+
     // pub fn get_file_metadata(file_id: String, db_client: &mut DBClient) -> Option<(FileInfo, FileMetadata)> {
     //     match db_client.get_provided_file_info(file_id.as_str()) {
     //         Ok(file_info) => {
@@ -249,7 +253,7 @@ impl Utils {
     //TODO: Move to a better struct
     //TODO: Return saved file path?
     /// Expects the response to be a file content response. Saves the file in dest_path
-    pub fn handle_file_content_response(resp: OrcaNetResponse, dest_path: Option<String>) {
+    pub fn handle_file_content_response(peer_id: PeerId, resp: OrcaNetResponse, dest_path: Option<String>) {
         match resp {
             OrcaNetResponse::FileContentResponse {
                 metadata,
@@ -264,39 +268,57 @@ impl Utils {
                             .join(format!("{}_{}", &metadata.file_id[..16], metadata.file_name.clone())) // Use file_id and name
                     }
                 };
+                let mut db_client = DBClient::new(None);
+                let size_kb = (content.len() as f64) / 1000f64;
+                tracing::info!("Received file with size {} KB", size_kb);
 
                 // Store the file
                 match std::fs::write(&path, &content) {
-                    Ok(_) => println!("Wrote file {} to {:?}", metadata.file_name, path),
-                    Err(e) => eprintln!("Error writing file {:?}", e)
-                }
+                    Ok(_) => {
+                        tracing::info!("Wrote file {} to {:?}", metadata.file_name, path);
 
-                let size_kb = (content.len() as f64) / 1000f64;
-                println!("Received file with size {} KB", size_kb);
+                        match db_client.insert_downloaded_file(DownloadedFileInfo {
+                            id: Utils::new_uuid(),
+                            file_id: metadata.file_id.clone(),
+                            file_name: metadata.file_name.clone(),
+                            file_size_kb: size_kb.clone() as f32,
+                            file_path: path.to_str().unwrap().to_string(),
+                            fee_rate_per_kb: Some(metadata.fee_rate_per_kb.clone() as f32),
+                            peer_id: peer_id.to_string(),
+                            price: None,
+                            payment_tx_id: None,
+                            download_timestamp: Utils::get_unix_timestamp(),
+                        }) {
+                            Ok(_) =>  tracing::info!("Inserted record for downloaded file"),
+                            Err(e) => tracing::error!("Error inserting download record {:?}", e)
+                        }
+                    }
+                    Err(e) => tracing::error!("Error writing file {:?}", e)
+                }
 
                 // Send payment after computing size
                 let btc_wrapper = RPCWrapper::new(BTCNetwork::RegTest);
                 let btc_addr = OrcaNetConfig::get_str_from_config(ConfigKey::BTCAddress);
                 let cost_btc = metadata.fee_rate_per_kb * size_kb;
                 let comment = format!("Payment for {}", metadata.file_id);
-                println!("Initiating transfer of {:?} BTC to {}", cost_btc, btc_addr);
+                tracing::info!("Initiating transfer of {:?} BTC to {}", cost_btc, btc_addr);
 
                 match btc_wrapper.send_to_address(metadata.recipient_address.as_str(), cost_btc, Some(comment.as_str())) {
                     Ok(tx_id) => {
-                        println!("sendtoaddress created transaction: {}", tx_id);
+                        tracing::info!("sendtoaddress created transaction: {}", tx_id);
                         // TODO: Handle error case ?
                         let _ = btc_wrapper.generate_to_address(btc_addr.as_str());
                     }
                     Err(e) => {
-                        eprintln!("Failed to send btc: {:?}", e);
+                        tracing::error!("Failed to send btc: {:?}", e);
                     }
                 }
             }
             OrcaNetResponse::Error { message } => {
-                eprintln!("Failed to fetch file: {message}");
+                tracing::error!("Failed to fetch file: {message}");
             }
             e => {
-                eprintln!("Expected file content response but got {:?}", e)
+                tracing::error!("Expected file content response but got {:?}", e)
             }
         }
     }

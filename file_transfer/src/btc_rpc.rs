@@ -57,9 +57,9 @@ impl RPCWrapper {
 
     pub fn load_wallet(&self, wallet: &str) {
         match self.rpc_client.load_wallet(wallet) {
-            Ok(v) => println!("Loaded wallet {}", v.name),
+            Ok(v) => tracing::info!("Loaded wallet {}", v.name),
             Err(e) => {
-                println!("Failed to load wallet {:?}", e);
+                tracing::error!("Failed to load wallet {:?}", e);
             }
         }
     }

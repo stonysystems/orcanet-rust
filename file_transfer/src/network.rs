@@ -167,7 +167,7 @@ impl EventLoop {
 
                 stream_event = incoming.next() => match stream_event {
                     Some((peer_id, mut stream)) => {
-                        println!("Received stream from {:?}", peer_id);
+                        tracing::info!("Received stream from {:?}", peer_id);
 
                         self.handle_stream_req(peer_id, &mut stream).await;
                     }
@@ -279,7 +279,7 @@ impl EventLoop {
                 }
             }
             kad::QueryResult::GetProviders(Err(err)) => {
-                eprintln!("Failed to get providers: {err:?}");
+                tracing::error!("Failed to get providers: {err:?}");
                 if let Some(sender) = self.pending_get_providers.remove(&query_id) {
                     sender.send(HashSet::new()).expect("Receiver not to be dropped");
                 }
@@ -298,10 +298,10 @@ impl EventLoop {
                 if let Some(sender) = self.pending_get_value.remove(&query_id) {
                     sender.send(Err(Box::new(err.clone()))).expect("Receiver not to be dropped");
                 }
-                eprintln!("Failed to get record: {err:?}");
+                tracing::error!("Failed to get record: {err:?}");
             }
             kad::QueryResult::PutRecord(Ok(kad::PutRecordOk { key })) => {
-                println!(
+                tracing::info!(
                     "Successfully put record {:?}",
                     std::str::from_utf8(key.as_ref()).unwrap()
                 );
@@ -310,13 +310,13 @@ impl EventLoop {
                 }
             }
             kad::QueryResult::PutRecord(Err(err)) => {
-                eprintln!("Failed to put record: {err:?}");
+                tracing::error!("Failed to put record: {err:?}");
                 if let Some(sender) = self.pending_put_kv.remove(&query_id) {
                     sender.send(Err(Box::new(err))).expect("Receiver not to be dropped");
                 }
             }
             kad::QueryResult::StartProviding(Ok(kad::AddProviderOk { key })) => {
-                println!(
+                tracing::info!(
                     "Successfully put provider record {:?}",
                     std::str::from_utf8(key.as_ref()).unwrap()
                 );
@@ -327,7 +327,7 @@ impl EventLoop {
                 let _ = sender.send(());
             }
             kad::QueryResult::StartProviding(Err(err)) => {
-                eprintln!("Failed to put provider record: {err:?}");
+                tracing::error!("Failed to put provider record: {err:?}");
                 // TODO: May be add handling later ?
             }
             _ => {}
@@ -407,7 +407,7 @@ impl EventLoop {
                     .send_request(&peer, request);
                 self.pending_request.insert(request_id, sender);
 
-                println!("Sent request to {:?}", peer);
+                tracing::info!("Sent request to {:?}", peer);
             }
             OrcaNetCommand::Respond { response, channel } => {
                 self.swarm
@@ -416,7 +416,7 @@ impl EventLoop {
                     .send_response(channel, response)
                     .expect("Connection to peer to be still open.");
 
-                println!("Sent response");
+                tracing::info!("Sent response");
             }
             OrcaNetCommand::PutKV { key, value, sender } => {
                 let key_with_ns = Utils::get_key_with_ns(key.as_str());
@@ -445,17 +445,17 @@ impl EventLoop {
             OrcaNetCommand::SendInStream { peer_id, stream_req, sender } => {
                 let mut control = self.swarm.behaviour_mut().stream.new_control();
                 let content_bytes = bincode::serialize(&stream_req).unwrap();
-                println!("Sending {} bytes", content_bytes.len());
+                tracing::info!("Sending {} bytes", content_bytes.len());
 
                 let protocol_future = async move {
                     match control
                         .open_stream(peer_id.clone(), StreamProtocol::new(OrcaNetConfig::STREAM_PROTOCOL))
                         .await {
                         Ok(mut stream) => {
-                            println!("Opened stream");
+                            tracing::info!("Opened stream");
                             match stream.write_all(content_bytes.as_slice()).await {
                                 Ok(_) => {
-                                    println!("Wrote successfully");
+                                    tracing::info!("Wrote successfully");
 
                                     if let Some(sender) = sender {
                                         self.pending_stream_requests
@@ -464,11 +464,11 @@ impl EventLoop {
 
                                     let _ = stream.close().await;
                                 }
-                                Err(e) => eprintln!("Failed to write to stream: {:?}", e)
+                                Err(e) => tracing::error!("Failed to write to stream: {:?}", e)
                             }
                         }
                         Err(e) => {
-                            eprintln!("Failed to open stream: {:?}", e)
+                            tracing::error!("Failed to open stream: {:?}", e)
                         }
                     }
                 };
@@ -481,21 +481,21 @@ impl EventLoop {
     async fn handle_stream_req(&mut self, peer_id: PeerId, stream: &mut Stream) {
         let mut buffer = Vec::new();
         if let Err(e) = stream.read_to_end(&mut buffer).await {
-            eprintln!("Failed to read from stream: {:?}", e);
+            tracing::error!("Failed to read from stream: {:?}", e);
             return;
         }
 
         let stream_req: StreamReq = match bincode::deserialize(buffer.as_slice()) {
             Ok(content) => content,
             Err(e) => {
-                eprintln!("Error deserializing stream request: {:?}", e);
+                tracing::error!("Error deserializing stream request: {:?}", e);
                 return;
             }
         };
 
         match stream_req.stream_data {
             StreamData::Request(request) => {
-                println!("Received request: {:?}", request);
+                tracing::info!("Received request: {:?}", request);
                 let (sender, receiver) = oneshot::channel();
 
                 self.event_sender
@@ -516,7 +516,7 @@ impl EventLoop {
                 }).await;
             }
             StreamData::Response(response) => {
-                println!("Received stream response");
+                tracing::info!("Received stream response");
                 // Utils::handle_file_response(response_content);
 
                 if let Some(sender) = self.pending_stream_requests

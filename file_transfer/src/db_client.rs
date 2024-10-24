@@ -25,11 +25,11 @@ impl DBClient {
 
         let conn = match SqliteConnection::establish(_db_path.as_str()) {
             Ok(conn) => {
-                println!("Opened connection");
+                tracing::info!("Opened connection");
                 conn
             }
             Err(e) => {
-                eprintln!("Failed to open connection: {:?}", e);
+                tracing::error!("Failed to open connection: {:?}", e);
                 panic!("Can't proceed without DB connection");
             }
         };
@@ -48,7 +48,7 @@ impl DBClient {
     //     Ok(table_names.collect::<QueryResult<_>>()?)
     // }
 
-    pub fn insert_provided_file(&mut self, file_info: FileInfo) -> QueryResult<usize> {
+    pub fn insert_provided_file(&mut self, file_info: ProvidedFileInfo) -> QueryResult<usize> {
         use schema::provided_files::dsl::*;
 
         insert_into(provided_files)
@@ -63,19 +63,19 @@ impl DBClient {
             .execute(&mut self.conn)
     }
 
-    pub fn get_provided_file_info(&mut self, target_file_id: &str) -> QueryResult<FileInfo> {
+    pub fn get_provided_file_info(&mut self, target_file_id: &str) -> QueryResult<ProvidedFileInfo> {
         use schema::provided_files::dsl::*;
 
         provided_files
             .filter(file_id.eq(target_file_id))
-            .first::<FileInfo>(&mut self.conn)
+            .first::<ProvidedFileInfo>(&mut self.conn)
     }
 
-    pub fn get_provided_files(&mut self) -> QueryResult<Vec<FileInfo>> {
+    pub fn get_provided_files(&mut self) -> QueryResult<Vec<ProvidedFileInfo>> {
         use schema::provided_files::dsl::*;
 
         provided_files
-            .load::<FileInfo>(&mut self.conn)
+            .load::<ProvidedFileInfo>(&mut self.conn)
     }
 
     pub fn increment_download_count(&mut self, target_file_id: &str) -> QueryResult<usize> {
@@ -117,6 +117,8 @@ mod schema {
             file_path -> Text,
             file_name -> Text,
             downloads_count -> Integer,
+            status -> Integer,
+            provide_start_timestamp -> Nullable<BigInt>
         }
     }
 
@@ -131,18 +133,20 @@ mod schema {
             price -> Nullable<Float>,
             payment_tx_id -> Nullable<Text>,
             peer_id -> Text,
-            download_timestamp -> Integer
+            download_timestamp -> BigInt
         }
     }
 }
 
 #[derive(Debug, Clone, Serialize, Insertable, Queryable, Selectable)]
 #[diesel(table_name = provided_files)]
-pub struct FileInfo {
+pub struct ProvidedFileInfo {
     pub file_id: String,
     pub file_path: String,
     pub file_name: String,
     pub downloads_count: i32,
+    pub status: i32,
+    pub provide_start_timestamp: Option<i64>
 }
 
 #[derive(Debug, Clone, Serialize, Insertable, Queryable, Selectable)]
@@ -157,5 +161,5 @@ pub struct DownloadedFileInfo {
     pub price: Option<f32>, // Size * rate if rate is present
     pub payment_tx_id: Option<String>, // Transaction may not have started, so can be NULL ?
     pub peer_id: String,
-    pub download_timestamp: i32,
+    pub download_timestamp: i64,
 }

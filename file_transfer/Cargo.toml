@@ -28,3 +28,4 @@ ring = "0.17.8"
 bincode = {version = "1.3.2"}
 uuid = { version = "1.11.0", features = ["v4"] }
 diesel = { version = "2.2.4", features = ["sqlite"] }
+chrono = "0.4.38"

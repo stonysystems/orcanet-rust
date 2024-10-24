@@ -117,7 +117,7 @@ impl NetworkClient {
         dest_path: Option<String>,
     ) -> Result<(), Box<dyn Error>> {
         let providers = self.get_providers(file_id.clone()).await;
-        println!("Got providers: {:?}", providers);
+        tracing::info!("Got providers: {:?}", providers);
 
         if providers.is_empty() {
             return Err(format!("No peer provides {file_id}").into());
@@ -152,8 +152,8 @@ impl NetworkClient {
         ).await;
 
         if let Ok(file_response) = response {
-            println!("Got file from peer {:?}", peer_id);
-            Utils::handle_file_content_response(file_response, dest_path);
+            tracing::info!("Got file from peer {:?}", peer_id);
+            Utils::handle_file_content_response(peer_id, file_response, dest_path);
 
             return Ok(());
         }
@@ -226,7 +226,7 @@ impl NetworkClient {
                 }
             }
             Err(e) => {
-                eprintln!("Error getting provided files {:?}", e);
+                tracing::error!("Error getting provided files {:?}", e);
             }
         }
     }

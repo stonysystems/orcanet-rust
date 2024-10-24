@@ -289,8 +289,6 @@ async fn get_providers(state: &State<AppState>, file_id: String) -> Json<Respons
         .get_providers(file_id.clone())
         .await;
 
-    println!("Got providers: {:?}", providers);
-
     if providers.is_empty() {
         Response::success(json!([]));
     }
@@ -313,7 +311,7 @@ async fn get_providers(state: &State<AppState>, file_id: String) -> Json<Respons
                     }));
                 }
             }
-            Err(e) => eprintln!("Error getting file metadata from peer {:?}. Error: {:?}", peer_id, e)
+            Err(e) => tracing::error!("Error getting file metadata from peer {:?}. Error: {:?}", peer_id, e)
         }
     }
 
