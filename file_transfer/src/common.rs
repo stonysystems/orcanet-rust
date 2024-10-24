@@ -276,22 +276,6 @@ impl Utils {
                 match std::fs::write(&path, &content) {
                     Ok(_) => {
                         tracing::info!("Wrote file {} to {:?}", metadata.file_name, path);
-
-                        match db_client.insert_downloaded_file(DownloadedFileInfo {
-                            id: Utils::new_uuid(),
-                            file_id: metadata.file_id.clone(),
-                            file_name: metadata.file_name.clone(),
-                            file_size_kb: size_kb.clone() as f32,
-                            file_path: path.to_str().unwrap().to_string(),
-                            fee_rate_per_kb: Some(metadata.fee_rate_per_kb.clone() as f32),
-                            peer_id: peer_id.to_string(),
-                            price: None,
-                            payment_tx_id: None,
-                            download_timestamp: Utils::get_unix_timestamp(),
-                        }) {
-                            Ok(_) =>  tracing::info!("Inserted record for downloaded file"),
-                            Err(e) => tracing::error!("Error inserting download record {:?}", e)
-                        }
                     }
                     Err(e) => tracing::error!("Error writing file {:?}", e)
                 }
@@ -303,15 +287,35 @@ impl Utils {
                 let comment = format!("Payment for {}", metadata.file_id);
                 tracing::info!("Initiating transfer of {:?} BTC to {}", cost_btc, btc_addr);
 
-                match btc_wrapper.send_to_address(metadata.recipient_address.as_str(), cost_btc, Some(comment.as_str())) {
+                let payment_tx_id = match btc_wrapper
+                    .send_to_address(metadata.recipient_address.as_str(), cost_btc, Some(comment.as_str())) {
                     Ok(tx_id) => {
                         tracing::info!("sendtoaddress created transaction: {}", tx_id);
                         // TODO: Handle error case ?
                         let _ = btc_wrapper.generate_to_address(btc_addr.as_str());
+                        Some(tx_id.to_string())
                     }
                     Err(e) => {
                         tracing::error!("Failed to send btc: {:?}", e);
+                        None
                     }
+                };
+
+                // Record the download in DB
+                match db_client.insert_downloaded_file(DownloadedFileInfo {
+                    id: Utils::new_uuid(),
+                    file_id: metadata.file_id.clone(),
+                    file_name: metadata.file_name.clone(),
+                    file_size_kb: size_kb.clone() as f32,
+                    file_path: path.to_str().unwrap().to_string(),
+                    fee_rate_per_kb: Some(metadata.fee_rate_per_kb.clone() as f32),
+                    peer_id: peer_id.to_string(),
+                    price: Some(cost_btc as f32), // Will change if we use per file price instead of rate
+                    payment_tx_id,
+                    download_timestamp: Utils::get_unix_timestamp(),
+                }) {
+                    Ok(_) =>  tracing::info!("Inserted record for downloaded file"),
+                    Err(e) => tracing::error!("Error inserting download record {:?}", e)
                 }
             }
             OrcaNetResponse::Error { message } => {
