@@ -65,7 +65,7 @@ impl RequestHandlerLoop {
                         file_path,
                         downloads_count: 0,
                         status: 1,
-                        provide_start_timestamp: Some(Utils::get_unix_timestamp())
+                        provide_start_timestamp: Some(Utils::get_unix_timestamp()),
                     });
 
                     match resp {
@@ -76,12 +76,22 @@ impl RequestHandlerLoop {
                     }
                 }
             }
-            OrcaNetEvent::StopProvidingFile { file_id } => {
-                db_client.remove_provided_file(file_id.as_str())
-                    .map(|_| ())
-                    .unwrap_or_else(
-                        |_| tracing::error!("Deletion failed for {}", file_id.as_str())
+            OrcaNetEvent::StopProvidingFile { file_id, permanent } => {
+                if permanent {
+                    // Permanently stop providing - Remove from DB
+                    let remove_resp = db_client.remove_provided_file(file_id.as_str());
+                    if let Err(e) = remove_resp {
+                        tracing::error!("Deletion failed for {}. Error: {:?}", file_id.as_str(), e)
+                    }
+                } else {
+                    let status_change_resp = db_client.set_provided_file_status(
+                        file_id.as_str(), false, None,
                     );
+                    if let Err(e) = status_change_resp {
+                        tracing::error!("Error changing status for {}. Error: {:?}", file_id.as_str(), e)
+                    }
+                }
+
                 self.network_client.stop_providing(file_id).await;
             }
         }

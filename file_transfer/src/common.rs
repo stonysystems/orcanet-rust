@@ -310,7 +310,7 @@ impl Utils {
                     file_path: path.to_str().unwrap().to_string(),
                     fee_rate_per_kb: Some(metadata.fee_rate_per_kb.clone() as f32),
                     peer_id: peer_id.to_string(),
-                    price: Some(cost_btc as f32), // Will change if we use per file price instead of rate
+                    price: Some(cost_btc as f32), // Will change if we use per-file price instead of rate
                     payment_tx_id,
                     download_timestamp: Utils::get_unix_timestamp(),
                 }) {
@@ -343,7 +343,8 @@ pub enum OrcaNetEvent {
         file_path: String,
     },
     StopProvidingFile {
-        file_id: String
+        file_id: String,
+        permanent: bool // Permanently stop providing
     },
 }
 

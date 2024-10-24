@@ -245,10 +245,11 @@ async fn provide_file(state: &State<AppState>, request: Json<ProvideFileRequest>
     Response::success(json!("Started providing file"))
 }
 
-#[post("/stop-providing/<file_id>")]
-async fn stop_providing(state: &State<AppState>, file_id: String) -> Json<Response> {
+/// Stop providing a file to the network. Set permanent to true to remove from DB. Otherwise, it's set as inactive.
+#[post("/stop-providing/<file_id>?<permanent>")]
+async fn stop_providing(state: &State<AppState>, file_id: String, permanent: bool) -> Json<Response> {
     let _ = state.event_sender.clone()
-        .send(OrcaNetEvent::StopProvidingFile { file_id })
+        .send(OrcaNetEvent::StopProvidingFile { file_id, permanent })
         .await;
 
     Response::success(json!("Stopped providing file"))

@@ -6,6 +6,7 @@ use serde::Serialize;
 use schema::{downloaded_files, provided_files};
 
 use crate::common::{ConfigKey, OrcaNetConfig};
+use crate::db_client::schema::provided_files::provide_start_timestamp;
 
 pub struct DBClient {
     conn: SqliteConnection,
@@ -86,6 +87,21 @@ impl DBClient {
             .execute(&mut self.conn)
     }
 
+    pub fn set_provided_file_status(
+        &mut self,
+        target_file_id: &str,
+        status_val: bool,
+        timestamp_val: Option<i64>) -> QueryResult<usize> {
+        use schema::provided_files::dsl::*;
+
+        update(provided_files.filter(file_id.eq(target_file_id)))
+            .set((
+                status.eq(status_val as i32),
+                provide_start_timestamp.eq(timestamp_val)
+            ))
+            .execute(&mut self.conn)
+    }
+
     pub fn insert_downloaded_file(&mut self, downloaded_file_info: DownloadedFileInfo) -> QueryResult<usize> {
         use schema::downloaded_files::dsl::*;
 
@@ -146,7 +162,7 @@ pub struct ProvidedFileInfo {
     pub file_name: String,
     pub downloads_count: i32,
     pub status: i32,
-    pub provide_start_timestamp: Option<i64>
+    pub provide_start_timestamp: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Insertable, Queryable, Selectable)]
