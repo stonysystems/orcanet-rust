@@ -16,7 +16,7 @@ use tokio::{io, select};
 use tokio::io::AsyncBufReadExt;
 use tracing_subscriber::EnvFilter;
 
-use crate::common::{OrcaNetConfig, OrcaNetEvent, OrcaNetRequest, StreamData, StreamReq, Utils};
+use crate::common::{OrcaNetConfig, OrcaNetEvent, Utils};
 use crate::http::start_http_server;
 use crate::network_client::NetworkClient;
 use crate::request_handler::RequestHandlerLoop;
@@ -144,6 +144,16 @@ async fn handle_input_line(
         }
         Some("advertise") => {
             let _ = client.advertise_provided_files().await;
+        }
+        Some("startproxy") => {
+            let _ = event_sender
+                .send(OrcaNetEvent::StartProxyServer)
+                .await;
+        }
+        Some("stopproxy") => {
+            let _ = event_sender
+                .send(OrcaNetEvent::StopProxyServer)
+                .await;
         }
         Some("exit") => {
             exit(0);

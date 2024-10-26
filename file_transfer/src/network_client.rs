@@ -6,12 +6,12 @@ use futures::SinkExt;
 use libp2p::{Multiaddr, PeerId};
 use libp2p::request_response::ResponseChannel;
 
-use crate::common::{OrcaNetCommand, OrcaNetRequest, OrcaNetResponse, StreamData, StreamReq, Utils};
+use crate::common::{NetworkCommand, OrcaNetRequest, OrcaNetResponse, StreamData, StreamReq, Utils};
 use crate::db_client::DBClient;
 
 #[derive(Clone)]
 pub struct NetworkClient {
-    pub sender: mpsc::Sender<OrcaNetCommand>,
+    pub sender: mpsc::Sender<NetworkCommand>,
 }
 
 impl NetworkClient {
@@ -22,7 +22,7 @@ impl NetworkClient {
     ) -> Result<(), Box<dyn Error + Send>> {
         let (sender, receiver) = oneshot::channel();
         self.sender
-            .send(OrcaNetCommand::StartListening { addr, sender })
+            .send(NetworkCommand::StartListening { addr, sender })
             .await
             .expect("Command receiver not to be dropped.");
         receiver.await.expect("Sender not to be dropped.")
@@ -36,7 +36,7 @@ impl NetworkClient {
     ) -> Result<(), Box<dyn Error + Send>> {
         let (sender, receiver) = oneshot::channel();
         self.sender
-            .send(OrcaNetCommand::Dial {
+            .send(NetworkCommand::Dial {
                 peer_id,
                 peer_addr,
                 sender,
@@ -50,7 +50,7 @@ impl NetworkClient {
     pub async fn start_providing(&mut self, file_id: String) {
         let (sender, receiver) = oneshot::channel();
         self.sender
-            .send(OrcaNetCommand::StartProviding { file_id, sender })
+            .send(NetworkCommand::StartProviding { file_id, sender })
             .await
             .expect("Command receiver not to be dropped.");
         receiver.await.expect("Sender not to be dropped.");
@@ -59,7 +59,7 @@ impl NetworkClient {
     /// Stop providing: Stop re-publishing provider record for given file_id
     pub async fn stop_providing(&mut self, file_id: String) {
         self.sender
-            .send(OrcaNetCommand::StopProviding { file_id })
+            .send(NetworkCommand::StopProviding { file_id })
             .await
             .expect("Command receiver not to be dropped.");
     }
@@ -68,7 +68,7 @@ impl NetworkClient {
     pub async fn get_providers(&mut self, file_id: String) -> HashSet<PeerId> {
         let (sender, receiver) = oneshot::channel();
         self.sender
-            .send(OrcaNetCommand::GetProviders { file_id, sender })
+            .send(NetworkCommand::GetProviders { file_id, sender })
             .await
             .expect("Command receiver not to be dropped.");
         receiver.await.expect("Sender not to be dropped.")
@@ -83,7 +83,7 @@ impl NetworkClient {
         let (sender, receiver) = oneshot::channel();
 
         self.sender
-            .send(OrcaNetCommand::PutKV {
+            .send(NetworkCommand::PutKV {
                 key,
                 value,
                 sender,
@@ -101,7 +101,7 @@ impl NetworkClient {
         let (sender, receiver) = oneshot::channel();
 
         self.sender
-            .send(OrcaNetCommand::GetValue {
+            .send(NetworkCommand::GetValue {
                 key,
                 sender,
             })
@@ -193,7 +193,7 @@ impl NetworkClient {
     ) -> Result<OrcaNetResponse, Box<dyn Error + Send>> {
         let (sender, receiver) = oneshot::channel();
         self.sender
-            .send(OrcaNetCommand::Request {
+            .send(NetworkCommand::Request {
                 request,
                 peer,
                 sender,
@@ -210,7 +210,7 @@ impl NetworkClient {
         channel: ResponseChannel<OrcaNetResponse>,
     ) {
         self.sender
-            .send(OrcaNetCommand::Respond { response, channel })
+            .send(NetworkCommand::Respond { response, channel })
             .await
             .expect("Command receiver not to be dropped.");
     }
@@ -244,7 +244,7 @@ impl NetworkClient {
 
         if !expect_response {
             self.sender
-                .send(OrcaNetCommand::SendInStream {
+                .send(NetworkCommand::SendInStream {
                     peer_id,
                     stream_req,
                     sender: None,
@@ -257,7 +257,7 @@ impl NetworkClient {
             let (sender, receiver) = oneshot::channel();
 
             self.sender
-                .send(OrcaNetCommand::SendInStream {
+                .send(NetworkCommand::SendInStream {
                     peer_id,
                     stream_req,
                     sender: Some(sender),

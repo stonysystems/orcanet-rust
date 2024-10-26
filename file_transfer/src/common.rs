@@ -120,7 +120,7 @@ impl OrcaNetConfig {
 }
 
 #[derive(Debug)]
-pub enum OrcaNetCommand {
+pub enum NetworkCommand {
     StartListening {
         addr: Multiaddr,
         sender: oneshot::Sender<Result<(), Box<dyn Error + Send>>>,
@@ -346,7 +346,8 @@ pub enum OrcaNetEvent {
         file_id: String,
         permanent: bool // Permanently stop providing
     },
-    StopProxy
+    StartProxyServer,
+    StopProxyServer
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

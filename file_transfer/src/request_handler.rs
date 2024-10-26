@@ -1,16 +1,18 @@
 use std::path::Path;
 
+use futures::{SinkExt, StreamExt};
 use futures::channel::mpsc;
-use futures::StreamExt;
 use tokio::select;
 
 use crate::common::{ConfigKey, FileMetadata, OrcaNetConfig, OrcaNetEvent, OrcaNetRequest, OrcaNetResponse, Utils};
 use crate::db_client::{DBClient, ProvidedFileInfo};
+use crate::http::start_http_proxy;
 use crate::network_client::NetworkClient;
 
 pub struct RequestHandlerLoop {
     network_client: NetworkClient,
     event_receiver: mpsc::Receiver<OrcaNetEvent>,
+    proxy_event_sender: Option<mpsc::Sender<OrcaNetEvent>>,
 }
 
 impl RequestHandlerLoop {
@@ -21,6 +23,7 @@ impl RequestHandlerLoop {
         RequestHandlerLoop {
             network_client,
             event_receiver,
+            proxy_event_sender: None,
         }
     }
 
@@ -94,7 +97,25 @@ impl RequestHandlerLoop {
 
                 self.network_client.stop_providing(file_id).await;
             }
-            _ => {}
+            OrcaNetEvent::StartProxyServer => {
+                let (mut proxy_event_sender, mut proxy_event_receiver) = mpsc::channel::<OrcaNetEvent>(0);
+                tokio::task::spawn(start_http_proxy(proxy_event_receiver));
+                self.proxy_event_sender = Some(proxy_event_sender);
+            }
+            OrcaNetEvent::StopProxyServer => {
+                match self.proxy_event_sender.take() {
+                    Some(mut proxy_event_sender) => {
+                        if let Err(e) = proxy_event_sender
+                            .send(OrcaNetEvent::StopProxyServer)
+                            .await {
+                            println!("Error sending stop command to proxy: {:?}", e);
+                        }
+                    }
+                    None => {
+                        println!("Proxy server not running");
+                    }
+                }
+            }
         }
     }
 

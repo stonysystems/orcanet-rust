@@ -53,13 +53,13 @@ async fn handle_request(request: Request<Incoming>) -> Result<Response<Full<Byte
 pub async fn start_http_proxy(mut receiver: Receiver<OrcaNetEvent>) {
     let addr = SocketAddr::from(([127, 0, 0, 1], PROXY_PORT));
     let listener = TcpListener::bind(addr).await.unwrap();
-    println!("Listening on http://{}", addr);
+    println!("Proxy server listening on http://{}", addr);
 
     loop {
         select! {
             event = receiver.next() => match event {
                 Some(ev) => {
-                    if let OrcaNetEvent::StopProxy = ev {
+                    if let OrcaNetEvent::StopProxyServer = ev {
                         println!("Stopping proxy server");
                         return;
                     }

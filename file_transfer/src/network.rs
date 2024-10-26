@@ -14,7 +14,7 @@ use libp2p::request_response::ProtocolSupport;
 use libp2p_swarm::Stream;
 use serde::{Deserialize, Serialize};
 
-use crate::common::{ConfigKey, OrcaNetCommand, OrcaNetConfig, OrcaNetEvent, OrcaNetRequest, OrcaNetResponse, StreamData, StreamReq, Utils};
+use crate::common::{ConfigKey, NetworkCommand, OrcaNetConfig, OrcaNetEvent, OrcaNetRequest, OrcaNetResponse, StreamData, StreamReq, Utils};
 use crate::network_client::NetworkClient;
 
 #[derive(NetworkBehaviour)]
@@ -119,7 +119,7 @@ pub async fn new(
 
 pub struct EventLoop {
     swarm: Swarm<Behaviour>,
-    command_receiver: mpsc::Receiver<OrcaNetCommand>,
+    command_receiver: mpsc::Receiver<NetworkCommand>,
     event_sender: mpsc::Sender<OrcaNetEvent>,
     pending_dial: HashMap<PeerId, oneshot::Sender<Result<(), Box<dyn Error + Send>>>>,
     pending_start_providing: HashMap<kad::QueryId, oneshot::Sender<()>>,
@@ -133,7 +133,7 @@ pub struct EventLoop {
 impl EventLoop {
     fn new(
         swarm: Swarm<Behaviour>,
-        command_receiver: mpsc::Receiver<OrcaNetCommand>,
+        command_receiver: mpsc::Receiver<NetworkCommand>,
         event_sender: mpsc::Sender<OrcaNetEvent>,
     ) -> Self {
         Self {
@@ -334,15 +334,15 @@ impl EventLoop {
         }
     }
 
-    async fn handle_command(&mut self, command: OrcaNetCommand) {
+    async fn handle_command(&mut self, command: NetworkCommand) {
         match command {
-            OrcaNetCommand::StartListening { addr, sender } => {
+            NetworkCommand::StartListening { addr, sender } => {
                 let _ = match self.swarm.listen_on(addr) {
                     Ok(_) => sender.send(Ok(())),
                     Err(e) => sender.send(Err(Box::new(e))),
                 };
             }
-            OrcaNetCommand::Dial {
+            NetworkCommand::Dial {
                 peer_id,
                 peer_addr,
                 sender,
@@ -370,7 +370,7 @@ impl EventLoop {
                     todo!("Already dialing peer.");
                 }
             }
-            OrcaNetCommand::StartProviding { file_id, sender } => {
+            NetworkCommand::StartProviding { file_id, sender } => {
                 let key = Utils::get_key_with_ns(file_id.as_str());
                 let query_id = self.swarm
                     .behaviour_mut()
@@ -380,7 +380,7 @@ impl EventLoop {
 
                 self.pending_start_providing.insert(query_id, sender);
             }
-            OrcaNetCommand::StopProviding { file_id } => {
+            NetworkCommand::StopProviding { file_id } => {
                 let file_id_with_ns = Utils::get_key_with_ns(file_id.as_str());
                 let key_with_ns = kad::RecordKey::new(&file_id_with_ns.into_bytes());
                 self.swarm
@@ -388,7 +388,7 @@ impl EventLoop {
                     .kademlia
                     .stop_providing(&key_with_ns);
             }
-            OrcaNetCommand::GetProviders { file_id, sender } => {
+            NetworkCommand::GetProviders { file_id, sender } => {
                 let key = Utils::get_key_with_ns(file_id.as_str());
                 let query_id = self.swarm
                     .behaviour_mut()
@@ -396,7 +396,7 @@ impl EventLoop {
                     .get_providers(key.into_bytes().into());
                 self.pending_get_providers.insert(query_id, sender);
             }
-            OrcaNetCommand::Request {
+            NetworkCommand::Request {
                 request,
                 peer,
                 sender,
@@ -409,7 +409,7 @@ impl EventLoop {
 
                 tracing::info!("Sent request to {:?}", peer);
             }
-            OrcaNetCommand::Respond { response, channel } => {
+            NetworkCommand::Respond { response, channel } => {
                 self.swarm
                     .behaviour_mut()
                     .request_response
@@ -418,7 +418,7 @@ impl EventLoop {
 
                 tracing::info!("Sent response");
             }
-            OrcaNetCommand::PutKV { key, value, sender } => {
+            NetworkCommand::PutKV { key, value, sender } => {
                 let key_with_ns = Utils::get_key_with_ns(key.as_str());
                 let record = kad::Record {
                     key: kad::RecordKey::new(&key_with_ns.as_str()),
@@ -433,7 +433,7 @@ impl EventLoop {
                     .expect("Failed to initiate put request");
                 self.pending_put_kv.insert(request_id, sender);
             }
-            OrcaNetCommand::GetValue { key, sender } => {
+            NetworkCommand::GetValue { key, sender } => {
                 let key_with_ns = Utils::get_key_with_ns(key.as_str());
                 let request_id = self.swarm
                     .behaviour_mut()
@@ -442,7 +442,7 @@ impl EventLoop {
 
                 self.pending_get_value.insert(request_id, sender);
             }
-            OrcaNetCommand::SendInStream { peer_id, stream_req, sender } => {
+            NetworkCommand::SendInStream { peer_id, stream_req, sender } => {
                 let mut control = self.swarm.behaviour_mut().stream.new_control();
                 let content_bytes = bincode::serialize(&stream_req).unwrap();
                 tracing::info!("Sending {} bytes", content_bytes.len());
@@ -506,7 +506,7 @@ impl EventLoop {
                 let response = receiver.await
                     .expect("Sender not to be dropped");
 
-                self.handle_command(OrcaNetCommand::SendInStream {
+                self.handle_command(NetworkCommand::SendInStream {
                     peer_id,
                     stream_req: StreamReq {
                         request_id: stream_req.request_id.clone(),
