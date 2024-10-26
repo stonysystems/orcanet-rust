@@ -29,6 +29,7 @@ mod db_client;
 mod btc_rpc;
 mod macros;
 mod http_server;
+mod http_proxy;
 
 #[derive(Parser)]
 struct Opts {

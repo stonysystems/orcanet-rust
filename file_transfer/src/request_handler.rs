@@ -94,6 +94,7 @@ impl RequestHandlerLoop {
 
                 self.network_client.stop_providing(file_id).await;
             }
+            _ => {}
         }
     }
 

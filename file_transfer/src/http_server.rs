@@ -230,7 +230,7 @@ async fn provide_file(state: &State<AppState>, request: Json<ProvideFileRequest>
     let file_path = request.file_path.clone();
 
     // Validate path and size
-    let path = std::path::Path::new(file_path.as_str());
+    let path = Path::new(file_path.as_str());
     if !path.exists() {
         return Response::error("Path does not exist".to_string());
     }

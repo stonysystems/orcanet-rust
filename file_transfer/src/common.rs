@@ -346,6 +346,7 @@ pub enum OrcaNetEvent {
         file_id: String,
         permanent: bool // Permanently stop providing
     },
+    StopProxy
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
