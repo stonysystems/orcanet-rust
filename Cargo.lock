@@ -755,20 +755,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "btc_miner"
-version = "0.1.0"
-dependencies = [
- "bitcoin",
- "bitcoincore-rpc",
- "clap",
- "futures",
- "hex",
- "serde",
- "time",
- "tokio",
-]
-
-[[package]]
 name = "bumpalo"
 version = "3.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2205,26 +2191,6 @@ dependencies = [
  "minreq",
  "serde",
  "serde_json",
-]
-
-[[package]]
-name = "kademlia-node"
-version = "0.1.0"
-dependencies = [
- "async-std",
- "bitcoincore-rpc",
- "clap",
- "futures",
- "futures-timer",
- "hex",
- "libp2p",
- "libp2p-stream",
- "rand",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]

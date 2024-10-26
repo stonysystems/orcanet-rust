@@ -50,7 +50,7 @@ async fn handle_request(request: Request<Incoming>) -> Result<Response<Full<Byte
     Ok(Response::from_parts(parts, Full::new(bytes)))
 }
 
-pub async fn start_proxy(mut receiver: Receiver<OrcaNetEvent>) {
+pub async fn start_http_proxy(mut receiver: Receiver<OrcaNetEvent>) {
     let addr = SocketAddr::from(([127, 0, 0, 1], PROXY_PORT));
     let listener = TcpListener::bind(addr).await.unwrap();
     println!("Listening on http://{}", addr);

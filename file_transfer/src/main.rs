@@ -17,7 +17,7 @@ use tokio::io::AsyncBufReadExt;
 use tracing_subscriber::EnvFilter;
 
 use crate::common::{OrcaNetConfig, OrcaNetEvent, OrcaNetRequest, StreamData, StreamReq, Utils};
-use crate::http_server::start_http_server;
+use crate::http::start_http_server;
 use crate::network_client::NetworkClient;
 use crate::request_handler::RequestHandlerLoop;
 
@@ -28,8 +28,7 @@ mod common;
 mod db_client;
 mod btc_rpc;
 mod macros;
-mod http_server;
-mod http_proxy;
+mod http;
 
 #[derive(Parser)]
 struct Opts {
