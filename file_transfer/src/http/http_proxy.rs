@@ -4,7 +4,8 @@ use bytes::Bytes;
 use futures::channel::mpsc::Receiver;
 use futures::StreamExt;
 use http_body_util::{BodyExt, Full};
-use hyper::{body::Incoming, Request, Response, StatusCode};
+use hyper::{Request, Response, StatusCode};
+use hyper::body::{Body, Incoming};
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper_tls::HttpsConnector;
@@ -35,6 +36,7 @@ async fn handle_request(request: Request<Incoming>) -> Result<Response<Full<Byte
     };
 
     // Validate token
+    println!("Request body size {:?}", request.size_hint().exact());
 
     // Send the request
     let path = request.uri().path();
@@ -46,6 +48,8 @@ async fn handle_request(request: Request<Incoming>) -> Result<Response<Full<Byte
 
     let (parts, body) = response.into_parts();
     let bytes = body.collect().await?.to_bytes();
+
+    println!("Response body size: {:?}", bytes.len());
 
     Ok(Response::from_parts(parts, Full::new(bytes)))
 }

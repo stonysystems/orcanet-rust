@@ -16,7 +16,7 @@ use serde_json::{json, Value};
 use uuid::Uuid;
 
 use crate::btc_rpc::{BTCNetwork, RPCWrapper};
-use crate::db_client::{DBClient, DownloadedFileInfo};
+use crate::db::{DownloadedFileInfo, DownloadedFilesTable, ProvidedFilesTable};
 use crate::impl_str_serde;
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -268,7 +268,7 @@ impl Utils {
                             .join(format!("{}_{}", &metadata.file_id[..16], metadata.file_name.clone())) // Use file_id and name
                     }
                 };
-                let mut db_client = DBClient::new(None);
+
                 let size_kb = (content.len() as f64) / 1000f64;
                 tracing::info!("Received file with size {} KB", size_kb);
 
@@ -302,7 +302,8 @@ impl Utils {
                 };
 
                 // Record the download in DB
-                match db_client.insert_downloaded_file(DownloadedFileInfo {
+                let mut downloaded_files_table = DownloadedFilesTable::new(None);
+                let downloaded_file_info = DownloadedFileInfo {
                     id: Utils::new_uuid(),
                     file_id: metadata.file_id.clone(),
                     file_name: metadata.file_name.clone(),
@@ -313,8 +314,10 @@ impl Utils {
                     price: Some(cost_btc as f32), // Will change if we use per-file price instead of rate
                     payment_tx_id,
                     download_timestamp: Utils::get_unix_timestamp(),
-                }) {
-                    Ok(_) =>  tracing::info!("Inserted record for downloaded file"),
+                };
+
+                match downloaded_files_table.insert_downloaded_file(downloaded_file_info) {
+                    Ok(_) => tracing::info!("Inserted record for downloaded file"),
                     Err(e) => tracing::error!("Error inserting download record {:?}", e)
                 }
             }
@@ -344,10 +347,10 @@ pub enum OrcaNetEvent {
     },
     StopProvidingFile {
         file_id: String,
-        permanent: bool // Permanently stop providing
+        permanent: bool, // Permanently stop providing
     },
     StartProxyServer,
-    StopProxyServer
+    StopProxyServer,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

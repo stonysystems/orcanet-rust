@@ -510,7 +510,7 @@ impl EventLoop {
                     peer_id,
                     stream_req: StreamReq {
                         request_id: stream_req.request_id.clone(),
-                        stream_data: StreamData::Response(response)
+                        stream_data: StreamData::Response(response),
                     },
                     sender: None,
                 }).await;

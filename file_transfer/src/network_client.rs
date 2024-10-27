@@ -7,7 +7,7 @@ use libp2p::{Multiaddr, PeerId};
 use libp2p::request_response::ResponseChannel;
 
 use crate::common::{NetworkCommand, OrcaNetRequest, OrcaNetResponse, StreamData, StreamReq, Utils};
-use crate::db_client::DBClient;
+use crate::db::ProvidedFilesTable;
 
 #[derive(Clone)]
 pub struct NetworkClient {
@@ -217,9 +217,9 @@ impl NetworkClient {
 
     /// Advertise all provided files to the network
     pub async fn advertise_provided_files(&mut self) {
-        let mut db_client = DBClient::new(None);
+        let mut provided_files_table = ProvidedFilesTable::new(None);
 
-        match db_client.get_provided_files() {
+        match provided_files_table.get_provided_files() {
             Ok(provided_files) => {
                 for file_info in provided_files {
                     self.start_providing(file_info.file_id).await;

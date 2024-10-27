@@ -25,10 +25,10 @@ mod request_handler;
 mod network_client;
 mod network;
 mod common;
-mod db_client;
 mod btc_rpc;
 mod macros;
 mod http;
+mod db;
 
 #[derive(Parser)]
 struct Opts {

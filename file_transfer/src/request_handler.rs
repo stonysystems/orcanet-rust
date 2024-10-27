@@ -5,7 +5,7 @@ use futures::channel::mpsc;
 use tokio::select;
 
 use crate::common::{ConfigKey, FileMetadata, OrcaNetConfig, OrcaNetEvent, OrcaNetRequest, OrcaNetResponse, Utils};
-use crate::db_client::{DBClient, ProvidedFileInfo};
+use crate::db::{ProvidedFileInfo, ProvidedFilesTable};
 use crate::http::start_http_proxy;
 use crate::network_client::NetworkClient;
 
@@ -42,17 +42,15 @@ impl RequestHandlerLoop {
     }
 
     async fn handle_event(&mut self, event: OrcaNetEvent) {
-        let mut db_client = DBClient::new(None);
-
         match event {
             OrcaNetEvent::Request { request, channel } => {
-                let response = self.handle_request(request, &mut db_client);
+                let response = self.handle_request(request);
                 self.network_client
                     .respond(response, channel)
                     .await;
             }
             OrcaNetEvent::StreamRequest { request, sender } => {
-                let response = self.handle_request(request, &mut db_client);
+                let response = self.handle_request(request);
                 let _ = sender.send(response);
             }
             OrcaNetEvent::ProvideFile { file_id, file_path } => {
@@ -62,14 +60,16 @@ impl RequestHandlerLoop {
                     .unwrap());
 
                 if path.exists() {
-                    let resp = db_client.insert_provided_file(ProvidedFileInfo {
-                        file_id: file_id.clone(),
-                        file_name,
-                        file_path,
-                        downloads_count: 0,
-                        status: 1,
-                        provide_start_timestamp: Some(Utils::get_unix_timestamp()),
-                    });
+                    let mut provided_files_table = ProvidedFilesTable::new(None);
+                    let resp = provided_files_table
+                        .insert_provided_file(ProvidedFileInfo {
+                            file_id: file_id.clone(),
+                            file_name,
+                            file_path,
+                            downloads_count: 0,
+                            status: 1,
+                            provide_start_timestamp: Some(Utils::get_unix_timestamp()),
+                        });
 
                     match resp {
                         Ok(_) => self.network_client.start_providing(file_id).await,
@@ -82,14 +82,18 @@ impl RequestHandlerLoop {
             OrcaNetEvent::StopProvidingFile { file_id, permanent } => {
                 if permanent {
                     // Permanently stop providing - Remove from DB
-                    let remove_resp = db_client.remove_provided_file(file_id.as_str());
+                    let mut provided_files_table = ProvidedFilesTable::new(None);
+                    let remove_resp = provided_files_table
+                        .remove_provided_file(file_id.as_str());
+
                     if let Err(e) = remove_resp {
                         tracing::error!("Deletion failed for {}. Error: {:?}", file_id.as_str(), e)
                     }
                 } else {
-                    let status_change_resp = db_client.set_provided_file_status(
-                        file_id.as_str(), false, None,
-                    );
+                    let mut provided_files_table = ProvidedFilesTable::new(None);
+                    let status_change_resp = provided_files_table
+                        .set_provided_file_status(file_id.as_str(), false, None);
+
                     if let Err(e) = status_change_resp {
                         tracing::error!("Error changing status for {}. Error: {:?}", file_id.as_str(), e)
                     }
@@ -119,12 +123,13 @@ impl RequestHandlerLoop {
         }
     }
 
-    fn handle_request(&mut self, request: OrcaNetRequest, db_client: &mut DBClient) -> OrcaNetResponse {
+    fn handle_request(&mut self, request: OrcaNetRequest) -> OrcaNetResponse {
         match request {
             OrcaNetRequest::FileMetadataRequest { file_id } => {
                 tracing::info!("Received metadata request for file_id: {}", file_id);
+                let mut provided_files_table = ProvidedFilesTable::new(None);
 
-                match db_client.get_provided_file_info(file_id.as_str()) {
+                match provided_files_table.get_provided_file_info(file_id.as_str()) {
                     Ok(file_info) => {
                         OrcaNetResponse::FileMetadataResponse(FileMetadata {
                             file_id,
@@ -144,14 +149,17 @@ impl RequestHandlerLoop {
             OrcaNetRequest::FileContentRequest { file_id } => {
                 tracing::info!("Received content request for file_id: {}", file_id);
 
-                let file_info = db_client.get_provided_file_info(file_id.as_str());
+                let mut provided_files_table = ProvidedFilesTable::new(None);
+                let file_info = provided_files_table
+                    .get_provided_file_info(file_id.as_str());
                 tracing::info!("File info for request {} {:?}", file_id, file_info);
 
                 let resp = match file_info {
                     Ok(file_info) => {
                         match std::fs::read(&file_info.file_path) {
                             Ok(content) => {
-                                let _ = db_client.increment_download_count(file_id.as_str());
+                                let _ = provided_files_table
+                                    .increment_download_count(file_id.as_str());
 
                                 OrcaNetResponse::FileContentResponse {
                                     metadata: FileMetadata {

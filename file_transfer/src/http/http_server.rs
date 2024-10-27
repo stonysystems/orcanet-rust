@@ -17,7 +17,7 @@ use tracing_subscriber::fmt::format;
 
 use crate::btc_rpc::RPCWrapper;
 use crate::common::{ConfigKey, OrcaNetConfig, OrcaNetEvent, OrcaNetRequest, OrcaNetResponse, Utils};
-use crate::db_client::{DBClient, DownloadedFileInfo};
+use crate::db::{DownloadedFileInfo, DownloadedFilesTable, ProvidedFilesTable};
 use crate::network_client::NetworkClient;
 
 pub struct AppState {
@@ -197,9 +197,9 @@ async fn dial(state: &State<AppState>, peer_id_str: String) -> Json<Response> {
 
 #[get("/get-provided-files")]
 async fn get_provided_files() -> Json<Response> {
-    let mut db_client = DBClient::new(None);
+    let mut provided_files_table = ProvidedFilesTable::new(None);
 
-    match db_client.get_provided_files() {
+    match provided_files_table.get_provided_files() {
         Ok(files) => Response::success(json!(files)),
         Err(e) => Response::error(format!("Error getting files: {:?}", e))
     }
@@ -207,9 +207,9 @@ async fn get_provided_files() -> Json<Response> {
 
 #[get("/get-downloaded-files")]
 async fn get_downloaded_files() -> Json<Response> {
-    let mut db_client = DBClient::new(None);
+    let mut downloaded_files_table = DownloadedFilesTable::new(None);
 
-    match db_client.get_downloaded_files() {
+    match downloaded_files_table.get_downloaded_files() {
         Ok(files) => Response::success(json!(files)),
         Err(e) => Response::error(format!("Error getting files: {:?}", e))
     }
@@ -217,9 +217,9 @@ async fn get_downloaded_files() -> Json<Response> {
 
 #[get("/get-file-info/<file_id>")]
 async fn get_file_info(file_id: String) -> Json<Response> {
-    let mut db_client = DBClient::new(None);
+    let mut provided_files_table = ProvidedFilesTable::new(None);
 
-    match db_client.get_provided_file_info(file_id.as_str()) {
+    match provided_files_table.get_provided_file_info(file_id.as_str()) {
         Ok(file) => Response::success(json!(file)),
         Err(e) => Response::error(format!("Error getting file: {:?}", e))
     }
