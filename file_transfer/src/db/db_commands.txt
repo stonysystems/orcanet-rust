@@ -1,0 +1,35 @@
+CREATE TABLE "downloaded_files" (
+	"id"	TEXT,
+	"file_id"	TEXT NOT NULL,
+	"file_path"	TEXT NOT NULL,
+	"file_name"	TEXT NOT NULL,
+	"file_size_kb"	REAL NOT NULL,
+	"fee_rate_per_kb"	REAL,
+	"price"	REAL,
+	"payment_tx_id"	TEXT,
+	"peer_id"	TEXT NOT NULL,
+	"download_timestamp"	INTEGER NOT NULL,
+	PRIMARY KEY("id")
+);
+
+CREATE TABLE "provided_files" (
+	"file_id"	TEXT,
+	"file_path"	TEXT NOT NULL UNIQUE,
+	"file_name"	TEXT NOT NULL,
+	"downloads_count"	INTEGER DEFAULT 0,
+	"status"	INTEGER DEFAULT 1,
+	"provide_start_timestamp"	INTEGER,
+	PRIMARY KEY("file_id")
+);
+
+CREATE TABLE "proxy_clients" (
+	"client_id"	TEXT,
+	"auth_token"	TEXT NOT NULL UNIQUE,
+	"start_timestamp"	INTEGER NOT NULL,
+	"data_transferred_kb"	REAL,
+	"total_fee_received"	REAL,
+	"total_fee_owed"	REAL,
+	"fee_rate_per_kb"	REAL,
+	"last_known_peer_id"	TEXT,
+	PRIMARY KEY("client_id")
+);

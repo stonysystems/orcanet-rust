@@ -29,12 +29,15 @@ pub mod table_schema {
     }
 
     diesel::table! {
-        proxy_clients (orca_token) {
-            orca_token -> Text,
-            session_start_time -> BigInt,
-            peer_id -> Text,
-            amount_owed -> Integer,
-            data_transferred_kb -> Float
+        proxy_clients (client_id) {
+            client_id -> Text,
+            auth_token -> Text,
+            start_timestamp -> BigInt,
+            data_transferred_kb -> Float,
+            total_fee_received -> Float,
+            total_fee_owed -> Float,
+            fee_rate_per_kb -> Float,
+            last_known_peer_id -> Text,
         }
     }
 
