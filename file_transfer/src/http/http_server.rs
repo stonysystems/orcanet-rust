@@ -26,19 +26,19 @@ pub struct AppState {
 }
 
 // Request structs
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 struct SendToAddressRequest {
     address: String,
     amount: f64,
     comment: Option<String>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 struct ProvideFileRequest {
     file_path: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 struct DownloadFileRequest {
     file_id: String,
     peer_id: String,
@@ -103,6 +103,7 @@ fn get_balance() -> Json<Response> {
 
 #[get("/load-wallet/<wallet_name>")]
 fn load_wallet(wallet_name: String) -> Json<Response> {
+    tracing::info!("Load wallet request for {}", wallet_name);
     let rpc_wrapper = RPCWrapper::new(OrcaNetConfig::get_network_type());
 
     match rpc_wrapper.get_client().load_wallet(wallet_name.as_str()) {
@@ -115,6 +116,7 @@ fn load_wallet(wallet_name: String) -> Json<Response> {
 
 #[post("/send-to-address", format = "application/json", data = "<request>")]
 fn send_to_address(request: Json<SendToAddressRequest>) -> Json<Response> {
+    tracing::info!("Send to address request: {:?}", request);
     let rpc_wrapper = RPCWrapper::new(OrcaNetConfig::get_network_type());
     let comment = request.comment.as_deref();
 
@@ -152,7 +154,10 @@ fn list_transactions(start_offset: usize, end_offset: usize) -> Json<Response> {
 
     match rpc_wrapper.get_client()
         .list_transactions(None, Some(end_offset - start_offset), Some(start_offset - 1), None) {
-        Ok(transactions) => Response::success(json!(transactions)),
+        Ok(mut transactions) => {
+            transactions.sort_by(|a, b| b.info.time.cmp(&a.info.time));
+            Response::success(json!(transactions))
+        },
         Err(e) => Response::error(format!("Error fetching transactions {:?}", e))
     }
 }
@@ -177,6 +182,7 @@ fn get_transaction_info(tx_id: String) -> Json<Response> {
 // File sharing
 #[post("/dial/<peer_id_str>")]
 async fn dial(state: &State<AppState>, peer_id_str: String) -> Json<Response> {
+    tracing::info!("Dial peer request: {}", peer_id_str);
     let peer_id = match peer_id_str.parse() {
         Ok(id) => id,
         Err(e) => {
@@ -217,6 +223,7 @@ async fn get_downloaded_files() -> Json<Response> {
 
 #[get("/get-file-info/<file_id>")]
 async fn get_file_info(file_id: String) -> Json<Response> {
+    tracing::info!("Get file info for : {}", file_id);
     let mut provided_files_table = ProvidedFilesTable::new(None);
 
     match provided_files_table.get_provided_file_info(file_id.as_str()) {
@@ -227,6 +234,7 @@ async fn get_file_info(file_id: String) -> Json<Response> {
 
 #[post("/provide-file", format = "application/json", data = "<request>")]
 async fn provide_file(state: &State<AppState>, request: Json<ProvideFileRequest>) -> Json<Response> {
+    tracing::info!("Provide file request: {:?}", request);
     let file_path = request.file_path.clone();
 
     // Validate path and size
@@ -249,15 +257,18 @@ async fn provide_file(state: &State<AppState>, request: Json<ProvideFileRequest>
 
     // Start providing
     let _ = state.event_sender.clone()
-        .send(OrcaNetEvent::ProvideFile { file_id, file_path })
+        .send(OrcaNetEvent::ProvideFile { file_id: file_id.clone(), file_path })
         .await;
 
-    Response::success(json!("Started providing file"))
+    Response::success(json!({
+        "file_id": file_id
+    }))
 }
 
 /// Stop providing a file to the network. Set permanent to true to remove from DB. Otherwise, it's set as inactive.
 #[post("/stop-providing/<file_id>?<permanent>")]
 async fn stop_providing(state: &State<AppState>, file_id: String, permanent: bool) -> Json<Response> {
+    tracing::info!("Stop providing request for: {}", file_id);
     let _ = state.event_sender.clone()
         .send(OrcaNetEvent::StopProvidingFile { file_id, permanent })
         .await;
@@ -268,6 +279,7 @@ async fn stop_providing(state: &State<AppState>, file_id: String, permanent: boo
 #[post("/download-file", format = "application/json", data = "<request>")]
 async fn download_file(state: &State<AppState>, request: Json<DownloadFileRequest>) -> Json<Response> {
     // TODO: Add a check to make sure it's not already downloaded or provided
+    tracing::info!("Download file request: {:?}", request);
     let path = Path::new(&request.dest_path);
 
     if path.exists() {
@@ -296,6 +308,7 @@ async fn download_file(state: &State<AppState>, request: Json<DownloadFileReques
 
 #[get("/get-providers/<file_id>")]
 async fn get_providers(state: &State<AppState>, file_id: String) -> Json<Response> {
+    tracing::info!("Get providers request for: {}", file_id);
     let providers = state.network_client.clone()
         .get_providers(file_id.clone())
         .await;
