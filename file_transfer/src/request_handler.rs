@@ -186,9 +186,9 @@ impl RequestHandlerLoop {
 
                 resp
             }
-            OrcaNetRequest::HTTPProxyRequest => {
+            OrcaNetRequest::HTTPProxyMetadataRequest => {
                 // Not providing
-                OrcaNetResponse::HTTPProxyResponse(None)
+                OrcaNetResponse::HTTPProxyMetadataResponse(None)
             }
         }
     }

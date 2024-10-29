@@ -5,7 +5,7 @@ use diesel::prelude::SqliteConnection;
 use serde::Serialize;
 
 use crate::common::{ConfigKey, OrcaNetConfig};
-use crate::db::{DownloadedFileInfo, ProvidedFileInfo, table_schema};
+use crate::db::{DownloadedFileInfo, ProvidedFileInfo, ProxyClientInfo, table_schema};
 
 fn create_connection(db_path: Option<String>) -> SqliteConnection {
     let _db_path = db_path
@@ -102,7 +102,8 @@ impl DownloadedFilesTable {
     pub fn insert_downloaded_file(&mut self, downloaded_file_info: DownloadedFileInfo) -> QueryResult<usize> {
         use table_schema::downloaded_files::dsl::*;
 
-        insert_into(downloaded_files).values(&downloaded_file_info)
+        insert_into(downloaded_files)
+            .values(&downloaded_file_info)
             .execute(&mut self.conn)
     }
 
@@ -122,3 +123,42 @@ impl DownloadedFilesTable {
             .load::<DownloadedFileInfo>(&mut self.conn)
     }
 }
+
+pub struct ProxyClientsTable {
+    conn: SqliteConnection,
+}
+
+impl ProxyClientsTable {
+    pub fn new(db_path: Option<String>) -> Self {
+        Self {
+            conn: create_connection(db_path)
+        }
+    }
+
+    pub fn get_client_auth_token(&mut self, target_client_id: &str) -> Option<String> {
+        use table_schema::proxy_clients::dsl::*;
+
+        proxy_clients
+            .filter(client_id.eq(target_client_id))
+            .first::<ProxyClientInfo>(&mut self.conn)
+            .ok()
+            .map(|info| info.auth_token)
+    }
+
+    pub fn add_client(&mut self, client_info: ProxyClientInfo) -> QueryResult<usize> {
+        use table_schema::proxy_clients::dsl::*;
+
+        insert_into(proxy_clients)
+            .values(&client_info)
+            .execute(&mut self.conn)
+    }
+
+    pub fn get_all_clients(&mut self) -> QueryResult<Vec<ProxyClientInfo>> {
+        use table_schema::proxy_clients::dsl::*;
+
+        proxy_clients
+            .load::<ProxyClientInfo>(&mut self.conn)
+    }
+}
+
+

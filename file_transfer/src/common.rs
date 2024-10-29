@@ -19,6 +19,20 @@ use crate::btc_rpc::{BTCNetwork, RPCWrapper};
 use crate::db::{DownloadedFileInfo, DownloadedFilesTable, ProvidedFilesTable};
 use crate::impl_str_serde;
 
+pub enum ProxyConfig {
+    NoProxy,
+    UsesProxy {
+        address: String,
+        port: u16,
+        fee_rate_per_kb: f32
+    },
+    ProvidesProxy {
+        address: String,
+        port: u16,
+        fee_rate_per_kb: f32
+    },
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 pub enum ConfigKey {
     DBPath,
@@ -27,6 +41,7 @@ pub enum ConfigKey {
     FeeRatePerKB,
     NetworkType,
     RunHTTPServer,
+    ProxyConfig,
     TstFileSavePath, // For testing, remove later
 }
 
@@ -373,15 +388,16 @@ pub enum OrcaNetRequest {
     FileContentRequest {
         file_id: String,
     },
-    HTTPProxyRequest,
+    HTTPProxyMetadataRequest,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct HTTPProxyResponse {
+pub struct HTTPProxyMetadata {
     pub address: String,
     pub port: u16,
     pub fee_rate: f64,
     pub recipient_address: String,
+    pub assigned_client_id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -399,7 +415,7 @@ pub enum OrcaNetResponse {
         metadata: FileMetadata,
         content: Vec<u8>,
     },
-    HTTPProxyResponse(Option<HTTPProxyResponse>),
+    HTTPProxyMetadataResponse(Option<HTTPProxyMetadata>),
     Error {
         message: String
     },

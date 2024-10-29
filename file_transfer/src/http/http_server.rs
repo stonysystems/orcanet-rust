@@ -349,7 +349,7 @@ pub async fn start_http_server(
     event_sender: mpsc::Sender<OrcaNetEvent>,
 ) {
     rocket::build()
-        .mount("/", routes![
+        .mount("/api", routes![
             // Wallet
             get_block_count,
             get_balance,

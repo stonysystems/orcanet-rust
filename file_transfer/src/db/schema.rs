@@ -48,16 +48,6 @@ pub mod table_schema {
             last_modified -> BigInt,
         }
     }
-
-    // diesel::table! {
-    //     proxy_history (orca_token) {
-    //         orca_token -> Text,
-    //         session_start_time -> BigInt,
-    //         peer_id -> Text,
-    //         amount_owed -> Integer,
-    //         data_transferred_kb -> Float
-    //     }
-    // }
 }
 
 #[derive(Debug, Clone, Serialize, Insertable, Queryable, Selectable)]
@@ -86,16 +76,18 @@ pub struct DownloadedFileInfo {
     pub download_timestamp: i64,
 }
 
-// #[derive(Debug, Clone, Serialize, Insertable, Queryable, Selectable)]
-// #[diesel(table_name = proxy_clients)]
-// pub struct ProxyClientInfo {
-//     pub file_id: String,
-//     pub file_path: String,
-//     pub file_name: String,
-//     pub downloads_count: i32,
-//     pub status: i32,
-//     pub provide_start_timestamp: Option<i64>,
-// }
+#[derive(Debug, Clone, Serialize, Insertable, Queryable, Selectable)]
+#[diesel(table_name = table_schema::proxy_clients)]
+pub struct ProxyClientInfo {
+    pub client_id: String,
+    pub auth_token: String,
+    pub start_timestamp: i64,
+    pub data_transferred_kb: f32,
+    pub total_fee_received: f32,
+    pub total_fee_owed: f32,
+    pub fee_rate_per_kb: f32,
+    pub last_known_peer_id: String,
+}
 
 #[derive(Debug, Clone, Serialize, Insertable, Queryable, Selectable)]
 #[diesel(table_name = table_schema::kv_store)]
