@@ -389,6 +389,7 @@ pub enum OrcaNetRequest {
         file_id: String,
     },
     HTTPProxyMetadataRequest,
+    HTTPProxyProvideRequest
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -397,7 +398,6 @@ pub struct HTTPProxyMetadata {
     pub port: u16,
     pub fee_rate: f64,
     pub recipient_address: String,
-    pub assigned_client_id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -415,7 +415,12 @@ pub enum OrcaNetResponse {
         metadata: FileMetadata,
         content: Vec<u8>,
     },
-    HTTPProxyMetadataResponse(Option<HTTPProxyMetadata>),
+    HTTPProxyMetadataResponse(HTTPProxyMetadata),
+    HTTPProxyProvideResponse {
+        metadata: HTTPProxyMetadata,
+        client_id: String,
+        auth_token: String
+    },
     Error {
         message: String
     },

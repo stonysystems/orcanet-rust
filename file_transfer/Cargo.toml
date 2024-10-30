@@ -34,3 +34,4 @@ hyper = { version = "1.5.0", features = ["server", "http1"] }
 hyper-tls = "0.6.0"
 http-body-util = "0.1.2"
 hyper-util = { version = "0.1.9", features = ["http1"] }
+hyper-http-proxy = "1.0.0"
