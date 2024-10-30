@@ -4,10 +4,11 @@ use futures::{SinkExt, StreamExt};
 use futures::channel::mpsc;
 use tokio::select;
 
-use crate::common::{ConfigKey, FileMetadata, OrcaNetConfig, OrcaNetEvent, OrcaNetRequest, OrcaNetResponse, Utils};
+use crate::common::{ConfigKey, FileMetadata, OrcaNetConfig, OrcaNetError, OrcaNetEvent, OrcaNetRequest, OrcaNetResponse};
 use crate::db::{ProvidedFileInfo, ProvidedFilesTable};
 use crate::http::start_http_proxy;
 use crate::network_client::NetworkClient;
+use crate::utils::Utils;
 
 pub struct RequestHandlerLoop {
     network_client: NetworkClient,
@@ -140,9 +141,9 @@ impl RequestHandlerLoop {
                     }
                     Err(_) => {
                         tracing::error!("Requested file not found in DB");
-                        OrcaNetResponse::Error {
-                            message: "File can't be provided".parse().unwrap()
-                        }
+                        OrcaNetResponse::Error(
+                            OrcaNetError::NotAProvider("Not a provider of requested file".parse().unwrap())
+                        )
                     }
                 }
             }
@@ -173,22 +174,30 @@ impl RequestHandlerLoop {
                             }
                             Err(e) => {
                                 tracing::error!("Error reading file: {:?}", e);
-                                OrcaNetResponse::Error {
-                                    message: "Error while reading file".parse().unwrap()
-                                }
+                                OrcaNetResponse::Error(
+                                    OrcaNetError::FileProvideError("Error while reading file".parse().unwrap())
+                                )
                             }
                         }
                     }
-                    Err(_) => OrcaNetResponse::Error {
-                        message: "File can't be provided".parse().unwrap()
-                    }
+                    Err(_) => OrcaNetResponse::Error(
+                        OrcaNetError::FileProvideError("File can't be provided".parse().unwrap())
+                    )
                 };
 
                 resp
             }
             OrcaNetRequest::HTTPProxyMetadataRequest => {
                 // Not providing
-                OrcaNetResponse::HTTPProxyMetadataResponse(None)
+                OrcaNetResponse::Error(
+                    OrcaNetError::NotAProvider("Not a proxy provider".parse().unwrap())
+                )
+            }
+            OrcaNetRequest::HTTPProxyProvideRequest => {
+                // Not providing
+                OrcaNetResponse::Error(
+                    OrcaNetError::NotAProvider("Not a proxy provider".parse().unwrap())
+                )
             }
         }
     }

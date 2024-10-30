@@ -16,10 +16,11 @@ use tokio::{io, select};
 use tokio::io::AsyncBufReadExt;
 use tracing_subscriber::EnvFilter;
 
-use crate::common::{OrcaNetConfig, OrcaNetEvent, Utils};
+use crate::common::{OrcaNetConfig, OrcaNetEvent};
 use crate::http::start_http_server;
 use crate::network_client::NetworkClient;
 use crate::request_handler::RequestHandlerLoop;
+use crate::utils::Utils;
 
 mod request_handler;
 mod network_client;
@@ -29,6 +30,7 @@ mod btc_rpc;
 mod macros;
 mod http;
 mod db;
+mod utils;
 
 #[derive(Parser)]
 struct Opts {

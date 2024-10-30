@@ -16,10 +16,10 @@ use serde_json::json;
 use tokio::net::TcpListener;
 use tokio::select;
 
-use crate::common::OrcaNetEvent;
+use crate::common::{OrcaNetError, OrcaNetEvent};
 use crate::db::ProxyClientsTable;
 
-const ORCA_NET_CLIENT_ID_HEADER: &str = "orca-client-id";
+const ORCA_NET_CLIENT_ID_HEADER: &str = "orca-net-client-id";
 const ORCA_NET_AUTH_KEY_HEADER: &str = "orca-net-token";
 const PROXY_PORT: u16 = 3000;
 
@@ -40,6 +40,18 @@ fn bad_request_with_message(message: &str) -> Response<Full<Bytes>> {
         .expect("Couldn't build body")
 }
 
+fn bad_request_with_err(err: OrcaNetError) -> Response<Full<Bytes>> {
+    let json_resp = json!({
+        "error": err,
+    });
+    let body = Bytes::from(json_resp.to_string());
+
+    Response::builder()
+        .status(StatusCode::BAD_REQUEST)
+        .body(Full::new(body))
+        .expect("Couldn't build body")
+}
+
 async fn handle_provide_request(request: Request<Incoming>) -> Result<Response<Full<Bytes>>, hyper::Error> {
     // Get client id and auth token
     println!("Request headers: {:?}", request.headers());
@@ -50,7 +62,9 @@ async fn handle_provide_request(request: Request<Incoming>) -> Result<Response<F
         .flatten() {
         Some(client_id) => client_id,
         None => {
-            return Ok(bad_request_with_message("Orca-Net-Client-ID not found in headers"));
+            return Ok(bad_request_with_err(
+                OrcaNetError::InvalidClientId("Orca-Net-Client-ID not found in headers".to_string())
+            ));
         }
     };
     let token_in_header = match request.headers()
@@ -59,7 +73,9 @@ async fn handle_provide_request(request: Request<Incoming>) -> Result<Response<F
         .flatten() {
         Some(token) => token,
         None => {
-            return Ok(bad_request_with_message("Orca-Net-Token not found in headers"));
+            return Ok(bad_request_with_err(
+                OrcaNetError::InvalidAuthToken("Orca-Net-Token not found in headers".to_string())
+            ));
         }
     };
 
@@ -68,11 +84,15 @@ async fn handle_provide_request(request: Request<Incoming>) -> Result<Response<F
     match proxy_clients_table.get_client_auth_token(client_id) {
         Some(token) => {
             if token_in_header != token {
-                return Ok(bad_request_with_message("Orca-Net-Token mismatch"));
+                return Ok(bad_request_with_err(
+                    OrcaNetError::InvalidAuthToken("Orca-Net-Token mismatch".to_string())
+                ));
             }
         }
         None => {
-            return Ok(bad_request_with_message("Client is not registered"));
+            return Ok(bad_request_with_err(
+                OrcaNetError::InvalidClientId("Client is not registered".to_string())
+            ));
         }
     }
 

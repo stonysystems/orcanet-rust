@@ -16,9 +16,10 @@ use serde_json::json;
 use tracing_subscriber::fmt::format;
 
 use crate::btc_rpc::RPCWrapper;
-use crate::common::{ConfigKey, OrcaNetConfig, OrcaNetEvent, OrcaNetRequest, OrcaNetResponse, Utils};
+use crate::common::{ConfigKey, OrcaNetConfig, OrcaNetEvent, OrcaNetRequest, OrcaNetResponse};
 use crate::db::{DownloadedFileInfo, DownloadedFilesTable, ProvidedFilesTable};
 use crate::network_client::NetworkClient;
+use crate::utils::Utils;
 
 pub struct AppState {
     pub network_client: NetworkClient,

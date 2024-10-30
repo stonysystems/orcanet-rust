@@ -6,8 +6,9 @@ use futures::SinkExt;
 use libp2p::{Multiaddr, PeerId};
 use libp2p::request_response::ResponseChannel;
 
-use crate::common::{NetworkCommand, OrcaNetRequest, OrcaNetResponse, StreamData, StreamReq, Utils};
+use crate::common::{NetworkCommand, OrcaNetRequest, OrcaNetResponse, StreamData, StreamReq};
 use crate::db::ProvidedFilesTable;
+use crate::utils::Utils;
 
 #[derive(Clone)]
 pub struct NetworkClient {
