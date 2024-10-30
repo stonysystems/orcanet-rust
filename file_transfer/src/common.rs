@@ -14,21 +14,7 @@ use serde_json::{json, Value};
 use crate::btc_rpc::BTCNetwork;
 use crate::impl_str_serde;
 
-pub enum ProxyConfig {
-    NoProxy,
-    UsesProxy {
-        address: String,
-        port: u16,
-        fee_rate_per_kb: f32,
-    },
-    ProvidesProxy {
-        address: String,
-        port: u16,
-        fee_rate_per_kb: f32,
-    },
-}
-
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum ConfigKey {
     DBPath,
     AppDataPath,
@@ -51,6 +37,7 @@ impl OrcaNetConfig {
     pub const CONFIG_FILE_REL_PATH: &'static str = ".orcanet/config.json";
     pub const FILE_SAVE_DIR: &'static str = "file_store_dest";
     pub const MAX_FILE_SIZE_BYTES: u64 = 10 * 1024 * 1024; // 10 MB
+    pub const PROXY_PORT: u16 = 3000;
 
     pub fn get_bootstrap_peer_id() -> PeerId {
         "12D3KooWQd1K1k8XA9xVEzSAu7HUCodC7LJB6uW5Kw4VwkRdstPE"
@@ -77,27 +64,30 @@ impl OrcaNetConfig {
         home_dir.join(Self::CONFIG_FILE_REL_PATH)
     }
 
-    pub fn get_from_config(config_key: ConfigKey) -> Option<Value> {
+    fn get_config_json() -> Value {
         let json_str = std::fs::read_to_string(Self::get_config_file_path())
             .expect(format!("Config file to be present at $HOME/{}", &Self::CONFIG_FILE_REL_PATH).as_str());
-        let json: Value = serde_json::from_str(&json_str).unwrap();
+        serde_json::from_str(&json_str)
+            .unwrap()
+    }
 
-        return json.get(config_key.to_string().as_str()).cloned();
+    pub fn get_from_config(config_key: ConfigKey) -> Option<Value> {
+        return Self::get_config_json()
+            .get(config_key.to_string().as_str())
+            .cloned();
     }
 
     pub fn get_str_from_config(config_key: ConfigKey) -> String {
         Self::get_from_config(config_key.clone())
-            .expect(format!("{} to be present in config", config_key.to_string()).as_str())
+            .expect(format!("{:?} to be present in config", config_key).as_str())
             .as_str()
-            .unwrap()
+            .expect(format!("{:?} to be a string", config_key).as_str())
             .to_string()
     }
 
     /// Update the config JSON file
     pub fn modify_config(key: &str, value: &str) -> Result<(), Box<dyn Error>> {
-        let json_str = std::fs::read_to_string(Self::get_config_file_path())
-            .expect(format!("Config file to be present at $HOME/{}", &Self::CONFIG_FILE_REL_PATH).as_str());
-        let mut json: Value = serde_json::from_str(&json_str).unwrap();
+        let mut json: Value = Self::get_config_json();
 
         if let Some(obj) = json.as_object_mut() {
             obj.insert(key.to_string(), json!(value));
@@ -110,15 +100,15 @@ impl OrcaNetConfig {
     }
 
     pub fn get_fee_rate() -> f64 {
-        let amt_str = Self::get_str_from_config(ConfigKey::FeeRatePerKB);
-
-        amt_str.parse()
+        Self::get_str_from_config(ConfigKey::FeeRatePerKB)
+            .parse()
             .expect("Amount to be valid floating point value in BTC")
     }
 
     pub fn get_network_type() -> BTCNetwork {
-        OrcaNetConfig::get_str_from_config(ConfigKey::NetworkType)
-            .as_str().parse()
+        Self::get_str_from_config(ConfigKey::NetworkType)
+            .as_str()
+            .parse()
             .expect("Expect network to be a valid value in config")
     }
 
@@ -261,5 +251,19 @@ pub enum OrcaNetError {
     InvalidAuthToken(String),
     FileProvideError(String),
     NotAProvider(String),
-    InternalServerError(String)
+    InternalServerError(String),
+}
+
+#[derive(Debug, Clone)]
+pub struct ProxyClientConfig {
+    proxy_address: String,
+    proxy_port: u16,
+    client_id: String,
+    auth_token: String,
+}
+
+#[derive(Clone)]
+pub enum ProxyMode {
+    ProxyProvider,
+    ProxyClient(ProxyClientConfig),
 }

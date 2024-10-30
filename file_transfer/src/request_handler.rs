@@ -4,7 +4,7 @@ use futures::{SinkExt, StreamExt};
 use futures::channel::mpsc;
 use tokio::select;
 
-use crate::common::{ConfigKey, FileMetadata, OrcaNetConfig, OrcaNetError, OrcaNetEvent, OrcaNetRequest, OrcaNetResponse};
+use crate::common::{ConfigKey, FileMetadata, OrcaNetConfig, OrcaNetError, OrcaNetEvent, OrcaNetRequest, OrcaNetResponse, ProxyMode};
 use crate::db::{ProvidedFileInfo, ProvidedFilesTable};
 use crate::http::start_http_proxy;
 use crate::network_client::NetworkClient;
@@ -104,7 +104,7 @@ impl RequestHandlerLoop {
             }
             OrcaNetEvent::StartProxyServer => {
                 let (mut proxy_event_sender, mut proxy_event_receiver) = mpsc::channel::<OrcaNetEvent>(0);
-                tokio::task::spawn(start_http_proxy(proxy_event_receiver));
+                tokio::task::spawn(start_http_proxy(ProxyMode::ProxyProvider, proxy_event_receiver));
                 self.proxy_event_sender = Some(proxy_event_sender);
             }
             OrcaNetEvent::StopProxyServer => {

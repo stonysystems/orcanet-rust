@@ -74,15 +74,15 @@ impl RPCWrapper {
         println!("Current balance: {}", balance);
     }
 
-    /// Generate a single block with given address as coinbase recipient
+    /// Generate a single block with given address as the coinbase recipient
     pub fn generate_to_address(&self, address_string: &str) -> Result<BlockHash, String> {
         let recipient_address = Address::from_str(address_string)
             .map_err(|e| e.to_string())?
             .assume_checked();
 
         self.rpc_client.generate_to_address(1, &recipient_address)
-            .map_err(|e| e.to_string())
             .map(|hashes| hashes[0])
+            .map_err(|e| e.to_string())
     }
 
     pub fn get_client(&self) -> &Client {

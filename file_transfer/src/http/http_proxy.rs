@@ -13,32 +13,30 @@ use hyper_util::client::legacy::Client;
 use hyper_util::rt::TokioIo;
 use rocket::yansi::Paint;
 use serde_json::json;
-use tokio::net::TcpListener;
+use tokio::net::{TcpListener, TcpStream};
 use tokio::select;
 
-use crate::common::{OrcaNetError, OrcaNetEvent};
+use crate::common::{OrcaNetError, OrcaNetEvent, ProxyClientConfig, ProxyMode};
 use crate::db::ProxyClientsTable;
 
 const ORCA_NET_CLIENT_ID_HEADER: &str = "orca-net-client-id";
 const ORCA_NET_AUTH_KEY_HEADER: &str = "orca-net-token";
 const PROXY_PORT: u16 = 3000;
 
-pub enum ProxyMode {
-    ProxyProvider,
-    ProxyUser,
+trait ProxyRequestHandler {
+    async fn serve(stream: TcpStream, io: TokioIo<TcpStream>);
+
+    async fn handle_request(request: Request<Incoming>) -> Result<Response<Full<Bytes>>, hyper::Error>;
 }
 
-fn bad_request_with_message(message: &str) -> Response<Full<Bytes>> {
-    let json_resp = json!({
-        "error": message,
-    });
-    let body = Bytes::from(json_resp.to_string());
-
-    Response::builder()
-        .status(StatusCode::BAD_REQUEST)
-        .body(Full::new(body))
-        .expect("Couldn't build body")
+struct ProxyProvider;
+impl ProxyRequestHandler for ProxyProvider {
+    async fn serve(stream: TcpStream, io: TokioIo<TcpStream>) {
+        todo!()
+    }
 }
+
+struct ProxyUser {}
 
 fn bad_request_with_err(err: OrcaNetError) -> Response<Full<Bytes>> {
     let json_resp = json!({
@@ -54,12 +52,11 @@ fn bad_request_with_err(err: OrcaNetError) -> Response<Full<Bytes>> {
 
 async fn handle_provide_request(request: Request<Incoming>) -> Result<Response<Full<Bytes>>, hyper::Error> {
     // Get client id and auth token
-    println!("Request headers: {:?}", request.headers());
+    tracing::info!("Request headers: {:?}", request.headers());
 
     let client_id = match request.headers()
         .get(ORCA_NET_CLIENT_ID_HEADER)
-        .map(|v| v.to_str().ok())
-        .flatten() {
+        .and_then(|v| v.to_str().ok()) {
         Some(client_id) => client_id,
         None => {
             return Ok(bad_request_with_err(
@@ -69,8 +66,7 @@ async fn handle_provide_request(request: Request<Incoming>) -> Result<Response<F
     };
     let token_in_header = match request.headers()
         .get(ORCA_NET_AUTH_KEY_HEADER)
-        .map(|v| v.to_str().ok())
-        .flatten() {
+        .and_then(|v| v.to_str().ok()) {
         Some(token) => token,
         None => {
             return Ok(bad_request_with_err(
@@ -96,11 +92,11 @@ async fn handle_provide_request(request: Request<Incoming>) -> Result<Response<F
         }
     }
 
-    println!("Request body size {:?}", request.size_hint().exact());
+    tracing::info!("Request body size {:?}", request.size_hint().exact());
 
     // Send the request
     let path = request.uri().path();
-    println!("Request path: {path}");
+    tracing::info!("Request path: {path}");
 
     let client = Client::builder(hyper_util::rt::TokioExecutor::new())
         .build(HttpsConnector::new());
@@ -113,18 +109,21 @@ async fn handle_provide_request(request: Request<Incoming>) -> Result<Response<F
         .await?
         .to_bytes();
 
-    println!("Response body size: {:?}", bytes.len());
+    tracing::info!("Response body size: {:?}", bytes.len());
 
     Ok(Response::from_parts(parts, Full::new(bytes)))
 }
 
-async fn handle_use_request(request: Request<Incoming>) -> Result<Response<Full<Bytes>>, hyper::Error> {
+async fn handle_use_request(
+    request: Request<Incoming>,
+    proxy_client_config: ProxyClientConfig,
+) -> Result<Response<Full<Bytes>>, hyper::Error> {
     // Get token
-    println!("Request headers: {:?}", request.headers());
+    tracing::info!("Request headers: {:?}", request.headers());
 
     // Send the request through proxy
     let path = request.uri().path();
-    println!("Request path: {path}");
+    tracing::info!("Request path: {path}");
 
     let client = Client::builder(hyper_util::rt::TokioExecutor::new())
         .build(HttpsConnector::new());
@@ -137,31 +136,34 @@ async fn handle_use_request(request: Request<Incoming>) -> Result<Response<Full<
         .await?
         .to_bytes();
 
-    println!("Response body size: {:?}", bytes.len());
+    tracing::info!("Response body size: {:?}", bytes.len());
 
     Ok(Response::from_parts(parts, Full::new(bytes)))
 }
 
-pub async fn start_http_proxy(mut receiver: Receiver<OrcaNetEvent>) {
-    let addr = SocketAddr::from(([127, 0, 0, 1], PROXY_PORT));
-    let listener = TcpListener::bind(addr).await.unwrap();
-    println!("Proxy server listening on http://{}", addr);
+pub async fn start_http_proxy(mode: ProxyMode, mut receiver: Receiver<OrcaNetEvent>) {
+    let addr = SocketAddr::from(([0, 0, 0, 0], PROXY_PORT)); // Listen on all addresses
+    let listener = TcpListener::bind(addr)
+        .await
+        .unwrap();
+    tracing::info!("Proxy server listening on http://{}", addr);
 
     loop {
         select! {
             event = receiver.next() => match event {
                 Some(ev) => {
                     if let OrcaNetEvent::StopProxyServer = ev {
-                        println!("Stopping proxy server");
+                        tracing::info!("Stopping proxy server");
                         return;
                     }
                 }
                 _ => {
-                    println!("Proxy received unsupported event");
+                    tracing::info!("Proxy received unsupported event");
                 }
             },
 
             stream_event = listener.accept() => {
+                tracing::info!("Got listener accept");
                 let (stream, _) = stream_event.unwrap();
                 let io = TokioIo::new(stream);
 
@@ -169,7 +171,7 @@ pub async fn start_http_proxy(mut receiver: Receiver<OrcaNetEvent>) {
                     if let Err(err) = http1::Builder::new()
                         .serve_connection(io, service_fn(handle_provide_request))
                         .await {
-                        println!("Error serving connection: {:?}", err);
+                        tracing::error!("Error serving connection: {:?}", err);
                     }
                 });
             }
