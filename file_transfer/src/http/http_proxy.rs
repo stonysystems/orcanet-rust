@@ -104,7 +104,7 @@ impl RequestHandler for ProxyProvider {
 
 struct ProxyClient {
     http_client: Client<ProxyConnector<HttpConnector>, Incoming>,
-    config: Arc<ProxyClientConfig>,
+    config: ProxyClientConfig,
 }
 
 impl ProxyClient {
@@ -126,7 +126,7 @@ impl ProxyClient {
 
         Self {
             http_client,
-            config: Arc::new(config),
+            config
         }
     }
 }
