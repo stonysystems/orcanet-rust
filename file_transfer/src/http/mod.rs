@@ -3,4 +3,5 @@ pub use http_server::start_http_server;
 
 mod http_proxy;
 mod http_server;
+mod proxy_handlers;
 

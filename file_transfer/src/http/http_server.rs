@@ -73,7 +73,7 @@ impl Response {
     }
 }
 
-// TODO: All HTTP endpoints are currently GET. Some of them should be POST/PUT. Change later
+// TODO: Change to use axum/actix-web instead of rocket later if there is time
 
 // Wallet
 #[get("/blocks-count")]
@@ -158,7 +158,7 @@ fn list_transactions(start_offset: usize, end_offset: usize) -> Json<Response> {
         Ok(mut transactions) => {
             transactions.sort_by(|a, b| b.info.time.cmp(&a.info.time));
             Response::success(json!(transactions))
-        },
+        }
         Err(e) => Response::error(format!("Error fetching transactions {:?}", e))
     }
 }
