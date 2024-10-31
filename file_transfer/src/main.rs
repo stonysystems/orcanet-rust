@@ -149,13 +149,7 @@ async fn handle_input_line(
         }
         Some("startproxyprovider") => {
             let _ = event_sender
-                .send(OrcaNetEvent::StartProxyServer(ProxyMode::ProxyClient(
-                    ProxyClientConfig {
-                        proxy_address: "http://130.245.173.221:3000".to_string(),
-                        client_id: "myclient1".to_string(),
-                        auth_token: "atsample123".to_string(),
-                    }
-                )))
+                .send(OrcaNetEvent::StartProxyServer(ProxyMode::ProxyProvider))
                 .await;
         }
         Some("startproxyclient") => {
