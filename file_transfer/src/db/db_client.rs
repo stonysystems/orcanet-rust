@@ -135,15 +135,24 @@ impl ProxyClientsTable {
         }
     }
 
-    pub fn get_client_auth_token(&mut self, target_client_id: &str) -> Option<String> {
+    pub fn get_client_by_auth_token(&mut self, given_auth_token: String) -> QueryResult<ProxyClientInfo> {
         use table_schema::proxy_clients::dsl::*;
 
+        // Should use the index on auth token
         proxy_clients
-            .filter(client_id.eq(target_client_id))
+            .filter(auth_token.eq(given_auth_token))
             .first::<ProxyClientInfo>(&mut self.conn)
-            .ok()
-            .map(|info| info.auth_token)
     }
+
+    // pub fn get_client_auth_token(&mut self, target_client_id: &str) -> Option<String> {
+    //     use table_schema::proxy_clients::dsl::*;
+    //
+    //     proxy_clients
+    //         .filter(client_id.eq(target_client_id))
+    //         .first::<ProxyClientInfo>(&mut self.conn)
+    //         .ok()
+    //         .map(|info| info.auth_token)
+    // }
 
     pub fn add_client(&mut self, client_info: ProxyClientInfo) -> QueryResult<usize> {
         use table_schema::proxy_clients::dsl::*;

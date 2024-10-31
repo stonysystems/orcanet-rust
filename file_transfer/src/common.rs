@@ -247,8 +247,7 @@ pub enum OrcaNetResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "message")]
 pub enum OrcaNetError {
-    InvalidClientId(String),
-    InvalidAuthToken(String),
+    AuthorizationFailed(String),
     FileProvideError(String),
     NotAProvider(String),
     InternalServerError(String),
@@ -256,10 +255,9 @@ pub enum OrcaNetError {
 
 #[derive(Debug, Clone)]
 pub struct ProxyClientConfig {
-    proxy_address: String,
-    proxy_port: u16,
-    client_id: String,
-    auth_token: String,
+    pub proxy_address: String,
+    pub client_id: String,
+    pub auth_token: String,
 }
 
 #[derive(Clone)]
