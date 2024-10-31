@@ -16,7 +16,7 @@ use tokio::{io, select};
 use tokio::io::AsyncBufReadExt;
 use tracing_subscriber::EnvFilter;
 
-use crate::common::{OrcaNetConfig, OrcaNetEvent};
+use crate::common::{OrcaNetConfig, OrcaNetEvent, ProxyClientConfig, ProxyMode};
 use crate::http::start_http_server;
 use crate::network_client::NetworkClient;
 use crate::request_handler::RequestHandlerLoop;
@@ -147,9 +147,26 @@ async fn handle_input_line(
         Some("advertise") => {
             let _ = client.advertise_provided_files().await;
         }
-        Some("startproxy") => {
+        Some("startproxyprovider") => {
             let _ = event_sender
-                .send(OrcaNetEvent::StartProxyServer)
+                .send(OrcaNetEvent::StartProxyServer(ProxyMode::ProxyClient(
+                    ProxyClientConfig {
+                        proxy_address: "http://130.245.173.221:3000".to_string(),
+                        client_id: "myclient1".to_string(),
+                        auth_token: "atsample123".to_string(),
+                    }
+                )))
+                .await;
+        }
+        Some("startproxyclient") => {
+            let _ = event_sender
+                .send(OrcaNetEvent::StartProxyServer(ProxyMode::ProxyClient(
+                    ProxyClientConfig {
+                        proxy_address: "http://130.245.173.221:3000".to_string(),
+                        client_id: "myclient1".to_string(),
+                        auth_token: "atsample123".to_string(),
+                    }
+                )))
                 .await;
         }
         Some("stopproxy") => {

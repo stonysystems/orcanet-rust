@@ -8,7 +8,7 @@ use headers::Authorization;
 use http_body_util::{BodyExt, Full};
 use hyper::{Error, Request, Response, StatusCode};
 use hyper::body::{Body, Incoming};
-use hyper::header::AUTHORIZATION;
+use hyper::header::{AUTHORIZATION, HeaderValue};
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper_http_proxy::{Intercept, Proxy, ProxyConnector};
@@ -20,6 +20,7 @@ use rocket::yansi::Paint;
 use serde_json::json;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::select;
+use tracing_subscriber::fmt::format;
 
 use crate::common::{OrcaNetError, OrcaNetEvent, ProxyClientConfig, ProxyMode};
 use crate::db::ProxyClientsTable;
@@ -134,7 +135,7 @@ impl ProxyClient {
 impl RequestHandler for ProxyClient {
     async fn handle_request(
         &self,
-        request: Request<Incoming>,
+        mut request: Request<Incoming>,
     ) -> Result<Response<Full<Bytes>>, Error> {
         // Get token
         tracing::info!("Request headers: {:?}", request.headers());
@@ -142,6 +143,14 @@ impl RequestHandler for ProxyClient {
         // Send the request through proxy
         let path = request.uri().path();
         tracing::info!("Request path: {path}");
+
+        // Add Bearer token
+        // TODO: For some reason set_authorization in proxy is not setting the header. Check later.
+        let token = format!("Bearer {}", self.config.auth_token.as_str());
+        let token_hdr_value = HeaderValue::from_str(token.as_str())
+            .expect("token value to be valid header value");
+        request.headers_mut()
+            .insert(AUTHORIZATION, token_hdr_value);
 
         let response = self.http_client
             .request(request)
@@ -209,19 +218,6 @@ pub async fn start_http_proxy(mode: ProxyMode, mut receiver: Receiver<OrcaNetEve
             }
         }
     }
-
-    // loop {
-    //     let (stream, _) = listener.accept().await.unwrap();
-    //     let io = TokioIo::new(stream);
-    //
-    //     tokio::task::spawn(async move {
-    //         if let Err(err) = http1::Builder::new()
-    //             .serve_connection(io, service_fn(handle_request))
-    //             .await {
-    //             println!("Error serving connection: {:?}", err);
-    //         }
-    //     });
-    // }
 }
 
 fn bad_request_with_err(err: OrcaNetError) -> Response<Full<Bytes>> {

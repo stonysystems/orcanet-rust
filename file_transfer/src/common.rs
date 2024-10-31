@@ -184,8 +184,8 @@ pub enum OrcaNetEvent {
         file_id: String,
         permanent: bool, // Permanently stop providing
     },
-    StartProxyServer,
-    StopProxyServer,
+    StartProxyServer(ProxyMode),
+    StopProxyServer
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -260,7 +260,7 @@ pub struct ProxyClientConfig {
     pub auth_token: String,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum ProxyMode {
     ProxyProvider,
     ProxyClient(ProxyClientConfig),

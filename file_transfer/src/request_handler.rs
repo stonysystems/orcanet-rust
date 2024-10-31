@@ -102,9 +102,9 @@ impl RequestHandlerLoop {
 
                 self.network_client.stop_providing(file_id).await;
             }
-            OrcaNetEvent::StartProxyServer => {
+            OrcaNetEvent::StartProxyServer(mode) => {
                 let (mut proxy_event_sender, mut proxy_event_receiver) = mpsc::channel::<OrcaNetEvent>(0);
-                tokio::task::spawn(start_http_proxy(ProxyMode::ProxyProvider, proxy_event_receiver));
+                tokio::task::spawn(start_http_proxy(mode, proxy_event_receiver));
                 self.proxy_event_sender = Some(proxy_event_sender);
             }
             OrcaNetEvent::StopProxyServer => {
