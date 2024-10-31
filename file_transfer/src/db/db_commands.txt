@@ -33,3 +33,14 @@ CREATE TABLE "proxy_clients" (
 	"last_known_peer_id"	TEXT,
 	PRIMARY KEY("client_id")
 );
+
+INSERT INTO "proxy_clients" VALUES (
+    'client123',
+    'at123',
+    1698553200,  -- Example Unix timestamp
+    1024.5,      -- Data transferred in KB
+    50.00,       -- Total fee received
+    20.00,       -- Total fee owed
+    0.05,        -- Fee rate per KB
+    'peerID456'  -- Last known peer ID
+);
