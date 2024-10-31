@@ -247,7 +247,7 @@ fn extract_bearer_token(req: &Request<Incoming>) -> Result<String, String> {
         .map_err(|_| "Invalid authorization header".to_string())?;
 
     // Extract the token
-    if auth_str.starts_with("Bearer ") {
+    if !auth_str.starts_with("Bearer ") {
         return Err("Invalid authorization format - must be Bearer token".to_string());
     }
 
