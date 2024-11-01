@@ -56,9 +56,7 @@ impl RequestHandlerLoop {
             }
             OrcaNetEvent::ProvideFile { file_id, file_path } => {
                 let path = Path::new(&file_path);
-                let file_name = String::from(Path::new(file_path.as_str()).file_name()
-                    .unwrap().to_str()
-                    .unwrap());
+                let file_name: String = Utils::get_file_name_from_path(&path);
 
                 if path.exists() {
                     let mut provided_files_table = ProvidedFilesTable::new(None);
@@ -73,7 +71,11 @@ impl RequestHandlerLoop {
                         });
 
                     match resp {
-                        Ok(_) => self.network_client.start_providing(file_id).await,
+                        Ok(_) => {
+                            self.network_client
+                                .start_providing(file_id)
+                                .await
+                        }
                         Err(e) => {
                             tracing::error!("Failed to insert into DB: {:?}", e);
                         }
@@ -100,12 +102,25 @@ impl RequestHandlerLoop {
                     }
                 }
 
-                self.network_client.stop_providing(file_id).await;
+                self.network_client
+                    .stop_providing(file_id)
+                    .await;
             }
             OrcaNetEvent::StartProxyServer(mode) => {
+                if self.proxy_event_sender.is_some() {
+                    println!("Proxy server already running");
+                    return;
+                }
+
                 let (mut proxy_event_sender, mut proxy_event_receiver) = mpsc::channel::<OrcaNetEvent>(0);
-                tokio::task::spawn(start_http_proxy(mode, proxy_event_receiver));
+                tokio::task::spawn(start_http_proxy(mode.clone(), proxy_event_receiver));
                 self.proxy_event_sender = Some(proxy_event_sender);
+
+                if let ProxyMode::ProxyProvider = mode {
+                    self.network_client
+                        .start_providing(OrcaNetConfig::PROXY_PROVIDER_KEY_DHT.to_string())
+                        .await;
+                }
             }
             OrcaNetEvent::StopProxyServer => {
                 match self.proxy_event_sender.take() {

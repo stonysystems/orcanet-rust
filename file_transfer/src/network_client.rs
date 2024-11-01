@@ -47,29 +47,29 @@ impl NetworkClient {
         receiver.await.expect("Sender not to be dropped.")
     }
 
-    /// Advertise the local node as the provider of the given file on the DHT.
-    pub async fn start_providing(&mut self, file_id: String) {
+    /// Advertise the local node as the provider of the given key on the DHT.
+    pub async fn start_providing(&mut self, key: String) {
         let (sender, receiver) = oneshot::channel();
         self.sender
-            .send(NetworkCommand::StartProviding { file_id, sender })
+            .send(NetworkCommand::StartProviding { key, sender })
             .await
             .expect("Command receiver not to be dropped.");
         receiver.await.expect("Sender not to be dropped.");
     }
 
-    /// Stop providing: Stop re-publishing provider record for given file_id
-    pub async fn stop_providing(&mut self, file_id: String) {
+    /// Stop providing: Stop re-publishing provider record for given key
+    pub async fn stop_providing(&mut self, key: String) {
         self.sender
-            .send(NetworkCommand::StopProviding { file_id })
+            .send(NetworkCommand::StopProviding { key })
             .await
             .expect("Command receiver not to be dropped.");
     }
 
-    /// Find the providers for the given file on the DHT.
-    pub async fn get_providers(&mut self, file_id: String) -> HashSet<PeerId> {
+    /// Find the providers for the given key on the DHT.
+    pub async fn get_providers(&mut self, key: String) -> HashSet<PeerId> {
         let (sender, receiver) = oneshot::channel();
         self.sender
-            .send(NetworkCommand::GetProviders { file_id, sender })
+            .send(NetworkCommand::GetProviders { key, sender })
             .await
             .expect("Command receiver not to be dropped.");
         receiver.await.expect("Sender not to be dropped.")

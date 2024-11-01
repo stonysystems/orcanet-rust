@@ -371,30 +371,30 @@ impl EventLoop {
                     todo!("Already dialing peer.");
                 }
             }
-            NetworkCommand::StartProviding { file_id, sender } => {
-                let key = Utils::get_key_with_ns(file_id.as_str());
+            NetworkCommand::StartProviding { key, sender } => {
+                let key_with_ns = Utils::get_key_with_ns(key.as_str());
                 let query_id = self.swarm
                     .behaviour_mut()
                     .kademlia
-                    .start_providing(key.into_bytes().into())
+                    .start_providing(key_with_ns.into_bytes().into())
                     .expect("No store error.");
 
                 self.pending_start_providing.insert(query_id, sender);
             }
-            NetworkCommand::StopProviding { file_id } => {
-                let file_id_with_ns = Utils::get_key_with_ns(file_id.as_str());
-                let key_with_ns = kad::RecordKey::new(&file_id_with_ns.into_bytes());
+            NetworkCommand::StopProviding { key } => {
+                let key_with_ns = Utils::get_key_with_ns(key.as_str());
+                let record_key = kad::RecordKey::new(&key_with_ns.into_bytes());
                 self.swarm
                     .behaviour_mut()
                     .kademlia
-                    .stop_providing(&key_with_ns);
+                    .stop_providing(&record_key);
             }
-            NetworkCommand::GetProviders { file_id, sender } => {
-                let key = Utils::get_key_with_ns(file_id.as_str());
+            NetworkCommand::GetProviders { key, sender } => {
+                let key_with_ns = Utils::get_key_with_ns(key.as_str());
                 let query_id = self.swarm
                     .behaviour_mut()
                     .kademlia
-                    .get_providers(key.into_bytes().into());
+                    .get_providers(key_with_ns.into_bytes().into());
                 self.pending_get_providers.insert(query_id, sender);
             }
             NetworkCommand::Request {

@@ -2,10 +2,12 @@ use std::fs::File;
 use std::io::{BufReader, Read};
 use std::path::Path;
 use std::str::FromStr;
+
 use libp2p::{identity, Multiaddr, PeerId};
 use libp2p::multiaddr::Protocol;
 use ring::digest::{Context, SHA256};
 use uuid::Uuid;
+
 use crate::btc_rpc::{BTCNetwork, RPCWrapper};
 use crate::common::{ConfigKey, OrcaNetConfig, OrcaNetResponse};
 use crate::db::{DownloadedFileInfo, DownloadedFilesTable};
@@ -77,6 +79,13 @@ impl Utils {
 
     pub fn get_unix_timestamp() -> i64 {
         chrono::Utc::now().timestamp()
+    }
+
+    pub fn get_file_name_from_path(path: &Path) -> String {
+        path.file_name()
+            .and_then(|v| v.to_str())
+            .and_then(|v| v.parse().ok())
+            .unwrap()
     }
 
     // pub fn get_file_metadata(file_id: String, db_client: &mut DBClient) -> Option<(FileInfo, FileMetadata)> {

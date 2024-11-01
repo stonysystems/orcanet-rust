@@ -38,6 +38,7 @@ impl OrcaNetConfig {
     pub const FILE_SAVE_DIR: &'static str = "file_store_dest";
     pub const MAX_FILE_SIZE_BYTES: u64 = 10 * 1024 * 1024; // 10 MB
     pub const PROXY_PORT: u16 = 3000;
+    pub const PROXY_PROVIDER_KEY_DHT: &'static str = "http_proxy_providers";
 
     pub fn get_bootstrap_peer_id() -> PeerId {
         "12D3KooWQd1K1k8XA9xVEzSAu7HUCodC7LJB6uW5Kw4VwkRdstPE"
@@ -131,14 +132,14 @@ pub enum NetworkCommand {
         sender: oneshot::Sender<Result<(), Box<dyn Error + Send>>>,
     },
     StartProviding {
-        file_id: String,
+        key: String,
         sender: oneshot::Sender<()>,
     },
     StopProviding {
-        file_id: String,
+        key: String,
     },
     GetProviders {
-        file_id: String,
+        key: String,
         sender: oneshot::Sender<HashSet<PeerId>>,
     },
     PutKV {
