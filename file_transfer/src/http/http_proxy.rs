@@ -10,14 +10,13 @@ use serde_json::json;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::select;
 use tracing_subscriber::fmt::format;
-use crate::common::{OrcaNetEvent, ProxyMode};
 
+use crate::common::{OrcaNetEvent, ProxyMode};
 use crate::http::proxy_handlers::*;
 
 const ORCA_NET_CLIENT_ID_HEADER: &str = "orca-net-client-id";
 const ORCA_NET_AUTH_KEY_HEADER: &str = "orca-net-token";
 const PROXY_PORT: u16 = 3000;
-
 
 
 fn get_handler(mode: ProxyMode) -> Box<dyn RequestHandler> {
@@ -38,14 +37,12 @@ pub async fn start_http_proxy(mode: ProxyMode, mut receiver: Receiver<OrcaNetEve
     loop {
         select! {
             event = receiver.next() => match event {
-                Some(ev) => {
-                    if let OrcaNetEvent::StopProxyServer = ev {
-                        tracing::info!("Stopping proxy server");
-                        return;
-                    }
+                Some(OrcaNetEvent:: StopProxyProvider | OrcaNetEvent::StopProxyClient) => {
+                    tracing::info!("Stopping proxy server");
+                            return;
                 }
                 _ => {
-                    tracing::info!("Proxy received unsupported event");
+                    tracing::info!("Proxy received unsupported event. Ignoring.");
                 }
             },
 

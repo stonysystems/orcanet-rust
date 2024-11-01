@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use crate::btc_rpc::BTCNetwork;
+use crate::db::ProxyClientInfo;
 use crate::impl_str_serde;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -185,8 +186,11 @@ pub enum OrcaNetEvent {
         file_id: String,
         permanent: bool, // Permanently stop providing
     },
-    StartProxyServer(ProxyMode),
-    StopProxyServer
+    StartProxyProvider,
+    StopProxyProvider,
+    StartProxyClient(ProxyClientConfig),
+    StopProxyClient,
+    ChangeProxyClient(ProxyClientConfig),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

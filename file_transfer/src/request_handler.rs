@@ -3,6 +3,7 @@ use std::path::Path;
 use futures::{SinkExt, StreamExt};
 use futures::channel::mpsc;
 use tokio::select;
+use tracing_subscriber::filter::FilterExt;
 
 use crate::common::{ConfigKey, FileMetadata, OrcaNetConfig, OrcaNetError, OrcaNetEvent, OrcaNetRequest, OrcaNetResponse, ProxyMode};
 use crate::db::{ProvidedFileInfo, ProvidedFilesTable};
@@ -106,35 +107,74 @@ impl RequestHandlerLoop {
                     .stop_providing(file_id)
                     .await;
             }
-            OrcaNetEvent::StartProxyServer(mode) => {
+            OrcaNetEvent::StartProxyProvider => {
                 if self.proxy_event_sender.is_some() {
                     println!("Proxy server already running");
                     return;
                 }
 
                 let (mut proxy_event_sender, mut proxy_event_receiver) = mpsc::channel::<OrcaNetEvent>(0);
-                tokio::task::spawn(start_http_proxy(mode.clone(), proxy_event_receiver));
+                tokio::task::spawn(start_http_proxy(ProxyMode::ProxyProvider, proxy_event_receiver));
                 self.proxy_event_sender = Some(proxy_event_sender);
 
-                if let ProxyMode::ProxyProvider = mode {
-                    self.network_client
-                        .start_providing(OrcaNetConfig::PROXY_PROVIDER_KEY_DHT.to_string())
-                        .await;
+                self.network_client
+                    .start_providing(OrcaNetConfig::PROXY_PROVIDER_KEY_DHT.to_string())
+                    .await;
+            }
+            OrcaNetEvent::StopProxyProvider => {
+                Self::send_event_to_proxy_server(
+                    OrcaNetEvent::StopProxyProvider,
+                    self.proxy_event_sender.take().as_mut(),
+                ).await;
+
+                self.network_client
+                    .stop_providing(OrcaNetConfig::PROXY_PROVIDER_KEY_DHT.to_string())
+                    .await;
+            }
+            OrcaNetEvent::StartProxyClient(client_info) => {
+                if self.proxy_event_sender.is_some() {
+                    println!("Proxy server already running");
+                    return;
+                }
+
+                let (mut proxy_event_sender, mut proxy_event_receiver) = mpsc::channel::<OrcaNetEvent>(0);
+                tokio::task::spawn(start_http_proxy(ProxyMode::ProxyClient(client_info), proxy_event_receiver));
+                self.proxy_event_sender = Some(proxy_event_sender);
+            }
+            OrcaNetEvent::StopProxyClient => {
+                Self::send_event_to_proxy_server(
+                    OrcaNetEvent::StopProxyClient,
+                    self.proxy_event_sender.take().as_mut(),
+                ).await;
+            }
+            OrcaNetEvent::ChangeProxyClient(client_config) => {
+                // We restart to change proxy configuration
+                // Technically, we only need to change the address and port in the running client
+                // But that requires mutating it, and we need to start using Mutex locks for handler
+                // Since changing is expected to be rare, I don't think it's worth introducing locks
+                // TODO: Change later if required
+
+                // About why Box::pin is needed: https://rust-lang.github.io/async-book/07_workarounds/04_recursion.html
+                Box::pin(self.handle_event(OrcaNetEvent::StopProxyClient))
+                    .await;
+                Box::pin(self.handle_event(OrcaNetEvent::StartProxyClient(client_config)))
+                    .await;
+            }
+        }
+    }
+
+    async fn send_event_to_proxy_server(event: OrcaNetEvent, sender: Option<&mut mpsc::Sender<OrcaNetEvent>>) {
+        // TODO: Return responses instead of just printing
+        match sender {
+            Some(proxy_event_sender) => {
+                if let Err(e) = proxy_event_sender
+                    .send(event)
+                    .await {
+                    println!("Error sending command to proxy: {:?}", e);
                 }
             }
-            OrcaNetEvent::StopProxyServer => {
-                match self.proxy_event_sender.take() {
-                    Some(mut proxy_event_sender) => {
-                        if let Err(e) = proxy_event_sender
-                            .send(OrcaNetEvent::StopProxyServer)
-                            .await {
-                            println!("Error sending stop command to proxy: {:?}", e);
-                        }
-                    }
-                    None => {
-                        println!("Proxy server not running");
-                    }
-                }
+            None => {
+                println!("Proxy server not running");
             }
         }
     }

@@ -16,7 +16,7 @@ use tokio::{io, select};
 use tokio::io::AsyncBufReadExt;
 use tracing_subscriber::EnvFilter;
 
-use crate::common::{OrcaNetConfig, OrcaNetEvent, ProxyClientConfig, ProxyMode};
+use crate::common::{OrcaNetConfig, OrcaNetEvent, ProxyClientConfig};
 use crate::http::start_http_server;
 use crate::network_client::NetworkClient;
 use crate::request_handler::RequestHandlerLoop;
@@ -149,23 +149,28 @@ async fn handle_input_line(
         }
         Some("startproxyprovider") => {
             let _ = event_sender
-                .send(OrcaNetEvent::StartProxyServer(ProxyMode::ProxyProvider))
+                .send(OrcaNetEvent::StartProxyProvider)
                 .await;
         }
         Some("startproxyclient") => {
             let _ = event_sender
-                .send(OrcaNetEvent::StartProxyServer(ProxyMode::ProxyClient(
+                .send(OrcaNetEvent::StartProxyClient(
                     ProxyClientConfig {
                         proxy_address: "http://130.245.173.221:3000".to_string(),
                         client_id: "myclient1".to_string(),
                         auth_token: "atsample123".to_string(),
                     }
-                )))
+                ))
                 .await;
         }
         Some("stopproxy") => {
+            // Don't know which so stop both
+            // TODO: Change after adding persistence for proxy state
             let _ = event_sender
-                .send(OrcaNetEvent::StopProxyServer)
+                .send(OrcaNetEvent::StopProxyProvider)
+                .await;
+            let _ = event_sender
+                .send(OrcaNetEvent::StopProxyClient)
                 .await;
         }
         Some("exit") => {
