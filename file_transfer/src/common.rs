@@ -198,11 +198,9 @@ pub enum OrcaNetEvent {
         file_id: String,
         permanent: bool, // Permanently stop providing
     },
-    StartProxyProvider,
-    StopProxyProvider,
-    StartProxyClient(ProxyClientConfig),
-    StopProxyClient,
     ChangeProxyClient(ProxyClientConfig),
+    StartProxy(ProxyMode),
+    StopProxy
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

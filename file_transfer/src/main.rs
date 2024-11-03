@@ -64,11 +64,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // Start Proxy server if needed
     if let Some(proxy_mode) = OrcaNetConfig::get_proxy_config() {
-        let event = match proxy_mode {
-            ProxyMode::ProxyProvider => OrcaNetEvent::StartProxyProvider,
-            ProxyMode::ProxyClient(config) => OrcaNetEvent::StartProxyClient(config)
-        };
-        event_sender.send(event)
+        event_sender.send(OrcaNetEvent::StartProxy(proxy_mode))
             .await
             .expect("Proxy start event to be sent");
     }
@@ -162,29 +158,27 @@ async fn handle_input_line(
         }
         Some("startproxyprovider") => {
             let _ = event_sender
-                .send(OrcaNetEvent::StartProxyProvider)
+                .send(OrcaNetEvent::StartProxy(ProxyMode::ProxyProvider))
                 .await;
         }
         Some("startproxyclient") => {
             let _ = event_sender
-                .send(OrcaNetEvent::StartProxyClient(
-                    ProxyClientConfig {
-                        proxy_address: "http://130.245.173.221:3000".to_string(),
-                        client_id: "myclient1".to_string(),
-                        auth_token: "atsample123".to_string(),
-                        fee_rate_per_kb: 0.00050,
-                    }
-                ))
+                .send(OrcaNetEvent::StartProxy(
+                    ProxyMode::ProxyClient(
+                        ProxyClientConfig {
+                            proxy_address: "http://130.245.173.221:3000".to_string(),
+                            client_id: "myclient1".to_string(),
+                            auth_token: "atsample123".to_string(),
+                            fee_rate_per_kb: 0.00050,
+                        }
+                    )))
                 .await;
         }
         Some("stopproxy") => {
             // Don't know which so stop both
             // TODO: Change after adding persistence for proxy state
             let _ = event_sender
-                .send(OrcaNetEvent::StopProxyProvider)
-                .await;
-            let _ = event_sender
-                .send(OrcaNetEvent::StopProxyClient)
+                .send(OrcaNetEvent::StopProxy)
                 .await;
         }
         Some("exit") => {
