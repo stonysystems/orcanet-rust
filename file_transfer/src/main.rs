@@ -16,7 +16,7 @@ use tokio::{io, select};
 use tokio::io::AsyncBufReadExt;
 use tracing_subscriber::EnvFilter;
 
-use crate::common::{OrcaNetConfig, OrcaNetEvent, ProxyClientConfig};
+use crate::common::{OrcaNetConfig, OrcaNetEvent, ProxyClientConfig, ProxyMode};
 use crate::http::start_http_server;
 use crate::network_client::NetworkClient;
 use crate::request_handler::RequestHandlerLoop;
@@ -57,12 +57,21 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // OrcaNet requests event loop
     tokio::task::spawn(request_handler_loop.run());
 
-    // Start HTTP server
+    // Start HTTP server if needed
     if OrcaNetConfig::should_start_http_server() {
         tokio::task::spawn(start_http_server(network_client.clone(), event_sender.clone()));
     }
 
-    // Start Proxy server
+    // Start Proxy server if needed
+    if let Some(proxy_mode) = OrcaNetConfig::get_proxy_config() {
+        let event = match proxy_mode {
+            ProxyMode::ProxyProvider => OrcaNetEvent::StartProxyProvider,
+            ProxyMode::ProxyClient(config) => OrcaNetEvent::StartProxyClient(config)
+        };
+        event_sender.send(event)
+            .await
+            .expect("Proxy start event to be sent");
+    }
 
     let mut stdin = io::BufReader::new(io::stdin()).lines();
 
@@ -163,7 +172,7 @@ async fn handle_input_line(
                         proxy_address: "http://130.245.173.221:3000".to_string(),
                         client_id: "myclient1".to_string(),
                         auth_token: "atsample123".to_string(),
-                        fee_rate_per_kb: 0.00050
+                        fee_rate_per_kb: 0.00050,
                     }
                 ))
                 .await;
