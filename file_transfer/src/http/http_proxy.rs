@@ -47,7 +47,6 @@ pub async fn start_http_proxy(mode: ProxyMode, mut receiver: Receiver<OrcaNetEve
             },
 
             stream_event = listener.accept() => {
-                tracing::info!("Got listener accept");
                 let (stream, _) = stream_event.unwrap();
                 let io = TokioIo::new(stream);
                 let handler_inner = handler.clone();

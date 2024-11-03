@@ -2,6 +2,7 @@ use std::path::Path;
 
 use futures::{SinkExt, StreamExt};
 use futures::channel::mpsc;
+use serde_json::json;
 use tokio::select;
 use tracing_subscriber::filter::FilterExt;
 
@@ -113,13 +114,18 @@ impl RequestHandlerLoop {
                     return;
                 }
 
-                let (mut proxy_event_sender, mut proxy_event_receiver) = mpsc::channel::<OrcaNetEvent>(0);
+                let (proxy_event_sender, proxy_event_receiver) = mpsc::channel::<OrcaNetEvent>(0);
                 tokio::task::spawn(start_http_proxy(ProxyMode::ProxyProvider, proxy_event_receiver));
                 self.proxy_event_sender = Some(proxy_event_sender);
 
                 self.network_client
                     .start_providing(OrcaNetConfig::PROXY_PROVIDER_KEY_DHT.to_string())
                     .await;
+
+                OrcaNetConfig::modify_config(
+                    ConfigKey::ProxyConfig.to_string().as_str(),
+                    json!(Some(ProxyMode::ProxyProvider)),
+                ).expect("Proxy configuration to be updated");
             }
             OrcaNetEvent::StopProxyProvider => {
                 Self::send_event_to_proxy_server(
@@ -130,6 +136,11 @@ impl RequestHandlerLoop {
                 self.network_client
                     .stop_providing(OrcaNetConfig::PROXY_PROVIDER_KEY_DHT.to_string())
                     .await;
+
+                OrcaNetConfig::modify_config(
+                    ConfigKey::ProxyConfig.to_string().as_str(),
+                    json!(None::<ProxyMode>),
+                ).expect("Proxy configuration to be updated");
             }
             OrcaNetEvent::StartProxyClient(client_info) => {
                 if self.proxy_event_sender.is_some() {
@@ -137,15 +148,28 @@ impl RequestHandlerLoop {
                     return;
                 }
 
-                let (mut proxy_event_sender, mut proxy_event_receiver) = mpsc::channel::<OrcaNetEvent>(0);
-                tokio::task::spawn(start_http_proxy(ProxyMode::ProxyClient(client_info), proxy_event_receiver));
+                let proxy_mode = ProxyMode::ProxyClient(client_info);
+                let (proxy_event_sender, proxy_event_receiver) = mpsc::channel::<OrcaNetEvent>(0);
+                tokio::task::spawn(start_http_proxy(proxy_mode.clone(), proxy_event_receiver));
                 self.proxy_event_sender = Some(proxy_event_sender);
+
+                OrcaNetConfig::modify_config(
+                    ConfigKey::ProxyConfig.to_string().as_str(),
+                    json!(Some(proxy_mode)),
+                ).expect("Proxy configuration to be updated");
             }
             OrcaNetEvent::StopProxyClient => {
                 Self::send_event_to_proxy_server(
                     OrcaNetEvent::StopProxyClient,
                     self.proxy_event_sender.take().as_mut(),
                 ).await;
+
+                OrcaNetConfig::modify_config(
+                    ConfigKey::ProxyConfig.to_string().as_str(),
+                    json!(None::<ProxyMode>),
+                ).expect("Proxy configuration to be updated");
+
+                // TODO: Pay the remaining owed amount
             }
             OrcaNetEvent::ChangeProxyClient(client_config) => {
                 // We restart to change proxy configuration
@@ -174,7 +198,7 @@ impl RequestHandlerLoop {
                 }
             }
             None => {
-                println!("Proxy server not running");
+                println!("Send event to proxy: Proxy server not running");
             }
         }
     }

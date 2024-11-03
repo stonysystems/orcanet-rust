@@ -12,7 +12,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use crate::btc_rpc::BTCNetwork;
-use crate::db::ProxyClientInfo;
 use crate::impl_str_serde;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -25,6 +24,7 @@ pub enum ConfigKey {
     RunHTTPServer,
     ProxyConfig,
     TstFileSavePath, // For testing, remove later
+    SecretKeySeed,
 }
 
 impl_str_serde!(ConfigKey);
@@ -40,6 +40,7 @@ impl OrcaNetConfig {
     pub const MAX_FILE_SIZE_BYTES: u64 = 10 * 1024 * 1024; // 10 MB
     pub const PROXY_PORT: u16 = 3000;
     pub const PROXY_PROVIDER_KEY_DHT: &'static str = "http_proxy_providers";
+    pub const DEFAULT_SECRET_KEY_SEED: u64 = 4;
 
     pub fn get_bootstrap_peer_id() -> PeerId {
         "12D3KooWQd1K1k8XA9xVEzSAu7HUCodC7LJB6uW5Kw4VwkRdstPE"
@@ -88,11 +89,11 @@ impl OrcaNetConfig {
     }
 
     /// Update the config JSON file
-    pub fn modify_config(key: &str, value: &str) -> Result<(), Box<dyn Error>> {
+    pub fn modify_config(key: &str, value: Value) -> Result<(), Box<dyn Error>> {
         let mut json: Value = Self::get_config_json();
 
         if let Some(obj) = json.as_object_mut() {
-            obj.insert(key.to_string(), json!(value));
+            obj.insert(key.to_string(), value);
         }
 
         let updated_json = serde_json::to_string_pretty(&json)?;
@@ -112,6 +113,17 @@ impl OrcaNetConfig {
             .as_str()
             .parse()
             .expect("Expect network to be a valid value in config")
+    }
+
+    pub fn get_secret_key_seed() -> u64 {
+        Self::get_from_config(ConfigKey::SecretKeySeed)
+            .and_then(|v| v.as_u64())
+            .unwrap_or(Self::DEFAULT_SECRET_KEY_SEED)
+    }
+
+    pub fn get_proxy_config() -> Option<ProxyMode> {
+        Self::get_from_config(ConfigKey::ProxyConfig)
+            .and_then(|v| serde_json::from_value::<ProxyMode>(v).ok())
     }
 
     pub fn should_start_http_server() -> bool {
@@ -258,14 +270,16 @@ pub enum OrcaNetError {
     InternalServerError(String),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProxyClientConfig {
     pub proxy_address: String,
     pub client_id: String,
     pub auth_token: String,
+    pub fee_rate_per_kb: f64,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(tag = "type", content = "message")]
 pub enum ProxyMode {
     ProxyProvider,
     ProxyClient(ProxyClientConfig),

@@ -34,8 +34,8 @@ mod utils;
 
 #[derive(Parser)]
 struct Opts {
-    #[arg(long, default_value_t = 4)]
-    seed: u64,
+    #[arg(long)]
+    seed: Option<u64>,
 }
 
 #[tokio::main]
@@ -44,9 +44,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .with_env_filter(EnvFilter::from_default_env())
         .try_init();
     let opts = Opts::parse();
+    let seed = opts.seed
+        .unwrap_or_else(OrcaNetConfig::get_secret_key_seed);
 
     let (mut event_sender, event_receiver) = mpsc::channel::<OrcaNetEvent>(0);
-    let (mut network_client, network_event_loop) = network::new(opts.seed, event_sender.clone()).await?;
+    let (mut network_client, network_event_loop) = network::new(seed, event_sender.clone()).await?;
     let mut request_handler_loop = RequestHandlerLoop::new(network_client.clone(), event_receiver);
 
     // Network event loop
@@ -59,6 +61,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     if OrcaNetConfig::should_start_http_server() {
         tokio::task::spawn(start_http_server(network_client.clone(), event_sender.clone()));
     }
+
+    // Start Proxy server
 
     let mut stdin = io::BufReader::new(io::stdin()).lines();
 
@@ -159,6 +163,7 @@ async fn handle_input_line(
                         proxy_address: "http://130.245.173.221:3000".to_string(),
                         client_id: "myclient1".to_string(),
                         auth_token: "atsample123".to_string(),
+                        fee_rate_per_kb: 0.00050
                     }
                 ))
                 .await;
