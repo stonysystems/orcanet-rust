@@ -307,46 +307,4 @@ impl RequestHandlerLoop {
             _ => panic!("Expected file request")
         }
     }
-
-    // fn handle_file_content_request(file_id: String) -> OrcaNetResponse {
-    //     tracing::info!("Received content request for file_id: {}", file_id);
-    //
-    //     let mut provided_files_table = ProvidedFilesTable::new(None);
-    //     let file_info = provided_files_table
-    //         .get_provided_file_info(file_id.as_str());
-    //     tracing::info!("File info for request {} {:?}", file_id, file_info);
-    //
-    //     match file_info {
-    //         Ok(file_info) => {
-    //             match std::fs::read(&file_info.file_path) {
-    //                 Ok(content) => {
-    //                     let _ = provided_files_table
-    //                         .increment_download_count(file_id.as_str());
-    //
-    //                     OrcaNetResponse::FileContentResponse {
-    //                         metadata: FileMetadata {
-    //                             file_id,
-    //                             file_name: file_info.file_name,
-    //                             fee_rate_per_kb: OrcaNetConfig::get_file_fee_rate(),
-    //                             recipient_address: OrcaNetConfig::get_str_from_config(ConfigKey::BTCAddress),
-    //                         },
-    //                         content,
-    //                     }
-    //                 }
-    //                 Err(e) => {
-    //                     tracing::error!("Error reading file: {:?}", e);
-    //                     OrcaNetResponse::Error(
-    //                         OrcaNetError::FileProvideError("Error while reading file".parse().unwrap())
-    //                     )
-    //                 }
-    //             }
-    //         }
-    //         Err(_) => {
-    //             tracing::error!("Requested file not found in DB");
-    //             OrcaNetResponse::Error(
-    //                 OrcaNetError::FileProvideError("Not a provider of requested file".parse().unwrap())
-    //             )
-    //         }
-    //     }
-    // }
 }

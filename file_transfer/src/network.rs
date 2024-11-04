@@ -276,13 +276,15 @@ impl EventLoop {
         match result {
             kad::QueryResult::GetProviders(Ok(kad::GetProvidersOk::FoundProviders { key, providers, .. })) => {
                 if let Some(sender) = self.pending_get_providers.remove(&query_id) {
-                    sender.send(providers).expect("Receiver not to be dropped");
+                    sender.send(providers)
+                        .expect("Receiver not to be dropped");
                 }
             }
             kad::QueryResult::GetProviders(Err(err)) => {
                 tracing::error!("Failed to get providers: {err:?}");
                 if let Some(sender) = self.pending_get_providers.remove(&query_id) {
-                    sender.send(HashSet::new()).expect("Receiver not to be dropped");
+                    sender.send(HashSet::new())
+                        .expect("Receiver not to be dropped");
                 }
             }
             kad::QueryResult::GetRecord(Ok(
@@ -292,12 +294,14 @@ impl EventLoop {
                                                                           })
                                         )) => {
                 if let Some(sender) = self.pending_get_value.remove(&query_id) {
-                    sender.send(Ok(value)).expect("Receiver not to be dropped");
+                    sender.send(Ok(value))
+                        .expect("Receiver not to be dropped");
                 }
             }
             kad::QueryResult::GetRecord(Err(err)) => {
                 if let Some(sender) = self.pending_get_value.remove(&query_id) {
-                    sender.send(Err(Box::new(err.clone()))).expect("Receiver not to be dropped");
+                    sender.send(Err(Box::new(err.clone())))
+                        .expect("Receiver not to be dropped");
                 }
                 tracing::error!("Failed to get record: {err:?}");
             }
@@ -307,13 +311,15 @@ impl EventLoop {
                     std::str::from_utf8(key.as_ref()).unwrap()
                 );
                 if let Some(sender) = self.pending_put_kv.remove(&query_id) {
-                    sender.send(Ok(())).expect("Receiver not to be dropped");
+                    sender.send(Ok(()))
+                        .expect("Receiver not to be dropped");
                 }
             }
             kad::QueryResult::PutRecord(Err(err)) => {
                 tracing::error!("Failed to put record: {err:?}");
                 if let Some(sender) = self.pending_put_kv.remove(&query_id) {
-                    sender.send(Err(Box::new(err))).expect("Receiver not to be dropped");
+                    sender.send(Err(Box::new(err)))
+                        .expect("Receiver not to be dropped");
                 }
             }
             kad::QueryResult::StartProviding(Ok(kad::AddProviderOk { key })) => {
@@ -379,11 +385,13 @@ impl EventLoop {
                     .start_providing(key_with_ns.into_bytes().into())
                     .expect("No store error.");
 
-                self.pending_start_providing.insert(query_id, sender);
+                self.pending_start_providing
+                    .insert(query_id, sender);
             }
             NetworkCommand::StopProviding { key } => {
                 let key_with_ns = Utils::get_key_with_ns(key.as_str());
                 let record_key = kad::RecordKey::new(&key_with_ns.into_bytes());
+
                 self.swarm
                     .behaviour_mut()
                     .kademlia
@@ -395,7 +403,9 @@ impl EventLoop {
                     .behaviour_mut()
                     .kademlia
                     .get_providers(key_with_ns.into_bytes().into());
-                self.pending_get_providers.insert(query_id, sender);
+
+                self.pending_get_providers
+                    .insert(query_id, sender);
             }
             NetworkCommand::Request {
                 request,
@@ -406,7 +416,9 @@ impl EventLoop {
                     .behaviour_mut()
                     .request_response
                     .send_request(&peer, request);
-                self.pending_request.insert(request_id, sender);
+
+                self.pending_request
+                    .insert(request_id, sender);
 
                 tracing::info!("Sent request to {:?}", peer);
             }
@@ -432,7 +444,9 @@ impl EventLoop {
                     .kademlia
                     .put_record(record, kad::Quorum::One)
                     .expect("Failed to initiate put request");
-                self.pending_put_kv.insert(request_id, sender);
+
+                self.pending_put_kv
+                    .insert(request_id, sender);
             }
             NetworkCommand::GetValue { key, sender } => {
                 let key_with_ns = Utils::get_key_with_ns(key.as_str());
@@ -441,11 +455,14 @@ impl EventLoop {
                     .kademlia
                     .get_record(kad::RecordKey::new(&key_with_ns.as_str()));
 
-                self.pending_get_value.insert(request_id, sender);
+                self.pending_get_value
+                    .insert(request_id, sender);
             }
             NetworkCommand::SendInStream { peer_id, stream_req, sender } => {
-                let mut control = self.swarm.behaviour_mut().stream.new_control();
-                let content_bytes = bincode::serialize(&stream_req).unwrap();
+                let mut control = self.swarm.behaviour_mut().stream
+                    .new_control();
+                let content_bytes = bincode::serialize(&stream_req)
+                    .unwrap();
                 tracing::info!("Sending {} bytes", content_bytes.len());
 
                 let protocol_future = async move {
@@ -504,7 +521,8 @@ impl EventLoop {
                     .await
                     .expect("Command receiver not to be dropped");
 
-                let response = receiver.await
+                let response = receiver
+                    .await
                     .expect("Sender not to be dropped");
 
                 self.handle_command(NetworkCommand::SendInStream {
