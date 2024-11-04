@@ -1,25 +1,25 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use crate::common::{OrcaNetError, ProxyClientConfig};
+use crate::db::ProxyClientsTable;
 use bytes::Bytes;
 use futures::channel::mpsc::Receiver;
 use futures::StreamExt;
 use headers::Authorization;
 use http_body_util::{BodyExt, Full};
-use hyper::{Error, Request, Response, StatusCode};
 use hyper::body::{Body, Incoming};
-use hyper::header::{AUTHORIZATION, HeaderValue};
+use hyper::header::{HeaderValue, AUTHORIZATION};
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
+use hyper::{Error, Request, Response, StatusCode};
 use hyper_http_proxy::{Intercept, Proxy, ProxyConnector};
 use hyper_tls::HttpsConnector;
-use hyper_util::client::legacy::Client;
 use hyper_util::client::legacy::connect::HttpConnector;
+use hyper_util::client::legacy::Client;
 use hyper_util::rt::TokioIo;
 use serde_json::json;
 use tokio::net::{TcpListener, TcpStream};
-use crate::common::{OrcaNetError, ProxyClientConfig};
-use crate::db::ProxyClientsTable;
 
 #[async_trait]
 pub trait RequestHandler: Send + Sync {
@@ -37,7 +37,7 @@ impl ProxyProvider {
     pub fn new() -> Self {
         Self {
             http_client: Client::builder(hyper_util::rt::TokioExecutor::new())
-                .build(HttpConnector::new())
+                .build(HttpConnector::new()),
         }
     }
 }
@@ -53,9 +53,7 @@ impl RequestHandler for ProxyProvider {
         let auth_token = match extract_bearer_token(&request) {
             Ok(token) => token,
             Err(e) => {
-                return Ok(bad_request_with_err(
-                    OrcaNetError::AuthorizationFailed(e)
-                ));
+                return Ok(bad_request_with_err(OrcaNetError::AuthorizationFailed(e)));
             }
         };
 
@@ -64,9 +62,9 @@ impl RequestHandler for ProxyProvider {
         let client_info = match proxy_clients_table.get_client_by_auth_token(auth_token) {
             Ok(client_info) => client_info,
             Err(_) => {
-                return Ok(bad_request_with_err(
-                    OrcaNetError::AuthorizationFailed("Auth token verification failed".to_string())
-                ));
+                return Ok(bad_request_with_err(OrcaNetError::AuthorizationFailed(
+                    "Auth token verification failed".to_string(),
+                )));
             }
         };
 
@@ -76,15 +74,10 @@ impl RequestHandler for ProxyProvider {
         let path = request.uri().path();
         tracing::info!("Request path: {path}");
 
-        let response = self.http_client
-            .request(request)
-            .await
-            .unwrap();
+        let response = self.http_client.request(request).await.unwrap();
 
         let (parts, body) = response.into_parts();
-        let bytes = body.collect()
-            .await?
-            .to_bytes();
+        let bytes = body.collect().await?.to_bytes();
 
         // Update client info in DB
 
@@ -102,7 +95,9 @@ pub struct ProxyClient {
 impl ProxyClient {
     pub fn new(config: ProxyClientConfig) -> Self {
         // Configure the proxy
-        let proxy_uri = config.proxy_address.clone()
+        let proxy_uri = config
+            .proxy_address
+            .clone()
             .parse()
             .expect("Proxy address to be valid proxy URI");
         let mut proxy = Proxy::new(Intercept::All, proxy_uri);
@@ -113,12 +108,12 @@ impl ProxyClient {
         // Create the http client
         let proxy_connector = ProxyConnector::from_proxy(HttpConnector::new(), proxy)
             .expect("Proxy connector creation to be successful");
-        let http_client = Client::builder(hyper_util::rt::TokioExecutor::new())
-            .build(proxy_connector);
+        let http_client =
+            Client::builder(hyper_util::rt::TokioExecutor::new()).build(proxy_connector);
 
         Self {
             http_client,
-            config
+            config,
         }
     }
 }
@@ -139,24 +134,16 @@ impl RequestHandler for ProxyClient {
         // Add Bearer token
         // TODO: For some reason set_authorization in proxy is not setting the header. Check later.
         let token = format!("Bearer {}", self.config.auth_token.as_str());
-        let token_hdr_value = HeaderValue::from_str(token.as_str())
-            .expect("token value to be valid header value");
-        request.headers_mut()
-            .insert(AUTHORIZATION, token_hdr_value);
+        let token_hdr_value =
+            HeaderValue::from_str(token.as_str()).expect("token value to be valid header value");
+        request.headers_mut().insert(AUTHORIZATION, token_hdr_value);
 
-        let response = self.http_client
-            .request(request)
-            .await
-            .unwrap();
+        let response = self.http_client.request(request).await.unwrap();
 
         let (parts, body) = response.into_parts();
-        let bytes = body.collect()
-            .await?
-            .to_bytes();
-
+        let bytes = body.collect().await?.to_bytes();
 
         // Update usage info in DB
-
 
         tracing::info!("Response body size: {:?}", bytes.len());
 
@@ -178,7 +165,8 @@ fn bad_request_with_err(err: OrcaNetError) -> Response<Full<Bytes>> {
 
 fn extract_bearer_token(req: &Request<Incoming>) -> Result<String, String> {
     // Get the Authorization header
-    let auth_header = req.headers()
+    let auth_header = req
+        .headers()
         .get(AUTHORIZATION)
         .ok_or("Missing authorization header".to_string())?;
 

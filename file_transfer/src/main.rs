@@ -10,10 +10,10 @@ use std::str::FromStr;
 
 use async_std::task::block_on;
 use clap::Parser;
-use futures::{SinkExt, StreamExt};
 use futures::channel::mpsc;
-use tokio::{io, select};
+use futures::{SinkExt, StreamExt};
 use tokio::io::AsyncBufReadExt;
+use tokio::{io, select};
 use tracing_subscriber::EnvFilter;
 
 use crate::common::{OrcaNetConfig, OrcaNetEvent, ProxyClientConfig, ProxyMode};
@@ -22,14 +22,14 @@ use crate::network_client::NetworkClient;
 use crate::request_handler::RequestHandlerLoop;
 use crate::utils::Utils;
 
-mod request_handler;
-mod network_client;
-mod network;
-mod common;
 mod btc_rpc;
-mod macros;
-mod http;
+mod common;
 mod db;
+mod http;
+mod macros;
+mod network;
+mod network_client;
+mod request_handler;
 mod utils;
 
 #[derive(Parser)]
@@ -44,8 +44,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .with_env_filter(EnvFilter::from_default_env())
         .try_init();
     let opts = Opts::parse();
-    let seed = opts.seed
-        .unwrap_or_else(OrcaNetConfig::get_secret_key_seed);
+    let seed = opts.seed.unwrap_or_else(OrcaNetConfig::get_secret_key_seed);
 
     let (mut event_sender, event_receiver) = mpsc::channel::<OrcaNetEvent>(0);
     let (mut network_client, network_event_loop) = network::new(seed, event_sender.clone()).await?;
@@ -59,12 +58,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // Start HTTP server if needed
     if OrcaNetConfig::should_start_http_server() {
-        tokio::task::spawn(start_http_server(network_client.clone(), event_sender.clone()));
+        tokio::task::spawn(start_http_server(
+            network_client.clone(),
+            event_sender.clone(),
+        ));
     }
 
     // Start Proxy server if needed
     if let Some(proxy_mode) = OrcaNetConfig::get_proxy_config() {
-        event_sender.send(OrcaNetEvent::StartProxy(proxy_mode))
+        event_sender
+            .send(OrcaNetEvent::StartProxy(proxy_mode))
             .await
             .expect("Proxy start event to be sent");
     }
@@ -101,7 +104,9 @@ async fn handle_input_line(
     match command {
         Some("put") => {
             let key = expect_input!(args.next(), "key", String::from);
-            let value = expect_input!(args.next(), "value", |value: &str| value.as_bytes().to_vec());
+            let value = expect_input!(args.next(), "value", |value: &str| value
+                .as_bytes()
+                .to_vec());
 
             let _ = client.put_kv_pair(key, value).await;
         }
@@ -150,7 +155,9 @@ async fn handle_input_line(
             }
 
             if let Ok(file_id) = Utils::sha256_digest(path) {
-                let _ = event_sender.send(OrcaNetEvent::ProvideFile { file_id, file_path }).await;
+                let _ = event_sender
+                    .send(OrcaNetEvent::ProvideFile { file_id, file_path })
+                    .await;
             }
         }
         Some("advertise") => {
@@ -163,23 +170,20 @@ async fn handle_input_line(
         }
         Some("startproxyclient") => {
             let _ = event_sender
-                .send(OrcaNetEvent::StartProxy(
-                    ProxyMode::ProxyClient(
-                        ProxyClientConfig {
-                            proxy_address: "http://130.245.173.221:3000".to_string(),
-                            client_id: "myclient1".to_string(),
-                            auth_token: "atsample123".to_string(),
-                            fee_rate_per_kb: 0.00050,
-                        }
-                    )))
+                .send(OrcaNetEvent::StartProxy(ProxyMode::ProxyClient(
+                    ProxyClientConfig {
+                        proxy_address: "http://130.245.173.221:3000".to_string(),
+                        client_id: "myclient1".to_string(),
+                        auth_token: "atsample123".to_string(),
+                        fee_rate_per_kb: 0.00050,
+                    },
+                )))
                 .await;
         }
         Some("stopproxy") => {
             // Don't know which so stop both
             // TODO: Change after adding persistence for proxy state
-            let _ = event_sender
-                .send(OrcaNetEvent::StopProxy)
-                .await;
+            let _ = event_sender.send(OrcaNetEvent::StopProxy).await;
         }
         Some("exit") => {
             exit(0);

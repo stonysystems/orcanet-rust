@@ -6,8 +6,8 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use futures::channel::oneshot;
-use libp2p::{Multiaddr, PeerId};
 use libp2p::request_response::ResponseChannel;
+use libp2p::{Multiaddr, PeerId};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
@@ -45,22 +45,26 @@ impl OrcaNetConfig {
 
     pub fn get_bootstrap_peer_id() -> PeerId {
         "12D3KooWQd1K1k8XA9xVEzSAu7HUCodC7LJB6uW5Kw4VwkRdstPE"
-            .parse().unwrap()
+            .parse()
+            .unwrap()
     }
 
     pub fn get_bootstrap_address() -> Multiaddr {
         "/ip4/130.245.173.222/tcp/61000/p2p/12D3KooWQd1K1k8XA9xVEzSAu7HUCodC7LJB6uW5Kw4VwkRdstPE"
-            .parse().unwrap()
+            .parse()
+            .unwrap()
     }
 
     pub fn get_relay_peer_id() -> PeerId {
         "12D3KooWDpJ7As7BWAwRMfu1VU2WCqNjvq387JEYKDBj4kx6nXTN"
-            .parse().unwrap()
+            .parse()
+            .unwrap()
     }
 
     pub fn get_relay_address() -> Multiaddr {
         "/ip4/130.245.173.221/tcp/4001/p2p/12D3KooWDpJ7As7BWAwRMfu1VU2WCqNjvq387JEYKDBj4kx6nXTN"
-            .parse().unwrap()
+            .parse()
+            .unwrap()
     }
 
     pub fn get_config_file_path() -> PathBuf {
@@ -69,10 +73,14 @@ impl OrcaNetConfig {
     }
 
     fn get_config_json() -> Value {
-        let json_str = std::fs::read_to_string(Self::get_config_file_path())
-            .expect(format!("Config file to be present at $HOME/{}", &Self::CONFIG_FILE_REL_PATH).as_str());
-        serde_json::from_str(&json_str)
-            .unwrap()
+        let json_str = std::fs::read_to_string(Self::get_config_file_path()).expect(
+            format!(
+                "Config file to be present at $HOME/{}",
+                &Self::CONFIG_FILE_REL_PATH
+            )
+            .as_str(),
+        );
+        serde_json::from_str(&json_str).unwrap()
     }
 
     pub fn get_from_config(config_key: ConfigKey) -> Option<Value> {
@@ -207,7 +215,7 @@ pub enum OrcaNetEvent {
     },
     ChangeProxyClient(ProxyClientConfig),
     StartProxy(ProxyMode),
-    StopProxy
+    StopProxy,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -224,12 +232,8 @@ pub enum StreamData {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum OrcaNetRequest {
-    FileMetadataRequest {
-        file_id: String,
-    },
-    FileContentRequest {
-        file_id: String,
-    },
+    FileMetadataRequest { file_id: String },
+    FileContentRequest { file_id: String },
     HTTPProxyMetadataRequest,
     HTTPProxyProvideRequest,
 }

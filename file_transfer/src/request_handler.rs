@@ -1,12 +1,15 @@
 use std::path::Path;
 
-use futures::{SinkExt, StreamExt};
 use futures::channel::mpsc;
+use futures::{SinkExt, StreamExt};
 use serde_json::json;
 use tokio::select;
 use tracing_subscriber::filter::FilterExt;
 
-use crate::common::{ConfigKey, FileMetadata, HTTPProxyMetadata, OrcaNetConfig, OrcaNetError, OrcaNetEvent, OrcaNetRequest, OrcaNetResponse, ProxyMode};
+use crate::common::{
+    ConfigKey, FileMetadata, HTTPProxyMetadata, OrcaNetConfig, OrcaNetError, OrcaNetEvent,
+    OrcaNetRequest, OrcaNetResponse, ProxyMode,
+};
 use crate::db::{ProvidedFileInfo, ProvidedFilesTable, ProxyClientInfo, ProxyClientsTable};
 use crate::http::start_http_proxy;
 use crate::network_client::NetworkClient;
@@ -48,9 +51,7 @@ impl RequestHandlerLoop {
         match event {
             OrcaNetEvent::Request { request, channel } => {
                 let response = self.handle_request(request);
-                self.network_client
-                    .respond(response, channel)
-                    .await;
+                self.network_client.respond(response, channel).await;
             }
             OrcaNetEvent::StreamRequest { request, sender } => {
                 let response = self.handle_request(request);
@@ -62,16 +63,12 @@ impl RequestHandlerLoop {
 
                 if path.exists() {
                     let mut provided_files_table = ProvidedFilesTable::new(None);
-                    let file_info = ProvidedFileInfo::with_defaults(file_id.clone(), file_path, file_name);
-                    let resp = provided_files_table
-                        .insert_provided_file(&file_info);
+                    let file_info =
+                        ProvidedFileInfo::with_defaults(file_id.clone(), file_path, file_name);
+                    let resp = provided_files_table.insert_provided_file(&file_info);
 
                     match resp {
-                        Ok(_) => {
-                            self.network_client
-                                .start_providing(file_id)
-                                .await
-                        }
+                        Ok(_) => self.network_client.start_providing(file_id).await,
                         Err(e) => {
                             tracing::error!("Failed to insert into DB: {:?}", e);
                         }
@@ -82,25 +79,29 @@ impl RequestHandlerLoop {
                 if permanent {
                     // Permanently stop providing - Remove from DB
                     let mut provided_files_table = ProvidedFilesTable::new(None);
-                    let remove_resp = provided_files_table
-                        .remove_provided_file(file_id.as_str());
+                    let remove_resp = provided_files_table.remove_provided_file(file_id.as_str());
 
                     if let Err(e) = remove_resp {
                         tracing::error!("Deletion failed for {}. Error: {:?}", file_id.as_str(), e)
                     }
                 } else {
                     let mut provided_files_table = ProvidedFilesTable::new(None);
-                    let status_change_resp = provided_files_table
-                        .set_provided_file_status(file_id.as_str(), false, None);
+                    let status_change_resp = provided_files_table.set_provided_file_status(
+                        file_id.as_str(),
+                        false,
+                        None,
+                    );
 
                     if let Err(e) = status_change_resp {
-                        tracing::error!("Error changing status for {}. Error: {:?}", file_id.as_str(), e)
+                        tracing::error!(
+                            "Error changing status for {}. Error: {:?}",
+                            file_id.as_str(),
+                            e
+                        )
                     }
                 }
 
-                self.network_client
-                    .stop_providing(file_id)
-                    .await;
+                self.network_client.stop_providing(file_id).await;
             }
             OrcaNetEvent::ChangeProxyClient(client_config) => {
                 // We restart to change proxy configuration
@@ -110,11 +111,13 @@ impl RequestHandlerLoop {
                 // TODO: Change later if required
 
                 // About why Box::pin is needed: https://rust-lang.github.io/async-book/07_workarounds/04_recursion.html
-                Box::pin(self.handle_event(OrcaNetEvent::StopProxy))
-                    .await;
-                Box::pin(self.handle_event(
-                    OrcaNetEvent::StartProxy(ProxyMode::ProxyClient(client_config))
-                )).await;
+                Box::pin(self.handle_event(OrcaNetEvent::StopProxy)).await;
+                Box::pin(
+                    self.handle_event(OrcaNetEvent::StartProxy(ProxyMode::ProxyClient(
+                        client_config,
+                    ))),
+                )
+                .await;
             }
             OrcaNetEvent::StartProxy(proxy_mode) => {
                 if self.proxy_event_sender.is_some() {
@@ -141,16 +144,18 @@ impl RequestHandlerLoop {
                 OrcaNetConfig::modify_config(
                     ConfigKey::ProxyConfig.to_string().as_str(),
                     json!(Some(proxy_mode)),
-                ).expect("Proxy configuration to be updated");
+                )
+                .expect("Proxy configuration to be updated");
             }
             OrcaNetEvent::StopProxy => {
-                let proxy_mode = OrcaNetConfig::get_proxy_config()
-                    .expect("Proxy mode to be present in config");
+                let proxy_mode =
+                    OrcaNetConfig::get_proxy_config().expect("Proxy mode to be present in config");
 
                 Self::send_event_to_proxy_server(
                     OrcaNetEvent::StopProxy,
                     self.proxy_event_sender.take().as_mut(),
-                ).await;
+                )
+                .await;
 
                 match proxy_mode {
                     ProxyMode::ProxyProvider => {
@@ -166,18 +171,20 @@ impl RequestHandlerLoop {
                 OrcaNetConfig::modify_config(
                     ConfigKey::ProxyConfig.to_string().as_str(),
                     json!(None::<ProxyMode>),
-                ).expect("Proxy configuration to be updated");
+                )
+                .expect("Proxy configuration to be updated");
             }
         }
     }
 
-    async fn send_event_to_proxy_server(event: OrcaNetEvent, sender: Option<&mut mpsc::Sender<OrcaNetEvent>>) {
+    async fn send_event_to_proxy_server(
+        event: OrcaNetEvent,
+        sender: Option<&mut mpsc::Sender<OrcaNetEvent>>,
+    ) {
         // TODO: Return responses instead of just logging
         match sender {
             Some(proxy_event_sender) => {
-                if let Err(e) = proxy_event_sender
-                    .send(event)
-                    .await {
+                if let Err(e) = proxy_event_sender.send(event).await {
                     tracing::error!("Error sending command to proxy: {:?}", e);
                 }
             }
@@ -189,9 +196,8 @@ impl RequestHandlerLoop {
 
     fn handle_request(&mut self, request: OrcaNetRequest) -> OrcaNetResponse {
         match request {
-            OrcaNetRequest::FileMetadataRequest { .. } | OrcaNetRequest::FileContentRequest { .. } => {
-                Self::handle_file_request(request)
-            }
+            OrcaNetRequest::FileMetadataRequest { .. }
+            | OrcaNetRequest::FileContentRequest { .. } => Self::handle_file_request(request),
             OrcaNetRequest::HTTPProxyMetadataRequest | OrcaNetRequest::HTTPProxyProvideRequest => {
                 Self::handle_http_proxy_request(request)
             }
@@ -217,8 +223,8 @@ impl RequestHandlerLoop {
                         let auth_token = Utils::new_uuid();
 
                         let mut proxy_clients_table = ProxyClientsTable::new(None);
-                        let proxy_client_info = ProxyClientInfo::with_defaults(
-                            client_id.clone(), auth_token.clone());
+                        let proxy_client_info =
+                            ProxyClientInfo::with_defaults(client_id.clone(), auth_token.clone());
 
                         match proxy_clients_table.add_client(&proxy_client_info) {
                             Ok(_) => {
@@ -229,21 +235,19 @@ impl RequestHandlerLoop {
                                     auth_token,
                                 }
                             }
-                            Err(_) => {
-                                OrcaNetResponse::Error(
-                                    OrcaNetError::InternalServerError("Error creating client".to_string())
-                                )
-                            }
+                            Err(_) => OrcaNetResponse::Error(OrcaNetError::InternalServerError(
+                                "Error creating client".to_string(),
+                            )),
                         }
                     }
-                    _ => panic!("Expected only proxy requests in handle_proxy_requests")
+                    _ => panic!("Expected only proxy requests in handle_proxy_requests"),
                 }
             }
             _ => {
                 // Not providing
-                OrcaNetResponse::Error(
-                    OrcaNetError::NotAProvider("Not a proxy provider".to_string())
-                )
+                OrcaNetResponse::Error(OrcaNetError::NotAProvider(
+                    "Not a proxy provider".to_string(),
+                ))
             }
         }
     }
@@ -252,19 +256,18 @@ impl RequestHandlerLoop {
         let file_id = match &request {
             OrcaNetRequest::FileMetadataRequest { file_id } => file_id,
             OrcaNetRequest::FileContentRequest { file_id } => file_id,
-            _ => panic!("Expected file request")
+            _ => panic!("Expected file request"),
         };
 
         let mut provided_files_table = ProvidedFilesTable::new(None);
-        let file_info_resp = provided_files_table
-            .get_provided_file_info(file_id.as_str());
+        let file_info_resp = provided_files_table.get_provided_file_info(file_id.as_str());
 
         if file_info_resp.is_err() {
             // Most likely not present in DB
             tracing::error!("Requested file not found in DB");
-            return OrcaNetResponse::Error(
-                OrcaNetError::NotAProvider("Not a provider of requested file".to_string())
-            );
+            return OrcaNetResponse::Error(OrcaNetError::NotAProvider(
+                "Not a provider of requested file".to_string(),
+            ));
         }
 
         let file_info = file_info_resp.unwrap();
@@ -288,8 +291,7 @@ impl RequestHandlerLoop {
 
                 match std::fs::read(&file_info.file_path) {
                     Ok(content) => {
-                        let _ = provided_files_table
-                            .increment_download_count(file_id.as_str());
+                        let _ = provided_files_table.increment_download_count(file_id.as_str());
 
                         OrcaNetResponse::FileContentResponse {
                             metadata: file_metadata,
@@ -298,13 +300,13 @@ impl RequestHandlerLoop {
                     }
                     Err(e) => {
                         tracing::error!("Error reading file: {:?}", e);
-                        OrcaNetResponse::Error(
-                            OrcaNetError::FileProvideError("Error while reading file".to_string())
-                        )
+                        OrcaNetResponse::Error(OrcaNetError::FileProvideError(
+                            "Error while reading file".to_string(),
+                        ))
                     }
                 }
             }
-            _ => panic!("Expected file request")
+            _ => panic!("Expected file request"),
         }
     }
 }

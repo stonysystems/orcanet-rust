@@ -3,8 +3,8 @@ use std::io::{BufReader, Read};
 use std::path::Path;
 use std::str::FromStr;
 
-use libp2p::{identity, Multiaddr, PeerId};
 use libp2p::multiaddr::Protocol;
+use libp2p::{identity, Multiaddr, PeerId};
 use ring::digest::{Context, SHA256};
 use uuid::Uuid;
 
@@ -15,9 +15,13 @@ use crate::db::{DownloadedFileInfo, DownloadedFilesTable};
 pub struct Utils;
 
 impl Utils {
-    pub fn get_address_through_relay(peer_id: &PeerId, relay_address_override: Option<Multiaddr>) -> Multiaddr {
+    pub fn get_address_through_relay(
+        peer_id: &PeerId,
+        relay_address_override: Option<Multiaddr>,
+    ) -> Multiaddr {
         let relay_address = relay_address_override.unwrap_or(OrcaNetConfig::get_relay_address());
-        relay_address.clone()
+        relay_address
+            .clone()
             .with(Protocol::P2pCircuit)
             .with(Protocol::P2p(peer_id.clone()))
     }
@@ -43,7 +47,7 @@ impl Utils {
                 let keypair = Utils::generate_ed25519(seed);
                 keypair.public().to_peer_id()
             }
-            Err(_) => PeerId::from_str(input).unwrap()
+            Err(_) => PeerId::from_str(input).unwrap(),
         }
     }
 
@@ -106,19 +110,25 @@ impl Utils {
     //TODO: Move to a better struct
     //TODO: Return saved file path?
     /// Expects the response to be a file content response. Saves the file in dest_path
-    pub fn handle_file_content_response(peer_id: PeerId, resp: OrcaNetResponse, dest_path: Option<String>) {
+    pub fn handle_file_content_response(
+        peer_id: PeerId,
+        resp: OrcaNetResponse,
+        dest_path: Option<String>,
+    ) {
         match resp {
-            OrcaNetResponse::FileContentResponse {
-                metadata,
-                content
-            } => {
+            OrcaNetResponse::FileContentResponse { metadata, content } => {
                 let path = match dest_path {
                     Some(dest_path) => Path::new(&dest_path).to_path_buf(),
                     None => {
-                        let app_data_path = OrcaNetConfig::get_str_from_config(ConfigKey::AppDataPath);
+                        let app_data_path =
+                            OrcaNetConfig::get_str_from_config(ConfigKey::AppDataPath);
                         Path::new(&app_data_path)
                             .join(OrcaNetConfig::FILE_SAVE_DIR)
-                            .join(format!("{}_{}", &metadata.file_id[..16], metadata.file_name.clone())) // Use file_id and name
+                            .join(format!(
+                                "{}_{}",
+                                &metadata.file_id[..16],
+                                metadata.file_name.clone()
+                            )) // Use file_id and name
                     }
                 };
 
@@ -130,7 +140,7 @@ impl Utils {
                     Ok(_) => {
                         tracing::info!("Wrote file {} to {:?}", metadata.file_name, path);
                     }
-                    Err(e) => tracing::error!("Error writing file {:?}", e)
+                    Err(e) => tracing::error!("Error writing file {:?}", e),
                 }
 
                 // Send payment after computing size
@@ -140,8 +150,11 @@ impl Utils {
                 let comment = format!("Payment for {}", metadata.file_id);
                 tracing::info!("Initiating transfer of {:?} BTC to {}", cost_btc, btc_addr);
 
-                let payment_tx_id = match btc_wrapper
-                    .send_to_address(metadata.recipient_address.as_str(), cost_btc, Some(comment.as_str())) {
+                let payment_tx_id = match btc_wrapper.send_to_address(
+                    metadata.recipient_address.as_str(),
+                    cost_btc,
+                    Some(comment.as_str()),
+                ) {
                     Ok(tx_id) => {
                         tracing::info!("sendtoaddress created transaction: {}", tx_id);
                         // TODO: Handle error case ?
@@ -171,7 +184,7 @@ impl Utils {
 
                 match downloaded_files_table.insert_downloaded_file(&downloaded_file_info) {
                     Ok(_) => tracing::info!("Inserted record for downloaded file"),
-                    Err(e) => tracing::error!("Error inserting download record {:?}", e)
+                    Err(e) => tracing::error!("Error inserting download record {:?}", e),
                 }
             }
             OrcaNetResponse::Error(error) => {

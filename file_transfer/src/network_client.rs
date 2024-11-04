@@ -3,8 +3,8 @@ use std::error::Error;
 
 use futures::channel::{mpsc, oneshot};
 use futures::SinkExt;
-use libp2p::{Multiaddr, PeerId};
 use libp2p::request_response::ResponseChannel;
+use libp2p::{Multiaddr, PeerId};
 
 use crate::common::{NetworkCommand, OrcaNetRequest, OrcaNetResponse, StreamData, StreamReq};
 use crate::db::ProvidedFilesTable;
@@ -17,10 +17,7 @@ pub struct NetworkClient {
 
 impl NetworkClient {
     /// Listen for incoming connections on the given address.
-    pub async fn start_listening(
-        &mut self,
-        addr: Multiaddr,
-    ) -> Result<(), Box<dyn Error + Send>> {
+    pub async fn start_listening(&mut self, addr: Multiaddr) -> Result<(), Box<dyn Error + Send>> {
         let (sender, receiver) = oneshot::channel();
         self.sender
             .send(NetworkCommand::StartListening { addr, sender })
@@ -84,28 +81,18 @@ impl NetworkClient {
         let (sender, receiver) = oneshot::channel();
 
         self.sender
-            .send(NetworkCommand::PutKV {
-                key,
-                value,
-                sender,
-            })
+            .send(NetworkCommand::PutKV { key, value, sender })
             .await
             .expect("Command receiver not to be dropped.");
         receiver.await.expect("Sender not be dropped.")
     }
 
     /// Get the value for the given key from the DHT
-    pub async fn get_value(
-        &mut self,
-        key: String,
-    ) -> Result<Vec<u8>, Box<dyn Error + Send>> {
+    pub async fn get_value(&mut self, key: String) -> Result<Vec<u8>, Box<dyn Error + Send>> {
         let (sender, receiver) = oneshot::channel();
 
         self.sender
-            .send(NetworkCommand::GetValue {
-                key,
-                sender,
-            })
+            .send(NetworkCommand::GetValue { key, sender })
             .await
             .expect("Command receiver not to be dropped.");
         receiver.await.expect("Sender not be dropped.")
@@ -125,11 +112,9 @@ impl NetworkClient {
         }
 
         for peer_id in providers {
-            let resp = self.download_file_from_peer(
-                file_id.clone(),
-                peer_id.clone(),
-                dest_path.clone(),
-            ).await;
+            let resp = self
+                .download_file_from_peer(file_id.clone(), peer_id.clone(), dest_path.clone())
+                .await;
 
             if resp.is_ok() {
                 return Ok(());
@@ -145,12 +130,12 @@ impl NetworkClient {
         peer_id: PeerId,
         dest_path: Option<String>,
     ) -> Result<(), Box<dyn Error>> {
-        let response = self.send_stream_request(
-            peer_id.clone(),
-            OrcaNetRequest::FileContentRequest {
-                file_id
-            },
-        ).await;
+        let response = self
+            .send_stream_request(
+                peer_id.clone(),
+                OrcaNetRequest::FileContentRequest { file_id },
+            )
+            .await;
 
         if let Ok(file_response) = response {
             tracing::info!("Got file from peer {:?}", peer_id);
@@ -175,14 +160,13 @@ impl NetworkClient {
             stream_data: StreamData::Request(orca_net_request),
         };
 
-        let resp = self.send_in_stream(peer_id.clone(), addr.clone(), stream_req, true).await;
+        let resp = self
+            .send_in_stream(peer_id.clone(), addr.clone(), stream_req, true)
+            .await;
 
         match resp {
-            Some(response) => {
-                response
-                    .map_err(|e| e as Box<dyn Error>)
-            }
-            None => Err(format!("No valid response from peer {peer_id}").into())
+            Some(response) => response.map_err(|e| e as Box<dyn Error>),
+            None => Err(format!("No valid response from peer {peer_id}").into()),
         }
     }
 

@@ -18,20 +18,17 @@ const ORCA_NET_CLIENT_ID_HEADER: &str = "orca-net-client-id";
 const ORCA_NET_AUTH_KEY_HEADER: &str = "orca-net-token";
 const PROXY_PORT: u16 = 3000;
 
-
 fn get_handler(mode: ProxyMode) -> Box<dyn RequestHandler> {
     match mode {
         ProxyMode::ProxyProvider => Box::new(ProxyProvider::new()),
-        ProxyMode::ProxyClient(config) => Box::new(ProxyClient::new(config))
+        ProxyMode::ProxyClient(config) => Box::new(ProxyClient::new(config)),
     }
 }
 
 pub async fn start_http_proxy(mode: ProxyMode, mut receiver: Receiver<OrcaNetEvent>) {
     let addr = SocketAddr::from(([0, 0, 0, 0], PROXY_PORT)); // Listen on all addresses
     let handler = Arc::new(get_handler(mode));
-    let listener = TcpListener::bind(addr)
-        .await
-        .unwrap();
+    let listener = TcpListener::bind(addr).await.unwrap();
     tracing::info!("Proxy server listening on http://{}", addr);
 
     loop {

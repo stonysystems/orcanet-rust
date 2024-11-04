@@ -1,16 +1,14 @@
 #[macro_export]
 macro_rules! expect_input {
-    ($exp:expr, $name:literal, $func:expr) => {
-        {
-            match $exp {
-                Some(input) => $func(input),
-                None => {
-                    eprintln!("Expected {}", $name);
-                    return;
-                }
+    ($exp:expr, $name:literal, $func:expr) => {{
+        match $exp {
+            Some(input) => $func(input),
+            None => {
+                eprintln!("Expected {}", $name);
+                return;
             }
         }
-    };
+    }};
 }
 
 // TODO: Convert to procedural macro later
@@ -32,7 +30,7 @@ macro_rules! impl_str_serde {
         impl Display for $name {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                 let s = serde_json::to_string(self).unwrap();
-                write!(f, "{}", &s[1..(s.len()-1)])
+                write!(f, "{}", &s[1..(s.len() - 1)])
             }
         }
     };

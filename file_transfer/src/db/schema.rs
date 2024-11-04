@@ -85,7 +85,7 @@ pub struct DownloadedFileInfo {
     pub file_name: String,
     pub file_size_kb: f32,
     pub fee_rate_per_kb: Option<f32>, // May not be rate but fixed price
-    pub price: Option<f32>, // Size * rate if rate is present
+    pub price: Option<f32>,           // Size * rate if rate is present
     pub payment_tx_id: Option<String>, // Transaction may not have started, so can be NULL ?
     pub peer_id: String,
     pub download_timestamp: i64,

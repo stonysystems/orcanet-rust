@@ -7,14 +7,24 @@ use bincode;
 use futures::channel::{mpsc, oneshot};
 use futures::prelude::*;
 use futures::StreamExt;
-use libp2p::{identify, kad, multiaddr::Protocol, noise, PeerId, ping, relay, request_response::{self, OutboundRequestId, ResponseChannel}, StreamProtocol, swarm::{NetworkBehaviour, Swarm, SwarmEvent}, tcp, yamux};
 use libp2p::bytes::Bytes;
 use libp2p::kad::store::{MemoryStore, MemoryStoreConfig};
 use libp2p::request_response::ProtocolSupport;
+use libp2p::{
+    identify, kad,
+    multiaddr::Protocol,
+    noise, ping, relay,
+    request_response::{self, OutboundRequestId, ResponseChannel},
+    swarm::{NetworkBehaviour, Swarm, SwarmEvent},
+    tcp, yamux, PeerId, StreamProtocol,
+};
 use libp2p_swarm::Stream;
 use serde::{Deserialize, Serialize};
 
-use crate::common::{ConfigKey, NetworkCommand, OrcaNetConfig, OrcaNetEvent, OrcaNetRequest, OrcaNetResponse, StreamData, StreamReq};
+use crate::common::{
+    ConfigKey, NetworkCommand, OrcaNetConfig, OrcaNetEvent, OrcaNetRequest, OrcaNetResponse,
+    StreamData, StreamReq,
+};
 use crate::network_client::NetworkClient;
 use crate::utils::Utils;
 
@@ -45,44 +55,46 @@ pub async fn new(
     let bootstrap_peer_id = OrcaNetConfig::get_bootstrap_peer_id();
     let boostrap_addr = OrcaNetConfig::get_bootstrap_address();
 
-    let mut swarm =
-        libp2p::SwarmBuilder::with_existing_identity(keypair)
-            .with_tokio()
-            .with_tcp(
-                tcp::Config::default().nodelay(true),
-                noise::Config::new,
-                yamux::Config::default,
-            )?
-            .with_quic()
-            .with_dns()?
-            .with_relay_client(noise::Config::new, yamux::Config::default)?
-            .with_behaviour(|keypair, relay_behaviour| Behaviour {
-                relay_client: relay_behaviour,
-                ping: ping::Behaviour::new(ping::Config::new()),
-                identify: identify::Behaviour::new(identify::Config::new(
-                    "/TODO/0.0.1".to_string(),
-                    keypair.public(),
-                )),
-                kademlia: kad::Behaviour::new(
+    let mut swarm = libp2p::SwarmBuilder::with_existing_identity(keypair)
+        .with_tokio()
+        .with_tcp(
+            tcp::Config::default().nodelay(true),
+            noise::Config::new,
+            yamux::Config::default,
+        )?
+        .with_quic()
+        .with_dns()?
+        .with_relay_client(noise::Config::new, yamux::Config::default)?
+        .with_behaviour(|keypair, relay_behaviour| Behaviour {
+            relay_client: relay_behaviour,
+            ping: ping::Behaviour::new(ping::Config::new()),
+            identify: identify::Behaviour::new(identify::Config::new(
+                "/TODO/0.0.1".to_string(),
+                keypair.public(),
+            )),
+            kademlia: kad::Behaviour::new(
+                keypair.public().to_peer_id(),
+                MemoryStore::with_config(
                     keypair.public().to_peer_id(),
-                    MemoryStore::with_config(keypair.public().to_peer_id(), MemoryStoreConfig {
-                        max_records: 2 * 1000 * 1000, // 2M
+                    MemoryStoreConfig {
+                        max_records: 2 * 1000 * 1000,       // 2M
                         max_provided_keys: 2 * 1000 * 1000, // 2M
                         max_providers_per_key: 500,
                         max_value_bytes: 1 * 1024 * 1024, // 1 MB
-                    }),
+                    },
                 ),
-                stream: libp2p_stream::Behaviour::new(),
-                request_response: request_response::cbor::Behaviour::new(
-                    [(
-                        StreamProtocol::new("/file-exchange/1"),
-                        ProtocolSupport::Full,
-                    )],
-                    request_response::Config::default(),
-                ),
-            })?
-            .with_swarm_config(|c| c.with_idle_connection_timeout(Duration::from_secs(60)))
-            .build();
+            ),
+            stream: libp2p_stream::Behaviour::new(),
+            request_response: request_response::cbor::Behaviour::new(
+                [(
+                    StreamProtocol::new("/file-exchange/1"),
+                    ProtocolSupport::Full,
+                )],
+                request_response::Config::default(),
+            ),
+        })?
+        .with_swarm_config(|c| c.with_idle_connection_timeout(Duration::from_secs(60)))
+        .build();
 
     // Set up listening on all interfaces
     swarm
@@ -93,7 +105,9 @@ pub async fn new(
         .unwrap();
 
     // Make a reservation with relay
-    swarm.listen_on(relay_address.clone().with(Protocol::P2pCircuit)).unwrap();
+    swarm
+        .listen_on(relay_address.clone().with(Protocol::P2pCircuit))
+        .unwrap();
 
     // Set up kademlia props
     swarm
@@ -125,10 +139,13 @@ pub struct EventLoop {
     pending_dial: HashMap<PeerId, oneshot::Sender<Result<(), Box<dyn Error + Send>>>>,
     pending_start_providing: HashMap<kad::QueryId, oneshot::Sender<()>>,
     pending_get_providers: HashMap<kad::QueryId, oneshot::Sender<HashSet<PeerId>>>,
-    pending_request: HashMap<OutboundRequestId, oneshot::Sender<Result<OrcaNetResponse, Box<dyn Error + Send>>>>,
+    pending_request:
+        HashMap<OutboundRequestId, oneshot::Sender<Result<OrcaNetResponse, Box<dyn Error + Send>>>>,
     pending_put_kv: HashMap<kad::QueryId, oneshot::Sender<Result<(), Box<dyn Error + Send>>>>,
-    pending_get_value: HashMap<kad::QueryId, oneshot::Sender<Result<Vec<u8>, Box<dyn Error + Send>>>>,
-    pending_stream_requests: HashMap<String, oneshot::Sender<Result<OrcaNetResponse, Box<dyn Error + Send>>>>,
+    pending_get_value:
+        HashMap<kad::QueryId, oneshot::Sender<Result<Vec<u8>, Box<dyn Error + Send>>>>,
+    pending_stream_requests:
+        HashMap<String, oneshot::Sender<Result<OrcaNetResponse, Box<dyn Error + Send>>>>,
 }
 
 impl EventLoop {
@@ -184,32 +201,31 @@ impl EventLoop {
                 tracing::info!(%address, "Listening on address");
             }
             SwarmEvent::Behaviour(BehaviourEvent::RelayClient(
-                                      relay::client::Event::ReservationReqAccepted { .. },
-                                  )) => {
+                relay::client::Event::ReservationReqAccepted { .. },
+            )) => {
                 tracing::info!("Relay accepted our reservation request");
             }
             SwarmEvent::Behaviour(BehaviourEvent::RelayClient(event)) => {
                 tracing::info!(?event)
             }
-            SwarmEvent::Behaviour(BehaviourEvent::Kademlia(kad::Event::OutboundQueryProgressed { id, result, .. })) => {
+            SwarmEvent::Behaviour(BehaviourEvent::Kademlia(
+                kad::Event::OutboundQueryProgressed { id, result, .. },
+            )) => {
                 self.handle_kademlia_events(id, result);
             }
             SwarmEvent::Behaviour(BehaviourEvent::Kademlia(event)) => {
                 tracing::info!(?event, "Received kademlia event");
             }
             SwarmEvent::Behaviour(BehaviourEvent::RequestResponse(
-                                      request_response::Event::Message { message, .. },
-                                  )) => match message {
+                request_response::Event::Message { message, .. },
+            )) => match message {
                 request_response::Message::Request {
                     request, channel, ..
                 } => {
                     tracing::info!(?request, "Received request");
 
                     self.event_sender
-                        .send(OrcaNetEvent::Request {
-                            request,
-                            channel,
-                        })
+                        .send(OrcaNetEvent::Request { request, channel })
                         .await
                         .expect("Event receiver not to be dropped.");
                 }
@@ -227,10 +243,10 @@ impl EventLoop {
                 }
             },
             SwarmEvent::Behaviour(BehaviourEvent::RequestResponse(
-                                      request_response::Event::OutboundFailure {
-                                          request_id, error, ..
-                                      },
-                                  )) => {
+                request_response::Event::OutboundFailure {
+                    request_id, error, ..
+                },
+            )) => {
                 tracing::info!(?error, "Request response outbound failure:");
 
                 let _ = self
@@ -240,8 +256,8 @@ impl EventLoop {
                     .send(Err(Box::new(error)));
             }
             SwarmEvent::Behaviour(BehaviourEvent::RequestResponse(
-                                      request_response::Event::ResponseSent { .. },
-                                  )) => {}
+                request_response::Event::ResponseSent { .. },
+            )) => {}
             SwarmEvent::IncomingConnection { .. } => {}
             SwarmEvent::ConnectionEstablished {
                 peer_id, endpoint, ..
@@ -274,33 +290,35 @@ impl EventLoop {
 
     fn handle_kademlia_events(&mut self, query_id: kad::QueryId, result: kad::QueryResult) {
         match result {
-            kad::QueryResult::GetProviders(Ok(kad::GetProvidersOk::FoundProviders { key, providers, .. })) => {
+            kad::QueryResult::GetProviders(Ok(kad::GetProvidersOk::FoundProviders {
+                key,
+                providers,
+                ..
+            })) => {
                 if let Some(sender) = self.pending_get_providers.remove(&query_id) {
-                    sender.send(providers)
-                        .expect("Receiver not to be dropped");
+                    sender.send(providers).expect("Receiver not to be dropped");
                 }
             }
             kad::QueryResult::GetProviders(Err(err)) => {
                 tracing::error!("Failed to get providers: {err:?}");
                 if let Some(sender) = self.pending_get_providers.remove(&query_id) {
-                    sender.send(HashSet::new())
+                    sender
+                        .send(HashSet::new())
                         .expect("Receiver not to be dropped");
                 }
             }
-            kad::QueryResult::GetRecord(Ok(
-                                            kad::GetRecordOk::FoundRecord(kad::PeerRecord {
-                                                                              record: kad::Record { key, value, .. },
-                                                                              ..
-                                                                          })
-                                        )) => {
+            kad::QueryResult::GetRecord(Ok(kad::GetRecordOk::FoundRecord(kad::PeerRecord {
+                record: kad::Record { key, value, .. },
+                ..
+            }))) => {
                 if let Some(sender) = self.pending_get_value.remove(&query_id) {
-                    sender.send(Ok(value))
-                        .expect("Receiver not to be dropped");
+                    sender.send(Ok(value)).expect("Receiver not to be dropped");
                 }
             }
             kad::QueryResult::GetRecord(Err(err)) => {
                 if let Some(sender) = self.pending_get_value.remove(&query_id) {
-                    sender.send(Err(Box::new(err.clone())))
+                    sender
+                        .send(Err(Box::new(err.clone())))
                         .expect("Receiver not to be dropped");
                 }
                 tracing::error!("Failed to get record: {err:?}");
@@ -311,14 +329,14 @@ impl EventLoop {
                     std::str::from_utf8(key.as_ref()).unwrap()
                 );
                 if let Some(sender) = self.pending_put_kv.remove(&query_id) {
-                    sender.send(Ok(()))
-                        .expect("Receiver not to be dropped");
+                    sender.send(Ok(())).expect("Receiver not to be dropped");
                 }
             }
             kad::QueryResult::PutRecord(Err(err)) => {
                 tracing::error!("Failed to put record: {err:?}");
                 if let Some(sender) = self.pending_put_kv.remove(&query_id) {
-                    sender.send(Err(Box::new(err)))
+                    sender
+                        .send(Err(Box::new(err)))
                         .expect("Receiver not to be dropped");
                 }
             }
@@ -379,14 +397,14 @@ impl EventLoop {
             }
             NetworkCommand::StartProviding { key, sender } => {
                 let key_with_ns = Utils::get_key_with_ns(key.as_str());
-                let query_id = self.swarm
+                let query_id = self
+                    .swarm
                     .behaviour_mut()
                     .kademlia
                     .start_providing(key_with_ns.into_bytes().into())
                     .expect("No store error.");
 
-                self.pending_start_providing
-                    .insert(query_id, sender);
+                self.pending_start_providing.insert(query_id, sender);
             }
             NetworkCommand::StopProviding { key } => {
                 let key_with_ns = Utils::get_key_with_ns(key.as_str());
@@ -399,26 +417,26 @@ impl EventLoop {
             }
             NetworkCommand::GetProviders { key, sender } => {
                 let key_with_ns = Utils::get_key_with_ns(key.as_str());
-                let query_id = self.swarm
+                let query_id = self
+                    .swarm
                     .behaviour_mut()
                     .kademlia
                     .get_providers(key_with_ns.into_bytes().into());
 
-                self.pending_get_providers
-                    .insert(query_id, sender);
+                self.pending_get_providers.insert(query_id, sender);
             }
             NetworkCommand::Request {
                 request,
                 peer,
                 sender,
             } => {
-                let request_id = self.swarm
+                let request_id = self
+                    .swarm
                     .behaviour_mut()
                     .request_response
                     .send_request(&peer, request);
 
-                self.pending_request
-                    .insert(request_id, sender);
+                self.pending_request.insert(request_id, sender);
 
                 tracing::info!("Sent request to {:?}", peer);
             }
@@ -439,36 +457,42 @@ impl EventLoop {
                     publisher: None,
                     expires: None,
                 };
-                let request_id = self.swarm
+                let request_id = self
+                    .swarm
                     .behaviour_mut()
                     .kademlia
                     .put_record(record, kad::Quorum::One)
                     .expect("Failed to initiate put request");
 
-                self.pending_put_kv
-                    .insert(request_id, sender);
+                self.pending_put_kv.insert(request_id, sender);
             }
             NetworkCommand::GetValue { key, sender } => {
                 let key_with_ns = Utils::get_key_with_ns(key.as_str());
-                let request_id = self.swarm
+                let request_id = self
+                    .swarm
                     .behaviour_mut()
                     .kademlia
                     .get_record(kad::RecordKey::new(&key_with_ns.as_str()));
 
-                self.pending_get_value
-                    .insert(request_id, sender);
+                self.pending_get_value.insert(request_id, sender);
             }
-            NetworkCommand::SendInStream { peer_id, stream_req, sender } => {
-                let mut control = self.swarm.behaviour_mut().stream
-                    .new_control();
-                let content_bytes = bincode::serialize(&stream_req)
-                    .unwrap();
+            NetworkCommand::SendInStream {
+                peer_id,
+                stream_req,
+                sender,
+            } => {
+                let mut control = self.swarm.behaviour_mut().stream.new_control();
+                let content_bytes = bincode::serialize(&stream_req).unwrap();
                 tracing::info!("Sending {} bytes", content_bytes.len());
 
                 let protocol_future = async move {
                     match control
-                        .open_stream(peer_id.clone(), StreamProtocol::new(OrcaNetConfig::STREAM_PROTOCOL))
-                        .await {
+                        .open_stream(
+                            peer_id.clone(),
+                            StreamProtocol::new(OrcaNetConfig::STREAM_PROTOCOL),
+                        )
+                        .await
+                    {
                         Ok(mut stream) => {
                             tracing::info!("Opened stream");
                             match stream.write_all(content_bytes.as_slice()).await {
@@ -482,7 +506,7 @@ impl EventLoop {
 
                                     let _ = stream.close().await;
                                 }
-                                Err(e) => tracing::error!("Failed to write to stream: {:?}", e)
+                                Err(e) => tracing::error!("Failed to write to stream: {:?}", e),
                             }
                         }
                         Err(e) => {
@@ -521,9 +545,7 @@ impl EventLoop {
                     .await
                     .expect("Command receiver not to be dropped");
 
-                let response = receiver
-                    .await
-                    .expect("Sender not to be dropped");
+                let response = receiver.await.expect("Sender not to be dropped");
 
                 self.handle_command(NetworkCommand::SendInStream {
                     peer_id,
@@ -532,14 +554,14 @@ impl EventLoop {
                         stream_data: StreamData::Response(response),
                     },
                     sender: None,
-                }).await;
+                })
+                .await;
             }
             StreamData::Response(response) => {
                 tracing::info!("Received stream response");
                 // Utils::handle_file_response(response_content);
 
-                if let Some(sender) = self.pending_stream_requests
-                    .remove(&stream_req.request_id) {
+                if let Some(sender) = self.pending_stream_requests.remove(&stream_req.request_id) {
                     let _ = sender.send(Ok(response)).expect("Send to work");
                 }
             }

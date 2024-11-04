@@ -8,9 +8,9 @@ use futures::channel::mpsc;
 use futures::SinkExt;
 use libp2p_swarm::derive_prelude::PeerId;
 use ring::digest::digest;
-use rocket::{get, routes, State};
 use rocket::serde::{json::Json, Serialize};
 use rocket::time::format_description::parse;
+use rocket::{get, routes, State};
 use serde::Deserialize;
 use serde_json::json;
 use tracing_subscriber::fmt::format;
@@ -80,12 +80,9 @@ impl Response {
 fn get_block_count() -> Json<Response> {
     let rpc_wrapper = RPCWrapper::new(OrcaNetConfig::get_network_type());
 
-    match rpc_wrapper.get_client()
-        .get_block_count() {
+    match rpc_wrapper.get_client().get_block_count() {
         Ok(count) => Response::success(json!(count)),
-        Err(e) => {
-            Response::error(format!("Error getting block count {:?}", e))
-        }
+        Err(e) => Response::error(format!("Error getting block count {:?}", e)),
     }
 }
 
@@ -93,12 +90,9 @@ fn get_block_count() -> Json<Response> {
 fn get_balance() -> Json<Response> {
     let rpc_wrapper = RPCWrapper::new(OrcaNetConfig::get_network_type());
 
-    match rpc_wrapper.get_client()
-        .get_balance(None, None) {
+    match rpc_wrapper.get_client().get_balance(None, None) {
         Ok(balance) => Response::success(json!(balance.to_string())),
-        Err(e) => {
-            Response::error(format!("Error getting balance {:?}", e))
-        }
+        Err(e) => Response::error(format!("Error getting balance {:?}", e)),
     }
 }
 
@@ -109,9 +103,7 @@ fn load_wallet(wallet_name: String) -> Json<Response> {
 
     match rpc_wrapper.get_client().load_wallet(wallet_name.as_str()) {
         Ok(_) => Response::success(json!("Wallet loaded")),
-        Err(e) => {
-            Response::error(format!("Error loading wallet {:?}", e))
-        }
+        Err(e) => Response::error(format!("Error loading wallet {:?}", e)),
     }
 }
 
@@ -122,14 +114,10 @@ fn send_to_address(request: Json<SendToAddressRequest>) -> Json<Response> {
     let comment = request.comment.as_deref();
 
     match rpc_wrapper.send_to_address(request.address.as_str(), request.amount, comment) {
-        Ok(tx_id) => {
-            Response::success(json!({
-                "tx_id": tx_id
-            }))
-        }
-        Err(e) => {
-            Response::error(format!("Failed to send: {:?}", e))
-        }
+        Ok(tx_id) => Response::success(json!({
+            "tx_id": tx_id
+        })),
+        Err(e) => Response::error(format!("Failed to send: {:?}", e)),
     }
 }
 
@@ -153,13 +141,17 @@ async fn generate_block() -> Json<Response> {
 fn list_transactions(start_offset: usize, end_offset: usize) -> Json<Response> {
     let rpc_wrapper = RPCWrapper::new(OrcaNetConfig::get_network_type());
 
-    match rpc_wrapper.get_client()
-        .list_transactions(None, Some(end_offset - start_offset), Some(start_offset - 1), None) {
+    match rpc_wrapper.get_client().list_transactions(
+        None,
+        Some(end_offset - start_offset),
+        Some(start_offset - 1),
+        None,
+    ) {
         Ok(mut transactions) => {
             transactions.sort_by(|a, b| b.info.time.cmp(&a.info.time));
             Response::success(json!(transactions))
         }
-        Err(e) => Response::error(format!("Error fetching transactions {:?}", e))
+        Err(e) => Response::error(format!("Error fetching transactions {:?}", e)),
     }
 }
 
@@ -173,10 +165,9 @@ fn get_transaction_info(tx_id: String) -> Json<Response> {
         }
     };
 
-    match rpc_wrapper.get_client()
-        .get_transaction(&tx_id_val, None) {
+    match rpc_wrapper.get_client().get_transaction(&tx_id_val, None) {
         Ok(transaction) => Response::success(json!(transaction)),
-        Err(e) => Response::error(format!("Error fetching transactions {:?}", e))
+        Err(e) => Response::error(format!("Error fetching transactions {:?}", e)),
     }
 }
 
@@ -192,13 +183,11 @@ async fn dial(state: &State<AppState>, peer_id_str: String) -> Json<Response> {
     };
 
     let addr = Utils::get_address_through_relay(&peer_id, None);
-    let dial_resp = state.network_client.clone()
-        .dial(peer_id, addr)
-        .await;
+    let dial_resp = state.network_client.clone().dial(peer_id, addr).await;
 
     match dial_resp {
         Ok(_) => Response::success(json!("Dialled successfully")),
-        Err(e) => Response::error(format!("Dialing failed: {:?}", e))
+        Err(e) => Response::error(format!("Dialing failed: {:?}", e)),
     }
 }
 
@@ -208,7 +197,7 @@ async fn get_provided_files() -> Json<Response> {
 
     match provided_files_table.get_provided_files() {
         Ok(files) => Response::success(json!(files)),
-        Err(e) => Response::error(format!("Error getting files: {:?}", e))
+        Err(e) => Response::error(format!("Error getting files: {:?}", e)),
     }
 }
 
@@ -218,7 +207,7 @@ async fn get_downloaded_files() -> Json<Response> {
 
     match downloaded_files_table.get_downloaded_files() {
         Ok(files) => Response::success(json!(files)),
-        Err(e) => Response::error(format!("Error getting files: {:?}", e))
+        Err(e) => Response::error(format!("Error getting files: {:?}", e)),
     }
 }
 
@@ -229,12 +218,15 @@ async fn get_file_info(file_id: String) -> Json<Response> {
 
     match provided_files_table.get_provided_file_info(file_id.as_str()) {
         Ok(file) => Response::success(json!(file)),
-        Err(e) => Response::error(format!("Error getting file: {:?}", e))
+        Err(e) => Response::error(format!("Error getting file: {:?}", e)),
     }
 }
 
 #[post("/provide-file", format = "application/json", data = "<request>")]
-async fn provide_file(state: &State<AppState>, request: Json<ProvideFileRequest>) -> Json<Response> {
+async fn provide_file(
+    state: &State<AppState>,
+    request: Json<ProvideFileRequest>,
+) -> Json<Response> {
     tracing::info!("Provide file request: {:?}", request);
     let file_path = request.file_path.clone();
 
@@ -245,7 +237,10 @@ async fn provide_file(state: &State<AppState>, request: Json<ProvideFileRequest>
     }
 
     if path.metadata().unwrap().len() > OrcaNetConfig::MAX_FILE_SIZE_BYTES {
-        return Response::error(format!("File size exceeds threshold of {} bytes", OrcaNetConfig::MAX_FILE_SIZE_BYTES));
+        return Response::error(format!(
+            "File size exceeds threshold of {} bytes",
+            OrcaNetConfig::MAX_FILE_SIZE_BYTES
+        ));
     }
 
     // Compute hash
@@ -257,8 +252,13 @@ async fn provide_file(state: &State<AppState>, request: Json<ProvideFileRequest>
     };
 
     // Start providing
-    let _ = state.event_sender.clone()
-        .send(OrcaNetEvent::ProvideFile { file_id: file_id.clone(), file_path })
+    let _ = state
+        .event_sender
+        .clone()
+        .send(OrcaNetEvent::ProvideFile {
+            file_id: file_id.clone(),
+            file_path,
+        })
         .await;
 
     Response::success(json!({
@@ -268,9 +268,15 @@ async fn provide_file(state: &State<AppState>, request: Json<ProvideFileRequest>
 
 /// Stop providing a file to the network. Set permanent to true to remove from DB. Otherwise, it's set as inactive.
 #[post("/stop-providing/<file_id>?<permanent>")]
-async fn stop_providing(state: &State<AppState>, file_id: String, permanent: bool) -> Json<Response> {
+async fn stop_providing(
+    state: &State<AppState>,
+    file_id: String,
+    permanent: bool,
+) -> Json<Response> {
     tracing::info!("Stop providing request for: {}", file_id);
-    let _ = state.event_sender.clone()
+    let _ = state
+        .event_sender
+        .clone()
         .send(OrcaNetEvent::StopProvidingFile { file_id, permanent })
         .await;
 
@@ -278,7 +284,10 @@ async fn stop_providing(state: &State<AppState>, file_id: String, permanent: boo
 }
 
 #[post("/download-file", format = "application/json", data = "<request>")]
-async fn download_file(state: &State<AppState>, request: Json<DownloadFileRequest>) -> Json<Response> {
+async fn download_file(
+    state: &State<AppState>,
+    request: Json<DownloadFileRequest>,
+) -> Json<Response> {
     // TODO: Add a check to make sure it's not already downloaded or provided
     tracing::info!("Download file request: {:?}", request);
     let path = Path::new(&request.dest_path);
@@ -289,7 +298,10 @@ async fn download_file(state: &State<AppState>, request: Json<DownloadFileReques
 
     // Validate that parent exists
     if path.parent().map_or(true, |v| !v.exists()) {
-        return Response::error("Invalid path. Either it's not a file path or the parent directory does not exist".to_string());
+        return Response::error(
+            "Invalid path. Either it's not a file path or the parent directory does not exist"
+                .to_string(),
+        );
     }
 
     let peer_id = match request.peer_id.parse() {
@@ -299,18 +311,27 @@ async fn download_file(state: &State<AppState>, request: Json<DownloadFileReques
         }
     };
 
-    match state.network_client.clone()
-        .download_file_from_peer(request.file_id.clone(), peer_id, Some(request.dest_path.clone()))
-        .await {
+    match state
+        .network_client
+        .clone()
+        .download_file_from_peer(
+            request.file_id.clone(),
+            peer_id,
+            Some(request.dest_path.clone()),
+        )
+        .await
+    {
         Ok(_) => Response::success(json!("Downloaded file")),
-        Err(e) => Response::error(format!("Error downloading file: {:?}", e))
+        Err(e) => Response::error(format!("Error downloading file: {:?}", e)),
     }
 }
 
 #[get("/get-providers/<file_id>")]
 async fn get_providers(state: &State<AppState>, file_id: String) -> Json<Response> {
     tracing::info!("Get providers request for: {}", file_id);
-    let providers = state.network_client.clone()
+    let providers = state
+        .network_client
+        .clone()
         .get_providers(file_id.clone())
         .await;
 
@@ -318,12 +339,16 @@ async fn get_providers(state: &State<AppState>, file_id: String) -> Json<Respons
         Response::success(json!([]));
     }
 
-    let file_request = OrcaNetRequest::FileMetadataRequest { file_id: file_id.clone() };
+    let file_request = OrcaNetRequest::FileMetadataRequest {
+        file_id: file_id.clone(),
+    };
     let mut results = Vec::new();
 
     // TODO: Parallelize the metadata requests
     for peer_id in providers {
-        let response = state.network_client.clone()
+        let response = state
+            .network_client
+            .clone()
             .send_stream_request(peer_id.clone(), file_request.clone())
             .await;
 
@@ -337,38 +362,44 @@ async fn get_providers(state: &State<AppState>, file_id: String) -> Json<Respons
                     }));
                 }
             }
-            Err(e) => tracing::error!("Error getting file metadata from peer {:?}. Error: {:?}", peer_id, e)
+            Err(e) => tracing::error!(
+                "Error getting file metadata from peer {:?}. Error: {:?}",
+                peer_id,
+                e
+            ),
         }
     }
 
     Response::success(json!(results))
 }
 
-
 pub async fn start_http_server(
     network_client: NetworkClient,
     event_sender: mpsc::Sender<OrcaNetEvent>,
 ) {
     rocket::build()
-        .mount("/api", routes![
-            // Wallet
-            get_block_count,
-            get_balance,
-            load_wallet,
-            send_to_address,
-            generate_block,
-            list_transactions,
-            get_transaction_info,
-            // File sharing
-            dial,
-            get_provided_files,
-            get_downloaded_files,
-            get_file_info,
-            provide_file,
-            stop_providing,
-            download_file,
-            get_providers
-        ])
+        .mount(
+            "/api",
+            routes![
+                // Wallet
+                get_block_count,
+                get_balance,
+                load_wallet,
+                send_to_address,
+                generate_block,
+                list_transactions,
+                get_transaction_info,
+                // File sharing
+                dial,
+                get_provided_files,
+                get_downloaded_files,
+                get_file_info,
+                provide_file,
+                stop_providing,
+                download_file,
+                get_providers
+            ],
+        )
         .manage(AppState {
             network_client,
             event_sender,
