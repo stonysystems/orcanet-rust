@@ -19,7 +19,8 @@ pub enum ConfigKey {
     DBPath,
     AppDataPath,
     BTCAddress,
-    FeeRatePerKB,
+    FileFeeRatePerKB,
+    ProxyFeeRatePerKB,
     NetworkType,
     RunHTTPServer,
     ProxyConfig,
@@ -84,7 +85,7 @@ impl OrcaNetConfig {
         Self::get_from_config(config_key.clone())
             .expect(format!("{:?} to be present in config", config_key).as_str())
             .as_str()
-            .expect(format!("{:?} to be a string", config_key).as_str())
+            .expect(format!("{:?} to be valid as a string", config_key).as_str())
             .to_string()
     }
 
@@ -102,9 +103,15 @@ impl OrcaNetConfig {
         Ok(())
     }
 
-    pub fn get_fee_rate() -> f64 {
-        Self::get_str_from_config(ConfigKey::FeeRatePerKB)
-            .parse()
+    pub fn get_file_fee_rate() -> f64 {
+        Self::get_from_config(ConfigKey::FileFeeRatePerKB)
+            .and_then(|v| v.as_f64())
+            .expect("Amount to be valid floating point value in BTC")
+    }
+
+    pub fn get_proxy_fee_rate() -> f64 {
+        Self::get_from_config(ConfigKey::ProxyFeeRatePerKB)
+            .and_then(|v| v.as_f64())
             .expect("Amount to be valid floating point value in BTC")
     }
 
@@ -229,9 +236,8 @@ pub enum OrcaNetRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HTTPProxyMetadata {
-    pub address: String,
-    pub port: u16,
-    pub fee_rate: f64,
+    pub proxy_address: String, // IP address with port
+    pub fee_rate_per_kb: f64,
     pub recipient_address: String,
 }
 

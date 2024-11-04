@@ -169,7 +169,7 @@ impl Utils {
                     download_timestamp: Utils::get_unix_timestamp(),
                 };
 
-                match downloaded_files_table.insert_downloaded_file(downloaded_file_info) {
+                match downloaded_files_table.insert_downloaded_file(&downloaded_file_info) {
                     Ok(_) => tracing::info!("Inserted record for downloaded file"),
                     Err(e) => tracing::error!("Error inserting download record {:?}", e)
                 }

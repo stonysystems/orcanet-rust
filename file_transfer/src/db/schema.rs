@@ -1,6 +1,8 @@
 use diesel::{Insertable, Queryable, Selectable};
 use serde::Serialize;
 
+use crate::utils::Utils;
+
 pub mod table_schema {
     diesel::table! {
         provided_files (file_id) {
@@ -61,6 +63,19 @@ pub struct ProvidedFileInfo {
     pub provide_start_timestamp: Option<i64>,
 }
 
+impl ProvidedFileInfo {
+    pub(crate) fn with_defaults(file_id: String, file_path: String, file_name: String) -> Self {
+        Self {
+            file_id,
+            file_path,
+            file_name,
+            downloads_count: 0,
+            status: 1,
+            provide_start_timestamp: Some(Utils::get_unix_timestamp()),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Insertable, Queryable, Selectable)]
 #[diesel(table_name = table_schema::downloaded_files)]
 pub struct DownloadedFileInfo {
@@ -76,7 +91,7 @@ pub struct DownloadedFileInfo {
     pub download_timestamp: i64,
 }
 
-#[derive(Debug, Clone, Serialize, Insertable, Queryable, Selectable)]
+#[derive(Default, Debug, Clone, Serialize, Insertable, Queryable, Selectable)]
 #[diesel(table_name = table_schema::proxy_clients)]
 pub struct ProxyClientInfo {
     pub client_id: String,
@@ -87,6 +102,19 @@ pub struct ProxyClientInfo {
     pub total_fee_owed: f32,
     pub fee_rate_per_kb: f32,
     pub last_known_peer_id: String,
+}
+
+impl ProxyClientInfo {
+    pub fn with_defaults(client_id: String, auth_token: String,
+                         // TODO: Add last_known_peer_id
+    ) -> Self {
+        Self {
+            client_id,
+            auth_token,
+            start_timestamp: Utils::get_unix_timestamp(),
+            ..Default::default()
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Insertable, Queryable, Selectable)]

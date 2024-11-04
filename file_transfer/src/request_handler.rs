@@ -6,8 +6,8 @@ use serde_json::json;
 use tokio::select;
 use tracing_subscriber::filter::FilterExt;
 
-use crate::common::{ConfigKey, FileMetadata, OrcaNetConfig, OrcaNetError, OrcaNetEvent, OrcaNetRequest, OrcaNetResponse, ProxyMode};
-use crate::db::{ProvidedFileInfo, ProvidedFilesTable};
+use crate::common::{ConfigKey, FileMetadata, HTTPProxyMetadata, OrcaNetConfig, OrcaNetError, OrcaNetEvent, OrcaNetRequest, OrcaNetResponse, ProxyMode};
+use crate::db::{ProvidedFileInfo, ProvidedFilesTable, ProxyClientInfo, ProxyClientsTable};
 use crate::http::start_http_proxy;
 use crate::network_client::NetworkClient;
 use crate::utils::Utils;
@@ -62,15 +62,9 @@ impl RequestHandlerLoop {
 
                 if path.exists() {
                     let mut provided_files_table = ProvidedFilesTable::new(None);
+                    let file_info = ProvidedFileInfo::with_defaults(file_id.clone(), file_path, file_name);
                     let resp = provided_files_table
-                        .insert_provided_file(ProvidedFileInfo {
-                            file_id: file_id.clone(),
-                            file_name,
-                            file_path,
-                            downloads_count: 0,
-                            status: 1,
-                            provide_start_timestamp: Some(Utils::get_unix_timestamp()),
-                        });
+                        .insert_provided_file(&file_info);
 
                     match resp {
                         Ok(_) => {
@@ -204,7 +198,7 @@ impl RequestHandlerLoop {
                         OrcaNetResponse::FileMetadataResponse(FileMetadata {
                             file_id,
                             file_name: file_info.file_name,
-                            fee_rate_per_kb: OrcaNetConfig::get_fee_rate(),
+                            fee_rate_per_kb: OrcaNetConfig::get_file_fee_rate(),
                             recipient_address: OrcaNetConfig::get_str_from_config(ConfigKey::BTCAddress),
                         })
                     }
@@ -217,57 +211,100 @@ impl RequestHandlerLoop {
                 }
             }
             OrcaNetRequest::FileContentRequest { file_id } => {
-                tracing::info!("Received content request for file_id: {}", file_id);
+                Self::handle_file_content_request(file_id)
+            }
+            OrcaNetRequest::HTTPProxyMetadataRequest | OrcaNetRequest::HTTPProxyProvideRequest => {
+                Self::handle_http_proxy_request(request)
+            }
+        }
+    }
 
-                let mut provided_files_table = ProvidedFilesTable::new(None);
-                let file_info = provided_files_table
-                    .get_provided_file_info(file_id.as_str());
-                tracing::info!("File info for request {} {:?}", file_id, file_info);
+    fn handle_http_proxy_request(request: OrcaNetRequest) -> OrcaNetResponse {
+        match OrcaNetConfig::get_proxy_config() {
+            Some(ProxyMode::ProxyProvider) => {
+                let metadata = HTTPProxyMetadata {
+                    proxy_address: "".to_string(),
+                    fee_rate_per_kb: OrcaNetConfig::get_proxy_fee_rate(),
+                    recipient_address: OrcaNetConfig::get_str_from_config(ConfigKey::BTCAddress),
+                };
 
-                let resp = match file_info {
-                    Ok(file_info) => {
-                        match std::fs::read(&file_info.file_path) {
-                            Ok(content) => {
-                                let _ = provided_files_table
-                                    .increment_download_count(file_id.as_str());
+                match request {
+                    OrcaNetRequest::HTTPProxyMetadataRequest => {
+                        OrcaNetResponse::HTTPProxyMetadataResponse(metadata)
+                    }
+                    OrcaNetRequest::HTTPProxyProvideRequest => {
+                        // Create new client
+                        let client_id = Utils::new_uuid();
+                        let auth_token = Utils::new_uuid();
 
-                                OrcaNetResponse::FileContentResponse {
-                                    metadata: FileMetadata {
-                                        file_id,
-                                        file_name: file_info.file_name,
-                                        fee_rate_per_kb: OrcaNetConfig::get_fee_rate(),
-                                        recipient_address: OrcaNetConfig::get_str_from_config(ConfigKey::BTCAddress),
-                                    },
-                                    content,
+                        let mut proxy_clients_table = ProxyClientsTable::new(None);
+                        let proxy_client_info = ProxyClientInfo::with_defaults(
+                            client_id.clone(), auth_token.clone());
+
+                        match proxy_clients_table.add_client(&proxy_client_info) {
+                            Ok(_) => {
+                                tracing::info!("Created new client: {:?}", proxy_client_info);
+                                OrcaNetResponse::HTTPProxyProvideResponse {
+                                    metadata,
+                                    client_id,
+                                    auth_token,
                                 }
                             }
-                            Err(e) => {
-                                tracing::error!("Error reading file: {:?}", e);
+                            Err(_) => {
                                 OrcaNetResponse::Error(
-                                    OrcaNetError::FileProvideError("Error while reading file".parse().unwrap())
+                                    OrcaNetError::InternalServerError("Error creating client".to_string())
                                 )
                             }
                         }
                     }
-                    Err(_) => OrcaNetResponse::Error(
-                        OrcaNetError::FileProvideError("File can't be provided".parse().unwrap())
-                    )
-                };
+                    _ => panic!("Expected only proxy requests in handle_proxy_requests")
+                }
+            }
+            _ => {
+                // Not providing
+                OrcaNetResponse::Error(
+                    OrcaNetError::NotAProvider("Not a proxy provider".parse().unwrap())
+                )
+            }
+        }
+    }
 
-                resp
+    fn handle_file_content_request(file_id: String) -> OrcaNetResponse {
+        tracing::info!("Received content request for file_id: {}", file_id);
+
+        let mut provided_files_table = ProvidedFilesTable::new(None);
+        let file_info = provided_files_table
+            .get_provided_file_info(file_id.as_str());
+        tracing::info!("File info for request {} {:?}", file_id, file_info);
+
+        match file_info {
+            Ok(file_info) => {
+                match std::fs::read(&file_info.file_path) {
+                    Ok(content) => {
+                        let _ = provided_files_table
+                            .increment_download_count(file_id.as_str());
+
+                        OrcaNetResponse::FileContentResponse {
+                            metadata: FileMetadata {
+                                file_id,
+                                file_name: file_info.file_name,
+                                fee_rate_per_kb: OrcaNetConfig::get_file_fee_rate(),
+                                recipient_address: OrcaNetConfig::get_str_from_config(ConfigKey::BTCAddress),
+                            },
+                            content,
+                        }
+                    }
+                    Err(e) => {
+                        tracing::error!("Error reading file: {:?}", e);
+                        OrcaNetResponse::Error(
+                            OrcaNetError::FileProvideError("Error while reading file".parse().unwrap())
+                        )
+                    }
+                }
             }
-            OrcaNetRequest::HTTPProxyMetadataRequest => {
-                // Not providing
-                OrcaNetResponse::Error(
-                    OrcaNetError::NotAProvider("Not a proxy provider".parse().unwrap())
-                )
-            }
-            OrcaNetRequest::HTTPProxyProvideRequest => {
-                // Not providing
-                OrcaNetResponse::Error(
-                    OrcaNetError::NotAProvider("Not a proxy provider".parse().unwrap())
-                )
-            }
+            Err(_) => OrcaNetResponse::Error(
+                OrcaNetError::FileProvideError("File can't be provided".parse().unwrap())
+            )
         }
     }
 }

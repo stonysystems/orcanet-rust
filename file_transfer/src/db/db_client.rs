@@ -34,11 +34,11 @@ impl ProvidedFilesTable {
         }
     }
 
-    pub fn insert_provided_file(&mut self, file_info: ProvidedFileInfo) -> QueryResult<usize> {
+    pub fn insert_provided_file(&mut self, file_info: &ProvidedFileInfo) -> QueryResult<usize> {
         use table_schema::provided_files::dsl::*;
 
         insert_into(provided_files)
-            .values(&file_info)
+            .values(file_info)
             .execute(&mut self.conn)
     }
 
@@ -99,11 +99,11 @@ impl DownloadedFilesTable {
         }
     }
 
-    pub fn insert_downloaded_file(&mut self, downloaded_file_info: DownloadedFileInfo) -> QueryResult<usize> {
+    pub fn insert_downloaded_file(&mut self, downloaded_file_info: &DownloadedFileInfo) -> QueryResult<usize> {
         use table_schema::downloaded_files::dsl::*;
 
         insert_into(downloaded_files)
-            .values(&downloaded_file_info)
+            .values(downloaded_file_info)
             .execute(&mut self.conn)
     }
 
@@ -154,11 +154,11 @@ impl ProxyClientsTable {
     //         .map(|info| info.auth_token)
     // }
 
-    pub fn add_client(&mut self, client_info: ProxyClientInfo) -> QueryResult<usize> {
+    pub fn add_client(&mut self, client_info: &ProxyClientInfo) -> QueryResult<usize> {
         use table_schema::proxy_clients::dsl::*;
 
         insert_into(proxy_clients)
-            .values(&client_info)
+            .values(client_info)
             .execute(&mut self.conn)
     }
 
