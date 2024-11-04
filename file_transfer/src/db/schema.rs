@@ -105,14 +105,13 @@ pub struct ProxyClientInfo {
 }
 
 impl ProxyClientInfo {
-    pub fn with_defaults(client_id: String, auth_token: String,
-                         // TODO: Add last_known_peer_id
-    ) -> Self {
+    // TODO: Add last_known_peer_id
+    pub fn with_defaults(client_id: String, auth_token: String) -> Self {
         Self {
             client_id,
             auth_token,
             start_timestamp: Utils::get_unix_timestamp(),
-            ..Default::default()
+            ..Self::default()
         }
     }
 }

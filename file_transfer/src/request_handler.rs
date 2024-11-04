@@ -189,29 +189,8 @@ impl RequestHandlerLoop {
 
     fn handle_request(&mut self, request: OrcaNetRequest) -> OrcaNetResponse {
         match request {
-            OrcaNetRequest::FileMetadataRequest { file_id } => {
-                tracing::info!("Received metadata request for file_id: {}", file_id);
-                let mut provided_files_table = ProvidedFilesTable::new(None);
-
-                match provided_files_table.get_provided_file_info(file_id.as_str()) {
-                    Ok(file_info) => {
-                        OrcaNetResponse::FileMetadataResponse(FileMetadata {
-                            file_id,
-                            file_name: file_info.file_name,
-                            fee_rate_per_kb: OrcaNetConfig::get_file_fee_rate(),
-                            recipient_address: OrcaNetConfig::get_str_from_config(ConfigKey::BTCAddress),
-                        })
-                    }
-                    Err(_) => {
-                        tracing::error!("Requested file not found in DB");
-                        OrcaNetResponse::Error(
-                            OrcaNetError::NotAProvider("Not a provider of requested file".parse().unwrap())
-                        )
-                    }
-                }
-            }
-            OrcaNetRequest::FileContentRequest { file_id } => {
-                Self::handle_file_content_request(file_id)
+            OrcaNetRequest::FileMetadataRequest { .. } | OrcaNetRequest::FileContentRequest { .. } => {
+                Self::handle_file_request(request)
             }
             OrcaNetRequest::HTTPProxyMetadataRequest | OrcaNetRequest::HTTPProxyProvideRequest => {
                 Self::handle_http_proxy_request(request)
@@ -263,48 +242,111 @@ impl RequestHandlerLoop {
             _ => {
                 // Not providing
                 OrcaNetResponse::Error(
-                    OrcaNetError::NotAProvider("Not a proxy provider".parse().unwrap())
+                    OrcaNetError::NotAProvider("Not a proxy provider".to_string())
                 )
             }
         }
     }
 
-    fn handle_file_content_request(file_id: String) -> OrcaNetResponse {
-        tracing::info!("Received content request for file_id: {}", file_id);
+    fn handle_file_request(request: OrcaNetRequest) -> OrcaNetResponse {
+        let file_id = match &request {
+            OrcaNetRequest::FileMetadataRequest { file_id } => file_id,
+            OrcaNetRequest::FileContentRequest { file_id } => file_id,
+            _ => panic!("Expected file request")
+        };
 
         let mut provided_files_table = ProvidedFilesTable::new(None);
-        let file_info = provided_files_table
+        let file_info_resp = provided_files_table
             .get_provided_file_info(file_id.as_str());
+
+        if file_info_resp.is_err() {
+            // Most likely not present in DB
+            tracing::error!("Requested file not found in DB");
+            return OrcaNetResponse::Error(
+                OrcaNetError::NotAProvider("Not a provider of requested file".to_string())
+            );
+        }
+
+        let file_info = file_info_resp.unwrap();
         tracing::info!("File info for request {} {:?}", file_id, file_info);
 
-        match file_info {
-            Ok(file_info) => {
+        let file_metadata = FileMetadata {
+            file_id: file_id.clone(),
+            file_name: file_info.file_name,
+            fee_rate_per_kb: OrcaNetConfig::get_file_fee_rate(),
+            recipient_address: OrcaNetConfig::get_str_from_config(ConfigKey::BTCAddress),
+        };
+
+        match request {
+            OrcaNetRequest::FileMetadataRequest { .. } => {
+                tracing::info!("Received metadata request for file_id: {}", file_id);
+
+                OrcaNetResponse::FileMetadataResponse(file_metadata)
+            }
+            OrcaNetRequest::FileContentRequest { .. } => {
+                tracing::info!("Received content request for file_id: {}", file_id);
+
                 match std::fs::read(&file_info.file_path) {
                     Ok(content) => {
                         let _ = provided_files_table
                             .increment_download_count(file_id.as_str());
 
                         OrcaNetResponse::FileContentResponse {
-                            metadata: FileMetadata {
-                                file_id,
-                                file_name: file_info.file_name,
-                                fee_rate_per_kb: OrcaNetConfig::get_file_fee_rate(),
-                                recipient_address: OrcaNetConfig::get_str_from_config(ConfigKey::BTCAddress),
-                            },
+                            metadata: file_metadata,
                             content,
                         }
                     }
                     Err(e) => {
                         tracing::error!("Error reading file: {:?}", e);
                         OrcaNetResponse::Error(
-                            OrcaNetError::FileProvideError("Error while reading file".parse().unwrap())
+                            OrcaNetError::FileProvideError("Error while reading file".to_string())
                         )
                     }
                 }
             }
-            Err(_) => OrcaNetResponse::Error(
-                OrcaNetError::FileProvideError("File can't be provided".parse().unwrap())
-            )
+            _ => panic!("Expected file request")
         }
     }
+
+    // fn handle_file_content_request(file_id: String) -> OrcaNetResponse {
+    //     tracing::info!("Received content request for file_id: {}", file_id);
+    //
+    //     let mut provided_files_table = ProvidedFilesTable::new(None);
+    //     let file_info = provided_files_table
+    //         .get_provided_file_info(file_id.as_str());
+    //     tracing::info!("File info for request {} {:?}", file_id, file_info);
+    //
+    //     match file_info {
+    //         Ok(file_info) => {
+    //             match std::fs::read(&file_info.file_path) {
+    //                 Ok(content) => {
+    //                     let _ = provided_files_table
+    //                         .increment_download_count(file_id.as_str());
+    //
+    //                     OrcaNetResponse::FileContentResponse {
+    //                         metadata: FileMetadata {
+    //                             file_id,
+    //                             file_name: file_info.file_name,
+    //                             fee_rate_per_kb: OrcaNetConfig::get_file_fee_rate(),
+    //                             recipient_address: OrcaNetConfig::get_str_from_config(ConfigKey::BTCAddress),
+    //                         },
+    //                         content,
+    //                     }
+    //                 }
+    //                 Err(e) => {
+    //                     tracing::error!("Error reading file: {:?}", e);
+    //                     OrcaNetResponse::Error(
+    //                         OrcaNetError::FileProvideError("Error while reading file".parse().unwrap())
+    //                     )
+    //                 }
+    //             }
+    //         }
+    //         Err(_) => {
+    //             tracing::error!("Requested file not found in DB");
+    //             OrcaNetResponse::Error(
+    //                 OrcaNetError::FileProvideError("Not a provider of requested file".parse().unwrap())
+    //             )
+    //         }
+    //     }
+    // }
 }
