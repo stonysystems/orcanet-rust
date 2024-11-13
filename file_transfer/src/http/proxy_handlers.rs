@@ -6,15 +6,15 @@ use futures::channel::mpsc::Receiver;
 use futures::StreamExt;
 use headers::Authorization;
 use http_body_util::{BodyExt, Full};
-use hyper::{Error, Request, Response, StatusCode};
 use hyper::body::{Body, Incoming};
-use hyper::header::{AUTHORIZATION, HeaderValue};
+use hyper::header::{HeaderValue, AUTHORIZATION};
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
+use hyper::{Error, Request, Response, StatusCode};
 use hyper_http_proxy::{Intercept, Proxy, ProxyConnector};
 use hyper_tls::HttpsConnector;
-use hyper_util::client::legacy::Client;
 use hyper_util::client::legacy::connect::HttpConnector;
+use hyper_util::client::legacy::Client;
 use hyper_util::rt::TokioIo;
 use serde_json::json;
 use tokio::net::{TcpListener, TcpStream};
@@ -60,9 +60,10 @@ impl RequestHandler for ProxyProvider {
 
         // Validate auth token
         let mut proxy_clients_table = ProxyClientsTable::new(None);
-        let client_info = match proxy_clients_table.get_client_by_auth_token(auth_token) {
+        let client_info = match proxy_clients_table.get_client_by_auth_token(auth_token.as_str()) {
             Ok(client_info) => client_info,
-            Err(_) => {
+            Err(e) => {
+                tracing::error!("Error {:?}", e);
                 return Ok(bad_request_with_err(OrcaNetError::AuthorizationFailed(
                     "Auth token verification failed".to_string(),
                 )));

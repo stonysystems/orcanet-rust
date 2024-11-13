@@ -147,7 +147,7 @@ impl ProxyClientsTable {
 
     pub fn get_client_by_auth_token(
         &mut self,
-        given_auth_token: String,
+        given_auth_token: &str,
     ) -> QueryResult<ProxyClientInfo> {
         use table_schema::proxy_clients::dsl::*;
 
