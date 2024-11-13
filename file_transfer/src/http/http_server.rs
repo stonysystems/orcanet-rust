@@ -330,45 +330,34 @@ async fn download_file(
 #[get("/get-providers/<file_id>")]
 async fn get_providers(state: &State<AppState>, file_id: String) -> Json<AppResponse> {
     tracing::info!("Get providers request for: {}", file_id);
-    let providers = state
-        .network_client
-        .clone()
-        .get_providers(file_id.clone())
-        .await;
+    let mut network_client = state.network_client.clone();
+    let providers = network_client.get_providers(file_id.clone()).await;
 
     if providers.is_empty() {
         AppResponse::success(json!([]));
     }
 
-    let file_request = OrcaNetRequest::FileMetadataRequest {
-        file_id: file_id.clone(),
-    };
-    let mut results = Vec::new();
+    let responses = Utils::request_from_peers(
+        OrcaNetRequest::FileMetadataRequest {
+            file_id: file_id.clone(),
+        },
+        state.network_client.clone(),
+        providers.iter(),
+    )
+    .await;
 
-    // TODO: Parallelize the metadata requests
-    for peer_id in providers {
-        let response = state
-            .network_client
-            .clone()
-            .send_stream_request(peer_id.clone(), file_request.clone())
-            .await;
-
-        match response {
-            Ok(OrcaNetResponse::FileMetadataResponse(metadata)) => {
-                results.push(metadata);
+    let file_metadata_list = responses
+        .iter()
+        .filter_map(|item| {
+            if let OrcaNetResponse::FileMetadataResponse(metadata) = item {
+                Some(metadata)
+            } else {
+                None
             }
-            Err(e) => {
-                tracing::error!(
-                    "Error getting file metadata from peer {:?}. Error: {:?}",
-                    peer_id,
-                    e
-                )
-            }
-            _ => {}
-        }
-    }
+        })
+        .collect::<Vec<_>>();
 
-    AppResponse::success(json!(results))
+    AppResponse::success(json!(file_metadata_list))
 }
 
 #[get("/get-proxy-providers")]
