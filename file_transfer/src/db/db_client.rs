@@ -8,7 +8,9 @@ use diesel::{
 use serde::Serialize;
 
 use crate::common::{ConfigKey, OrcaNetConfig};
-use crate::db::{table_schema, DownloadedFileInfo, ProvidedFileInfo, ProxyClientInfo};
+use crate::db::{
+    table_schema, DownloadedFileInfo, ProvidedFileInfo, ProxyClientInfo, ProxySessionInfo,
+};
 
 fn create_connection(db_path: Option<String>) -> SqliteConnection {
     let _db_path = db_path.unwrap_or_else(|| OrcaNetConfig::get_str_from_config(ConfigKey::DBPath));
@@ -25,16 +27,23 @@ fn create_connection(db_path: Option<String>) -> SqliteConnection {
     }
 }
 
+// Proc macro is probably cleaner but more work. Do later if required.
+macro_rules! fn_table_new {
+    () => {
+        pub fn new(db_path: Option<String>) -> Self {
+            Self {
+                conn: create_connection(db_path),
+            }
+        }
+    };
+}
+
 pub struct ProvidedFilesTable {
     conn: SqliteConnection,
 }
 
 impl ProvidedFilesTable {
-    pub fn new(db_path: Option<String>) -> Self {
-        Self {
-            conn: create_connection(db_path),
-        }
-    }
+    fn_table_new!();
 
     pub fn insert_provided_file(&mut self, file_info: &ProvidedFileInfo) -> QueryResult<usize> {
         use table_schema::provided_files::dsl::*;
@@ -97,11 +106,7 @@ pub struct DownloadedFilesTable {
 }
 
 impl DownloadedFilesTable {
-    pub fn new(db_path: Option<String>) -> Self {
-        Self {
-            conn: create_connection(db_path),
-        }
-    }
+    fn_table_new!();
 
     pub fn insert_downloaded_file(
         &mut self,
@@ -138,11 +143,7 @@ pub struct ProxyClientsTable {
 }
 
 impl ProxyClientsTable {
-    pub fn new(db_path: Option<String>) -> Self {
-        Self {
-            conn: create_connection(db_path),
-        }
-    }
+    fn_table_new!();
 
     pub fn get_client_by_auth_token(
         &mut self,
@@ -153,6 +154,7 @@ impl ProxyClientsTable {
         // Should use the index on auth token
         proxy_clients
             .filter(auth_token.eq(given_auth_token))
+            .filter(active.eq(1))
             .first::<ProxyClientInfo>(&mut self.conn)
     }
 
@@ -178,5 +180,45 @@ impl ProxyClientsTable {
         use table_schema::proxy_clients::dsl::*;
 
         proxy_clients.load::<ProxyClientInfo>(&mut self.conn)
+    }
+
+    pub fn update_fee_owed(&mut self, target_client_id: &str, diff: f32) -> QueryResult<usize> {
+        use table_schema::proxy_clients::dsl::*;
+
+        update(proxy_clients.filter(client_id.eq(target_client_id)))
+            .set(total_fee_owed.eq(total_fee_owed + diff))
+            .execute(&mut self.conn)
+    }
+}
+
+pub struct ProxySessionsTable {
+    conn: SqliteConnection,
+}
+
+impl ProxySessionsTable {
+    fn_table_new!();
+
+    pub fn get_session_info(&mut self, target_session_id: String) -> QueryResult<ProxySessionInfo> {
+        use table_schema::proxy_sessions::dsl::*;
+
+        proxy_sessions
+            .filter(session_id.eq(target_session_id))
+            .first::<ProxySessionInfo>(&mut self.conn)
+    }
+
+    pub fn insert_session_info(&mut self, session_info: &ProxySessionInfo) -> QueryResult<usize> {
+        use table_schema::proxy_sessions::dsl::*;
+
+        insert_into(proxy_sessions)
+            .values(session_info)
+            .execute(&mut self.conn)
+    }
+
+    pub fn update_fee_owed(&mut self, target_session_id: &str, diff: f32) -> QueryResult<usize> {
+        use table_schema::proxy_sessions::dsl::*;
+
+        update(proxy_sessions.filter(session_id.eq(target_session_id)))
+            .set(total_fee_owed.eq(total_fee_owed + diff))
+            .execute(&mut self.conn)
     }
 }

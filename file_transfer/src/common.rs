@@ -9,7 +9,7 @@ use futures::channel::oneshot;
 use libp2p::request_response::ResponseChannel;
 use libp2p::{Multiaddr, PeerId};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::Value;
 
 use crate::btc_rpc::BTCNetwork;
 use crate::impl_str_serde;
@@ -280,10 +280,11 @@ pub enum OrcaNetError {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProxyClientConfig {
+    pub session_id: String,
     pub proxy_address: String,
     pub client_id: String,
     pub auth_token: String,
-    pub fee_rate_per_kb: f64,
+    pub fee_rate_per_kb: f32,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

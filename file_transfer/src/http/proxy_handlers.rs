@@ -1,25 +1,26 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use crate::common::{OrcaNetError, ProxyClientConfig};
-use crate::db::ProxyClientsTable;
 use bytes::Bytes;
 use futures::channel::mpsc::Receiver;
 use futures::StreamExt;
 use headers::Authorization;
 use http_body_util::{BodyExt, Full};
+use hyper::{Error, Request, Response, StatusCode};
 use hyper::body::{Body, Incoming};
-use hyper::header::{HeaderValue, AUTHORIZATION};
+use hyper::header::{AUTHORIZATION, HeaderValue};
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
-use hyper::{Error, Request, Response, StatusCode};
 use hyper_http_proxy::{Intercept, Proxy, ProxyConnector};
 use hyper_tls::HttpsConnector;
-use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::client::legacy::Client;
+use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::rt::TokioIo;
 use serde_json::json;
 use tokio::net::{TcpListener, TcpStream};
+
+use crate::common::{OrcaNetError, ProxyClientConfig};
+use crate::db::{ProxyClientsTable, ProxySessionsTable};
 
 #[async_trait]
 pub trait RequestHandler: Send + Sync {
@@ -80,6 +81,11 @@ impl RequestHandler for ProxyProvider {
         let bytes = body.collect().await?.to_bytes();
 
         // Update client info in DB
+        let size_kb = (bytes.len() as f32) / 1000f32;
+        let amount_owed = client_info.fee_rate_per_kb * size_kb;
+        proxy_clients_table
+            .update_fee_owed(client_info.client_id.as_str(), amount_owed)
+            .expect("Owed amount to be updated in DB"); // TODO: May be failure is too strict ?
 
         tracing::info!("Response body size: {:?}", bytes.len());
 
@@ -134,16 +140,26 @@ impl RequestHandler for ProxyClient {
         // Add Bearer token
         // TODO: For some reason set_authorization in proxy is not setting the header. Check later.
         let token = format!("Bearer {}", self.config.auth_token.as_str());
-        let token_hdr_value =
-            HeaderValue::from_str(token.as_str()).expect("token value to be valid header value");
+        let token_hdr_value = HeaderValue::from_str(token.as_str())
+            .expect("token value to be valid header value when parsed from string");
         request.headers_mut().insert(AUTHORIZATION, token_hdr_value);
 
-        let response = self.http_client.request(request).await.unwrap();
+        let response = self
+            .http_client
+            .request(request)
+            .await
+            .expect("Response to be valid");
 
         let (parts, body) = response.into_parts();
         let bytes = body.collect().await?.to_bytes();
 
         // Update usage info in DB
+        let size_kb = (bytes.len() as f32) / 1000f32;
+        let amount_owed = self.config.fee_rate_per_kb * size_kb;
+        let mut proxy_sessions_table = ProxySessionsTable::new(None);
+        proxy_sessions_table
+            .update_fee_owed(self.config.session_id.as_str(), amount_owed)
+            .expect("Amount owed to be updated to DB");
 
         tracing::info!("Response body size: {:?}", bytes.len());
 

@@ -1,3 +1,4 @@
+use crate::db::ProxySessionsTable;
 use diesel::{Insertable, Queryable, Selectable};
 use serde::Serialize;
 
@@ -39,7 +40,24 @@ pub mod table_schema {
             total_fee_received -> Float,
             total_fee_owed -> Float,
             fee_rate_per_kb -> Float,
-            last_known_peer_id -> Text,
+            client_peer_id -> Text,
+            active -> Integer
+        }
+    }
+
+    diesel::table! {
+        proxy_sessions (session_id) {
+            session_id -> Text, // Locally assigned id for internal reference
+            client_id -> Text, // Client id assigned by the providing server
+            auth_token -> Text,
+            proxy_address -> Text,
+            start_timestamp -> BigInt,
+            end_timestamp -> Nullable<BigInt>,
+            data_transferred_kb -> Float,
+            total_fee_sent -> Float,
+            total_fee_owed -> Float,
+            fee_rate_per_kb -> Float,
+            provider_peer_id -> Text
         }
     }
 
@@ -101,19 +119,37 @@ pub struct ProxyClientInfo {
     pub total_fee_received: f32,
     pub total_fee_owed: f32,
     pub fee_rate_per_kb: f32,
-    pub last_known_peer_id: String,
+    pub client_peer_id: String,
+    pub active: i32,
 }
 
 impl ProxyClientInfo {
-    // TODO: Add last_known_peer_id
+    // TODO: Add client_peer_id
     pub fn with_defaults(client_id: String, auth_token: String) -> Self {
         Self {
             client_id,
             auth_token,
             start_timestamp: Utils::get_unix_timestamp(),
+            active: 1,
             ..Self::default()
         }
     }
+}
+
+#[derive(Default, Debug, Clone, Serialize, Insertable, Queryable, Selectable)]
+#[diesel(table_name = table_schema::proxy_sessions)]
+pub struct ProxySessionInfo {
+    pub session_id: String,
+    pub client_id: String,
+    pub auth_token: String,
+    pub proxy_address: String,
+    pub start_timestamp: i64,
+    pub end_timestamp: Option<i64>,
+    pub data_transferred_kb: f32,
+    pub total_fee_sent: f32,
+    pub total_fee_owed: f32,
+    pub fee_rate_per_kb: f32,
+    pub provider_peer_id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Insertable, Queryable, Selectable)]

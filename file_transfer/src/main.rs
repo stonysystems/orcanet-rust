@@ -172,6 +172,7 @@ async fn handle_input_line(
             let _ = event_sender
                 .send(OrcaNetEvent::StartProxy(ProxyMode::ProxyClient(
                     ProxyClientConfig {
+                        session_id: "abcd".to_string(),
                         proxy_address: "http://130.245.173.221:3000".to_string(),
                         client_id: "myclient1".to_string(),
                         auth_token: "atsample123".to_string(),

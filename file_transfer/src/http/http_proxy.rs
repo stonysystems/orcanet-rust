@@ -26,7 +26,10 @@ fn get_handler(mode: ProxyMode) -> Box<dyn RequestHandler> {
 }
 
 pub async fn start_http_proxy(mode: ProxyMode, mut receiver: Receiver<OrcaNetEvent>) {
-    let addr = SocketAddr::from(([0, 0, 0, 0], PROXY_PORT)); // Listen on all addresses
+    let addr = match mode {
+        ProxyMode::ProxyProvider => SocketAddr::from(([0, 0, 0, 0], PROXY_PORT)), // Listen on all addresses
+        ProxyMode::ProxyClient(_) => SocketAddr::from(([127, 0, 0, 1], PROXY_PORT)), // Only loopback address
+    };
     let handler = Arc::new(get_handler(mode));
     let listener = TcpListener::bind(addr).await.unwrap();
     tracing::info!("Proxy server listening on http://{}", addr);
