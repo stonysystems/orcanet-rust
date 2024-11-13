@@ -38,7 +38,7 @@ pub mod table_schema {
             start_timestamp -> BigInt,
             data_transferred_kb -> Float,
             total_fee_received -> Float,
-            total_fee_owed -> Float,
+            total_fee_owed -> Float, // TODO: Remove later as it is derivable
             fee_rate_per_kb -> Float,
             client_peer_id -> Text,
             active -> Integer
@@ -55,7 +55,7 @@ pub mod table_schema {
             end_timestamp -> Nullable<BigInt>,
             data_transferred_kb -> Float,
             total_fee_sent -> Float,
-            total_fee_owed -> Float,
+            total_fee_owed -> Float, // TODO: Remove later as it is derivable
             fee_rate_per_kb -> Float,
             provider_peer_id -> Text
         }
@@ -120,7 +120,7 @@ pub struct ProxyClientInfo {
     pub total_fee_owed: f32,
     pub fee_rate_per_kb: f32,
     pub client_peer_id: String,
-    pub active: i32,
+    pub active: i32, // 1 - Active, 0 - terminated by client, -1 - terminated by server
 }
 
 impl ProxyClientInfo {

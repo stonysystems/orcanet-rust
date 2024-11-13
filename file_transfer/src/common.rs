@@ -276,6 +276,7 @@ pub enum OrcaNetError {
     FileProvideError(String),
     NotAProvider(String),
     InternalServerError(String),
+    SessionTerminatedByProvider,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

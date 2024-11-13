@@ -154,7 +154,6 @@ impl ProxyClientsTable {
         // Should use the index on auth token
         proxy_clients
             .filter(auth_token.eq(given_auth_token))
-            .filter(active.eq(1))
             .first::<ProxyClientInfo>(&mut self.conn)
     }
 
@@ -182,11 +181,19 @@ impl ProxyClientsTable {
         proxy_clients.load::<ProxyClientInfo>(&mut self.conn)
     }
 
-    pub fn update_fee_owed(&mut self, target_client_id: &str, diff: f32) -> QueryResult<usize> {
+    pub fn update_data_transfer_info(
+        &mut self,
+        target_client_id: &str,
+        transferred_kb: f32,
+        fee_owed: f32,
+    ) -> QueryResult<usize> {
         use table_schema::proxy_clients::dsl::*;
 
         update(proxy_clients.filter(client_id.eq(target_client_id)))
-            .set(total_fee_owed.eq(total_fee_owed + diff))
+            .set((
+                data_transferred_kb.eq(data_transferred_kb + transferred_kb),
+                total_fee_owed.eq(total_fee_owed + fee_owed),
+            ))
             .execute(&mut self.conn)
     }
 }
@@ -214,11 +221,19 @@ impl ProxySessionsTable {
             .execute(&mut self.conn)
     }
 
-    pub fn update_fee_owed(&mut self, target_session_id: &str, diff: f32) -> QueryResult<usize> {
+    pub fn update_data_transfer_info(
+        &mut self,
+        target_session_id: &str,
+        transferred_kb: f32,
+        fee_owed: f32,
+    ) -> QueryResult<usize> {
         use table_schema::proxy_sessions::dsl::*;
 
         update(proxy_sessions.filter(session_id.eq(target_session_id)))
-            .set(total_fee_owed.eq(total_fee_owed + diff))
+            .set((
+                data_transferred_kb.eq(data_transferred_kb + transferred_kb),
+                total_fee_owed.eq(total_fee_owed + fee_owed),
+            ))
             .execute(&mut self.conn)
     }
 }

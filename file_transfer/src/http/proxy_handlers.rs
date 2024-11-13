@@ -58,7 +58,7 @@ impl RequestHandler for ProxyProvider {
             }
         };
 
-        // Validate auth token
+        // Validate auth token (must be present in table)
         let mut proxy_clients_table = ProxyClientsTable::new(None);
         let client_info = match proxy_clients_table.get_client_by_auth_token(auth_token.as_str()) {
             Ok(client_info) => client_info,
@@ -69,6 +69,24 @@ impl RequestHandler for ProxyProvider {
                 )));
             }
         };
+
+        // Check proxy session status
+        match client_info.active {
+            0 => {
+                // Inactive proxy provider session. Ask client to create new session
+                // Either party could have terminated the contract
+                return Ok(bad_request_with_err(OrcaNetError::AuthorizationFailed(
+                    "Received auth token for inactive session. Start a new session.".to_string(),
+                )));
+            }
+            -1 => {
+                // Server decided to terminate the contract due to client dishonesty
+                return Ok(bad_request_with_err(
+                    OrcaNetError::SessionTerminatedByProvider,
+                ));
+            }
+            _ => {}
+        }
 
         tracing::info!("Request body size {:?}", request.size_hint().exact());
 
@@ -85,7 +103,7 @@ impl RequestHandler for ProxyProvider {
         let size_kb = (bytes.len() as f32) / 1000f32;
         let amount_owed = client_info.fee_rate_per_kb * size_kb;
         proxy_clients_table
-            .update_fee_owed(client_info.client_id.as_str(), amount_owed)
+            .update_data_transfer_info(client_info.client_id.as_str(), size_kb, amount_owed)
             .expect("Owed amount to be updated in DB"); // TODO: May be failure is too strict ?
 
         tracing::info!("Response body size: {:?}", bytes.len());
@@ -159,7 +177,7 @@ impl RequestHandler for ProxyClient {
         let amount_owed = self.config.fee_rate_per_kb * size_kb;
         let mut proxy_sessions_table = ProxySessionsTable::new(None);
         proxy_sessions_table
-            .update_fee_owed(self.config.session_id.as_str(), amount_owed)
+            .update_data_transfer_info(self.config.session_id.as_str(), size_kb, amount_owed)
             .expect("Amount owed to be updated to DB");
 
         tracing::info!("Response body size: {:?}", bytes.len());
