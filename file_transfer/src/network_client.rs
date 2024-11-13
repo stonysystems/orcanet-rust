@@ -170,7 +170,7 @@ impl NetworkClient {
         }
     }
 
-    /// Send request to the given peer.
+    /// Send request-response request to the given peer.
     pub async fn send_request(
         &mut self,
         peer: PeerId,
@@ -188,7 +188,7 @@ impl NetworkClient {
         receiver.await.expect("Sender not be dropped.")
     }
 
-    /// Send response through the given channel
+    /// Send request-response response through the given channel
     pub async fn respond(
         &mut self,
         response: OrcaNetResponse,

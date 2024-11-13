@@ -9,8 +9,9 @@ use ring::digest::{Context, SHA256};
 use uuid::Uuid;
 
 use crate::btc_rpc::{BTCNetwork, RPCWrapper};
-use crate::common::{ConfigKey, OrcaNetConfig, OrcaNetResponse};
+use crate::common::{ConfigKey, OrcaNetConfig, OrcaNetRequest, OrcaNetResponse};
 use crate::db::{DownloadedFileInfo, DownloadedFilesTable};
+use crate::network_client::NetworkClient;
 
 pub struct Utils;
 
@@ -90,6 +91,37 @@ impl Utils {
             .and_then(|v| v.to_str())
             .and_then(|v| v.parse().ok())
             .unwrap()
+    }
+
+    pub async fn request_from_peers<'a>(
+        request: OrcaNetRequest,
+        network_client: NetworkClient,
+        peers: impl Iterator<Item = &'a PeerId>,
+    ) -> Vec<OrcaNetResponse> {
+        let mut results = Vec::new();
+
+        for peer_id in peers {
+            let response = network_client
+                .clone()
+                .send_stream_request(peer_id.clone(), request.clone())
+                .await;
+
+            match response {
+                Ok(resp) => {
+                    results.push(resp);
+                }
+                Err(e) => {
+                    tracing::error!(
+                        "Error getting file metadata from peer {:?}. Error: {:?}",
+                        peer_id,
+                        e
+                    )
+                }
+                _ => {}
+            }
+        }
+
+        results
     }
 
     // pub fn get_file_metadata(file_id: String, db_client: &mut DBClient) -> Option<(FileInfo, FileMetadata)> {
