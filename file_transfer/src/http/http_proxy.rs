@@ -37,13 +37,11 @@ pub async fn start_http_proxy(mode: ProxyMode, mut receiver: Receiver<OrcaNetEve
     loop {
         select! {
             event = receiver.next() => match event {
-                Some(OrcaNetEvent:: StopProxy) => {
+                Some(OrcaNetEvent::StopProxy) => {
                     tracing::info!("Stopping proxy server");
                             return;
                 }
-                _ => {
-                    tracing::info!("Proxy received unsupported event. Ignoring.");
-                }
+                _ => {}
             },
 
             stream_event = listener.accept() => {

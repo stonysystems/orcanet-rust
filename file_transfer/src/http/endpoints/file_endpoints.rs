@@ -203,7 +203,7 @@ async fn get_providers(state: &State<AppState>, file_id: String) -> Json<AppResp
             file_id: file_id.clone(),
         },
         state.network_client.clone(),
-        providers.iter(),
+        providers.into_iter(),
     )
     .await;
 

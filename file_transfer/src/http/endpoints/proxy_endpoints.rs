@@ -1,4 +1,4 @@
-use crate::common::{OrcaNetRequest, OrcaNetResponse};
+use crate::common::{OrcaNetConfig, OrcaNetRequest, OrcaNetResponse};
 use crate::http::endpoints::{AppResponse, AppState};
 use crate::utils::Utils;
 use rocket::serde::json::Json;
@@ -6,14 +6,14 @@ use rocket::{Route, State};
 use serde_json::json;
 
 pub fn get_proxy_endpoints() -> Vec<Route> {
-    routes![get_proxy_providers]
+    routes![get_providers]
 }
 
-#[get("/get-proxy-providers")]
-async fn get_proxy_providers(state: &State<AppState>) -> Json<AppResponse> {
+#[get("/get-providers")]
+async fn get_providers(state: &State<AppState>) -> Json<AppResponse> {
     let mut network_client = state.network_client.clone();
     let proxy_providers = network_client
-        .get_providers("proxy_providers".to_string())
+        .get_providers(OrcaNetConfig::PROXY_PROVIDER_KEY_DHT.to_string())
         .await;
 
     if proxy_providers.is_empty() {
@@ -23,7 +23,7 @@ async fn get_proxy_providers(state: &State<AppState>) -> Json<AppResponse> {
     let responses = Utils::request_from_peers(
         OrcaNetRequest::HTTPProxyMetadataRequest,
         network_client,
-        proxy_providers.iter(),
+        proxy_providers.into_iter(),
     )
     .await;
 

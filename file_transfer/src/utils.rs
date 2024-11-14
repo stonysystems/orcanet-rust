@@ -93,10 +93,10 @@ impl Utils {
             .unwrap()
     }
 
-    pub async fn request_from_peers<'a>(
+    pub async fn request_from_peers(
         request: OrcaNetRequest,
         network_client: NetworkClient,
-        peers: impl Iterator<Item = &'a PeerId>,
+        peers: impl Iterator<Item = PeerId>,
     ) -> Vec<OrcaNetResponse> {
         let mut results = Vec::new();
 
