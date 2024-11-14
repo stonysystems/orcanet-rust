@@ -29,9 +29,12 @@ async fn get_providers(state: &State<AppState>) -> Json<AppResponse> {
 
     let provider_metadata_list = responses
         .iter()
-        .filter_map(|item| {
-            if let OrcaNetResponse::HTTPProxyMetadataResponse(metadata) = item {
-                Some(metadata)
+        .filter_map(|(peer_id, resp)| {
+            if let OrcaNetResponse::HTTPProxyMetadataResponse(metadata) = resp {
+                Some(json!({
+                    "peer_id": peer_id.to_string(),
+                    "proxy_metadata": metadata
+                }))
             } else {
                 // Ignore if not metadata response
                 None

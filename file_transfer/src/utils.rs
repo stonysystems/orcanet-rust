@@ -97,7 +97,7 @@ impl Utils {
         request: OrcaNetRequest,
         network_client: NetworkClient,
         peers: impl Iterator<Item = PeerId>,
-    ) -> Vec<OrcaNetResponse> {
+    ) -> Vec<(PeerId, OrcaNetResponse)> {
         let mut results = Vec::new();
 
         for peer_id in peers {
@@ -108,7 +108,7 @@ impl Utils {
 
             match response {
                 Ok(resp) => {
-                    results.push(resp);
+                    results.push((peer_id, resp));
                 }
                 Err(e) => {
                     tracing::error!(

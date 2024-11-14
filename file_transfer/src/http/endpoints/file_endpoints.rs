@@ -209,9 +209,12 @@ async fn get_providers(state: &State<AppState>, file_id: String) -> Json<AppResp
 
     let file_metadata_list = responses
         .iter()
-        .filter_map(|item| {
-            if let OrcaNetResponse::FileMetadataResponse(metadata) = item {
-                Some(metadata)
+        .filter_map(|(peer_id, resp)| {
+            if let OrcaNetResponse::FileMetadataResponse(metadata) = resp {
+                Some(json!({
+                    "peer_id": peer_id.to_string(),
+                    "file_metadata": metadata
+                }))
             } else {
                 None
             }
