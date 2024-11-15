@@ -137,7 +137,7 @@ impl RequestHandlerLoop {
                             .await;
                     }
                     ProxyMode::ProxyClient { session_id } => {
-                        tracing::info!("Started proxy client with config: {:?}", session_id);
+                        tracing::info!("Started proxy client with session_id: {:?}", session_id);
                     }
                 }
 

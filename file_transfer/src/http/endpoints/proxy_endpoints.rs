@@ -14,7 +14,11 @@ use serde_json::json;
 use tracing::metadata;
 
 pub fn get_proxy_endpoints() -> Vec<Route> {
-    routes![get_providers]
+    routes![
+        get_providers, //
+        stop_proxy,    //
+        connect        //
+    ]
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -149,4 +153,21 @@ async fn connect(
     AppResponse::success(json!({
         "session_id": proxy_session.session_id
     }))
+}
+
+#[post("/start-providing")]
+async fn start_providing(state: &State<AppState>) -> Json<AppResponse> {
+    // Check if proxy is already active
+    if OrcaNetConfig::get_proxy_config().is_some() {
+        return AppResponse::error(
+            "Proxy already running".to_string(),
+        );
+    }
+
+    let mut event_sender = state.event_sender.clone();
+    let _ = event_sender
+        .send(OrcaNetEvent::StartProxy(ProxyMode::ProxyProvider))
+        .await;
+
+    AppResponse::success(json!("Started providing proxy"))
 }

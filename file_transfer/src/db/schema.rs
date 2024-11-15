@@ -171,6 +171,7 @@ impl ProxySessionInfo {
             fee_rate_per_kb: metadata.fee_rate_per_kb,
             provider_peer_id: peer_id,
             recipient_address: metadata.recipient_address,
+            status: 1,
             ..Default::default()
         }
     }

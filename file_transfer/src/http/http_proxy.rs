@@ -46,8 +46,12 @@ pub async fn start_http_proxy(
         ProxyMode::ProxyProvider => SocketAddr::from(([0, 0, 0, 0], PROXY_PORT)), // Listen on all addresses
         ProxyMode::ProxyClient { .. } => SocketAddr::from(([127, 0, 0, 1], PROXY_PORT)), // Only loopback address
     };
+    tracing::info!("Creating handler");
     let handler = Arc::new(get_handler(mode)?);
-    let listener = TcpListener::bind(addr).await.map_err(|e| e.to_string())?;
+    let listener = TcpListener::bind(addr)
+        .await
+        .expect(format!("Tcp listener to be bound to {:?}", addr).as_str());
+
     tracing::info!("Proxy server listening on http://{}", addr);
 
     loop {
@@ -62,7 +66,7 @@ pub async fn start_http_proxy(
 
             stream_event = listener.accept() => {
                 let (stream, _) = stream_event
-                    .map_err(|e| e.to_string())?;
+                    .expect("Stream event to be valid");
                 let io = TokioIo::new(stream);
                 let handler_inner = handler.clone();
 

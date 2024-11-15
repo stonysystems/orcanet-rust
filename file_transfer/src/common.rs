@@ -26,6 +26,7 @@ pub enum ConfigKey {
     ProxyConfig,
     TstFileSavePath, // For testing, remove later
     SecretKeySeed,
+    ProxyProviderServerAddress, // For provider
 }
 
 impl_str_serde!(ConfigKey);
