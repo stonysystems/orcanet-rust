@@ -289,10 +289,10 @@ pub enum PrePaymentResponse {
     Accepted {
         amount_to_send: f32, // Server requests a specific amount <= amount_owed
         payment_reference: String,
-        recipient_address: String
+        recipient_address: String,
     },
     RejectedDataTransferDiff,
-    RejectedAmountDiff,
+    RejectedAmountOwedDiff,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

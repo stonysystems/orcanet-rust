@@ -212,10 +212,10 @@ impl RequestHandlerLoop {
             OrcaNetRequest::HTTPProxyMetadataRequest | OrcaNetRequest::HTTPProxyProvideRequest => {
                 Self::handle_http_proxy_request(request, from_peer)
             }
-            OrcaNetRequest::HTTPProxyPrePaymentRequest {..} => {
+            OrcaNetRequest::HTTPProxyPrePaymentRequest { .. } => {
                 todo!()
             }
-            OrcaNetRequest::HTTPProxyPostPaymentNotification {..} => {
+            OrcaNetRequest::HTTPProxyPostPaymentNotification { .. } => {
                 todo!()
             }
         }

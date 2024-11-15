@@ -103,7 +103,7 @@ impl Utils {
         for peer_id in peers {
             let response = network_client
                 .clone()
-                .send_stream_request(peer_id.clone(), request.clone())
+                .send_request(peer_id.clone(), request.clone())
                 .await;
 
             match response {

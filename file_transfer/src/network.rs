@@ -218,7 +218,11 @@ impl EventLoop {
                     tracing::info!(?request, "Received request");
 
                     self.event_sender
-                        .send(OrcaNetEvent::Request { request, from_peer: peer, channel })
+                        .send(OrcaNetEvent::Request {
+                            request,
+                            from_peer: peer,
+                            channel,
+                        })
                         .await
                         .expect("Event receiver not to be dropped.");
                 }
