@@ -210,7 +210,7 @@ impl EventLoop {
                 tracing::info!(?event, "Received kademlia event");
             }
             SwarmEvent::Behaviour(BehaviourEvent::RequestResponse(
-                request_response::Event::Message { message, .. },
+                request_response::Event::Message { message, peer },
             )) => match message {
                 request_response::Message::Request {
                     request, channel, ..
@@ -218,7 +218,7 @@ impl EventLoop {
                     tracing::info!(?request, "Received request");
 
                     self.event_sender
-                        .send(OrcaNetEvent::Request { request, channel })
+                        .send(OrcaNetEvent::Request { request, from_peer: peer, channel })
                         .await
                         .expect("Event receiver not to be dropped.");
                 }
@@ -534,7 +534,11 @@ impl EventLoop {
                 let (sender, receiver) = oneshot::channel();
 
                 self.event_sender
-                    .send(OrcaNetEvent::StreamRequest { request, sender })
+                    .send(OrcaNetEvent::StreamRequest {
+                        from_peer: peer_id,
+                        request,
+                        sender,
+                    })
                     .await
                     .expect("Command receiver not to be dropped");
 

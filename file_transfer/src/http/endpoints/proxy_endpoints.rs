@@ -18,8 +18,8 @@ pub fn get_proxy_endpoints() -> Vec<Route> {
         get_providers,
         stop_proxy,
         connect,
-        start_client,
-        start_providing
+        start_providing,
+        start_client
     ]
 }
 
@@ -96,7 +96,7 @@ async fn connect(
 ) -> Json<AppResponse> {
     // Check if proxy is already active
     if OrcaNetConfig::get_proxy_config().is_some() {
-        // Current proxy session should be stopped before connecting to new proxy
+        // Current proxy session should be stopped before connecting to new proxy provider
         // Let's not do that automatically in here. Connect is only to initiate a new session.
         return AppResponse::error(
             "Proxy already running. Stop it before starting a new client session.".to_string(),
@@ -160,6 +160,21 @@ async fn connect(
     }))
 }
 
+#[post("/start-providing")]
+async fn start_providing(state: &State<AppState>) -> Json<AppResponse> {
+    // Check if proxy is already active
+    if OrcaNetConfig::get_proxy_config().is_some() {
+        return AppResponse::error("Proxy already running".to_string());
+    }
+
+    let mut event_sender = state.event_sender.clone();
+    let _ = event_sender
+        .send(OrcaNetEvent::StartProxy(ProxyMode::ProxyProvider))
+        .await;
+
+    AppResponse::success(json!("Started providing proxy"))
+}
+
 // For testing only
 #[post("/start-client", format = "application/json", data = "<request>")]
 async fn start_client(
@@ -179,19 +194,4 @@ async fn start_client(
         .await;
 
     AppResponse::success(json!("Started local proxy client"))
-}
-
-#[post("/start-providing")]
-async fn start_providing(state: &State<AppState>) -> Json<AppResponse> {
-    // Check if proxy is already active
-    if OrcaNetConfig::get_proxy_config().is_some() {
-        return AppResponse::error("Proxy already running".to_string());
-    }
-
-    let mut event_sender = state.event_sender.clone();
-    let _ = event_sender
-        .send(OrcaNetEvent::StartProxy(ProxyMode::ProxyProvider))
-        .await;
-
-    AppResponse::success(json!("Started providing proxy"))
 }

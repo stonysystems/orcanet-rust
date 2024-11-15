@@ -2,6 +2,7 @@ use std::path::Path;
 
 use futures::channel::mpsc;
 use futures::{SinkExt, StreamExt};
+use libp2p::PeerId;
 use serde_json::json;
 use tokio::select;
 use tracing_subscriber::filter::FilterExt;
@@ -49,12 +50,20 @@ impl RequestHandlerLoop {
 
     async fn handle_event(&mut self, event: OrcaNetEvent) {
         match event {
-            OrcaNetEvent::Request { request, channel } => {
-                let response = self.handle_request(request);
+            OrcaNetEvent::Request {
+                request,
+                from_peer,
+                channel,
+            } => {
+                let response = self.handle_request(request, from_peer);
                 self.network_client.respond(response, channel).await;
             }
-            OrcaNetEvent::StreamRequest { request, sender } => {
-                let response = self.handle_request(request);
+            OrcaNetEvent::StreamRequest {
+                request,
+                from_peer,
+                sender,
+            } => {
+                let response = self.handle_request(request, from_peer);
                 let _ = sender.send(response);
             }
             OrcaNetEvent::ProvideFile { file_id, file_path } => {
@@ -194,17 +203,25 @@ impl RequestHandlerLoop {
         }
     }
 
-    fn handle_request(&mut self, request: OrcaNetRequest) -> OrcaNetResponse {
+    fn handle_request(&mut self, request: OrcaNetRequest, from_peer: PeerId) -> OrcaNetResponse {
         match request {
             OrcaNetRequest::FileMetadataRequest { .. }
-            | OrcaNetRequest::FileContentRequest { .. } => Self::handle_file_request(request),
+            | OrcaNetRequest::FileContentRequest { .. } => {
+                Self::handle_file_request(request, from_peer)
+            }
             OrcaNetRequest::HTTPProxyMetadataRequest | OrcaNetRequest::HTTPProxyProvideRequest => {
-                Self::handle_http_proxy_request(request)
+                Self::handle_http_proxy_request(request, from_peer)
+            }
+            OrcaNetRequest::HTTPProxyPrePaymentRequest {..} => {
+                todo!()
+            }
+            OrcaNetRequest::HTTPProxyPostPaymentNotification {..} => {
+                todo!()
             }
         }
     }
 
-    fn handle_http_proxy_request(request: OrcaNetRequest) -> OrcaNetResponse {
+    fn handle_http_proxy_request(request: OrcaNetRequest, from_peer: PeerId) -> OrcaNetResponse {
         match OrcaNetConfig::get_proxy_config() {
             Some(ProxyMode::ProxyProvider) => {
                 let metadata = HTTPProxyMetadata {
@@ -223,8 +240,11 @@ impl RequestHandlerLoop {
                         let auth_token = Utils::new_uuid();
 
                         let mut proxy_clients_table = ProxyClientsTable::new(None);
-                        let proxy_client_info =
-                            ProxyClientInfo::with_defaults(client_id.clone(), auth_token.clone());
+                        let proxy_client_info = ProxyClientInfo::with_defaults(
+                            client_id.clone(),
+                            auth_token.clone(),
+                            from_peer.to_string(),
+                        );
 
                         match proxy_clients_table.add_client(&proxy_client_info) {
                             Ok(_) => {
@@ -252,7 +272,7 @@ impl RequestHandlerLoop {
         }
     }
 
-    fn handle_file_request(request: OrcaNetRequest) -> OrcaNetResponse {
+    fn handle_file_request(request: OrcaNetRequest, from_peer: PeerId) -> OrcaNetResponse {
         let file_id = match &request {
             OrcaNetRequest::FileMetadataRequest { file_id } => file_id,
             OrcaNetRequest::FileContentRequest { file_id } => file_id,

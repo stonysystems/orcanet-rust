@@ -200,10 +200,12 @@ pub enum NetworkCommand {
 pub enum OrcaNetEvent {
     Request {
         request: OrcaNetRequest,
+        from_peer: PeerId,
         channel: ResponseChannel<OrcaNetResponse>,
     },
     StreamRequest {
         request: OrcaNetRequest,
+        from_peer: PeerId,
         sender: oneshot::Sender<OrcaNetResponse>,
     },
     ProvideFile {
@@ -231,11 +233,40 @@ pub enum StreamData {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PaymentNotification {
+    /// Bitcoin address of the sender
+    sender_address: String,
+    /// Should be bitcoin address of the server
+    receiver_address: String,
+    amount_transferred: f32,
+    /// Transaction ID in the blockchain for the transaction created by the sender
+    tx_id: String,
+    /// Server generated payment reference if provided
+    payment_reference: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum OrcaNetRequest {
-    FileMetadataRequest { file_id: String },
-    FileContentRequest { file_id: String },
+    FileMetadataRequest {
+        file_id: String,
+    },
+    FileContentRequest {
+        file_id: String,
+    },
     HTTPProxyMetadataRequest,
     HTTPProxyProvideRequest,
+    /// To see if server and client agree on the data transferred and amount owed
+    HTTPProxyPrePaymentRequest {
+        client_id: String,
+        auth_token: String,
+        data_transferred_kb: f32,
+        amount_owed: f32,
+    },
+    HTTPProxyPostPaymentNotification {
+        client_id: String,
+        auth_token: String,
+        payment_notification: PaymentNotification,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -254,6 +285,17 @@ pub struct FileMetadata {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum PrePaymentResponse {
+    Accepted {
+        amount_to_send: f32, // Server requests a specific amount <= amount_owed
+        payment_reference: String,
+        recipient_address: String
+    },
+    RejectedDataTransferDiff,
+    RejectedAmountDiff,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum OrcaNetResponse {
     FileMetadataResponse(FileMetadata),
     FileContentResponse {
@@ -265,6 +307,13 @@ pub enum OrcaNetResponse {
         metadata: HTTPProxyMetadata,
         client_id: String,
         auth_token: String,
+    },
+    HTTPProxyPrePaymentResponse {
+        /// Data transferred according to server
+        data_transferred_kb: f32,
+        /// Amount owed according to server
+        amount_owed: f32,
+        response: PrePaymentResponse,
     },
     Error(OrcaNetError),
 }
