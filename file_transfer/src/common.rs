@@ -214,7 +214,7 @@ pub enum OrcaNetEvent {
         file_id: String,
         permanent: bool, // Permanently stop providing
     },
-    StartProxy(ProxyMode),
+    StartProxy(ProxyMode), // TODO: Add response sender
     StopProxy,
 }
 

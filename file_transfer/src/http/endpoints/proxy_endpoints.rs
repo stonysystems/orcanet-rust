@@ -15,15 +15,22 @@ use tracing::metadata;
 
 pub fn get_proxy_endpoints() -> Vec<Route> {
     routes![
-        get_providers, //
-        stop_proxy,    //
-        connect        //
+        get_providers,
+        stop_proxy,
+        connect,
+        start_client,
+        start_providing
     ]
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 struct ConnectToProxyRequest {
     peer_id: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct StartLocalProxyRequest {
+    session_id: String,
 }
 
 #[get("/get-providers")]
@@ -76,9 +83,7 @@ async fn stop_proxy(state: &State<AppState>) -> Json<AppResponse> {
                 .await
                 .expect("Sender not to be dropped");
 
-            AppResponse::success(json!({
-                "message": "proxy stopped"
-            }))
+            AppResponse::success(json!("proxy stopped"))
         }
         None => AppResponse::error("Proxy not running".to_string()),
     }
@@ -155,13 +160,32 @@ async fn connect(
     }))
 }
 
+// For testing only
+#[post("/start-client", format = "application/json", data = "<request>")]
+async fn start_client(
+    state: &State<AppState>,
+    request: Json<StartLocalProxyRequest>,
+) -> Json<AppResponse> {
+    // Check if proxy is already active
+    if OrcaNetConfig::get_proxy_config().is_some() {
+        return AppResponse::error("Proxy already running".to_string());
+    }
+
+    let mut event_sender = state.event_sender.clone();
+    let _ = event_sender
+        .send(OrcaNetEvent::StartProxy(ProxyMode::ProxyClient {
+            session_id: request.session_id.clone(),
+        }))
+        .await;
+
+    AppResponse::success(json!("Started local proxy client"))
+}
+
 #[post("/start-providing")]
 async fn start_providing(state: &State<AppState>) -> Json<AppResponse> {
     // Check if proxy is already active
     if OrcaNetConfig::get_proxy_config().is_some() {
-        return AppResponse::error(
-            "Proxy already running".to_string(),
-        );
+        return AppResponse::error("Proxy already running".to_string());
     }
 
     let mut event_sender = state.event_sender.clone();
