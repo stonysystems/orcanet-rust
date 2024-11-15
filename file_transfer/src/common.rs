@@ -213,7 +213,6 @@ pub enum OrcaNetEvent {
         file_id: String,
         permanent: bool, // Permanently stop providing
     },
-    ChangeProxyClient(ProxyClientConfig),
     StartProxy(ProxyMode),
     StopProxy,
 }
@@ -241,7 +240,7 @@ pub enum OrcaNetRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HTTPProxyMetadata {
     pub proxy_address: String, // IP address with port
-    pub fee_rate_per_kb: f64,
+    pub fee_rate_per_kb: f32,
     pub recipient_address: String,
 }
 
@@ -292,5 +291,5 @@ pub struct ProxyClientConfig {
 #[serde(tag = "type", content = "message")]
 pub enum ProxyMode {
     ProxyProvider,
-    ProxyClient(ProxyClientConfig),
+    ProxyClient { session_id: String },
 }

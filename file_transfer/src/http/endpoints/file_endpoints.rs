@@ -173,6 +173,7 @@ async fn download_file(
         }
     };
 
+    // Download
     match state
         .network_client
         .clone()
@@ -192,12 +193,15 @@ async fn download_file(
 async fn get_providers(state: &State<AppState>, file_id: String) -> Json<AppResponse> {
     tracing::info!("Get providers request for: {}", file_id);
     let mut network_client = state.network_client.clone();
+
+    // Get providers for the file
     let providers = network_client.get_providers(file_id.clone()).await;
 
     if providers.is_empty() {
         AppResponse::success(json!([]));
     }
 
+    // Ask them for metadata
     let responses = Utils::request_from_peers(
         OrcaNetRequest::FileMetadataRequest {
             file_id: file_id.clone(),

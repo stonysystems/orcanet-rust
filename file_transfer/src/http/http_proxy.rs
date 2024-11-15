@@ -1,3 +1,4 @@
+use std::error::Error;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -12,26 +13,41 @@ use tokio::select;
 use tracing_subscriber::fmt::format;
 
 use crate::common::{OrcaNetEvent, ProxyMode};
+use crate::db::ProxySessionsTable;
 use crate::http::proxy_handlers::*;
 
 const ORCA_NET_CLIENT_ID_HEADER: &str = "orca-net-client-id";
 const ORCA_NET_AUTH_KEY_HEADER: &str = "orca-net-token";
 const PROXY_PORT: u16 = 3000;
 
-fn get_handler(mode: ProxyMode) -> Box<dyn RequestHandler> {
+fn get_handler(mode: ProxyMode) -> Result<Box<dyn RequestHandler>, String> {
     match mode {
-        ProxyMode::ProxyProvider => Box::new(ProxyProvider::new()),
-        ProxyMode::ProxyClient(config) => Box::new(ProxyClient::new(config)),
+        ProxyMode::ProxyProvider => Ok(Box::new(ProxyProvider::new())),
+        ProxyMode::ProxyClient { session_id } => {
+            let mut proxy_sessions_table = ProxySessionsTable::new(None);
+            let session_info = proxy_sessions_table
+                .get_session_info(session_id)
+                .map_err(|e| e.to_string())?;
+
+            if session_info.status != 1 {
+                Err("Received attempt to start closed session".to_string())
+            } else {
+                Ok(Box::new(ProxyClient::new(session_info)))
+            }
+        }
     }
 }
 
-pub async fn start_http_proxy(mode: ProxyMode, mut receiver: Receiver<OrcaNetEvent>) {
+pub async fn start_http_proxy(
+    mode: ProxyMode,
+    mut receiver: Receiver<OrcaNetEvent>,
+) -> Result<(), String> {
     let addr = match mode {
         ProxyMode::ProxyProvider => SocketAddr::from(([0, 0, 0, 0], PROXY_PORT)), // Listen on all addresses
-        ProxyMode::ProxyClient(_) => SocketAddr::from(([127, 0, 0, 1], PROXY_PORT)), // Only loopback address
+        ProxyMode::ProxyClient { .. } => SocketAddr::from(([127, 0, 0, 1], PROXY_PORT)), // Only loopback address
     };
-    let handler = Arc::new(get_handler(mode));
-    let listener = TcpListener::bind(addr).await.unwrap();
+    let handler = Arc::new(get_handler(mode)?);
+    let listener = TcpListener::bind(addr).await.map_err(|e| e.to_string())?;
     tracing::info!("Proxy server listening on http://{}", addr);
 
     loop {
@@ -39,13 +55,14 @@ pub async fn start_http_proxy(mode: ProxyMode, mut receiver: Receiver<OrcaNetEve
             event = receiver.next() => match event {
                 Some(OrcaNetEvent::StopProxy) => {
                     tracing::info!("Stopping proxy server");
-                            return;
+                    return Ok(());
                 }
                 _ => {}
             },
 
             stream_event = listener.accept() => {
-                let (stream, _) = stream_event.unwrap();
+                let (stream, _) = stream_event
+                    .map_err(|e| e.to_string())?;
                 let io = TokioIo::new(stream);
                 let handler_inner = handler.clone();
 

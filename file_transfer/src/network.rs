@@ -38,18 +38,11 @@ struct Behaviour {
     request_response: request_response::cbor::Behaviour<OrcaNetRequest, OrcaNetResponse>,
 }
 
-/// Creates the network components, namely:
-///
-/// - The network client to interact with the network layer from anywhere
-///   within your application.
-///
-/// - The network event stream, e.g. for incoming requests.
-///
-/// - The network task driving the network itself.
-pub async fn new(
+pub async fn setup_network(
     secret_key_seed: u64,
     event_sender: mpsc::Sender<OrcaNetEvent>,
 ) -> Result<(NetworkClient, EventLoop), Box<dyn Error>> {
+    // Create the swarm to manage the network
     let keypair = Utils::generate_ed25519(secret_key_seed);
     let relay_address = OrcaNetConfig::get_relay_address();
     let bootstrap_peer_id = OrcaNetConfig::get_bootstrap_peer_id();

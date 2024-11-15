@@ -103,22 +103,22 @@ impl RequestHandlerLoop {
 
                 self.network_client.stop_providing(file_id).await;
             }
-            OrcaNetEvent::ChangeProxyClient(client_config) => {
-                // We restart to change proxy configuration
-                // Technically, we only need to change the address and port in the running client
-                // But that requires mutating it, and we need to start using Mutex locks for handler
-                // Since changing is expected to be rare, I don't think it's worth introducing locks
-                // TODO: Change later if required
-
-                // About why Box::pin is needed: https://rust-lang.github.io/async-book/07_workarounds/04_recursion.html
-                Box::pin(self.handle_event(OrcaNetEvent::StopProxy)).await;
-                Box::pin(
-                    self.handle_event(OrcaNetEvent::StartProxy(ProxyMode::ProxyClient(
-                        client_config,
-                    ))),
-                )
-                .await;
-            }
+            // OrcaNetEvent::ChangeProxyClient(client_config) => {
+            //     // We restart to change proxy configuration
+            //     // Technically, we only need to change the address and port in the running client
+            //     // But that requires mutating it, and we need to start using Mutex locks for handler
+            //     // Since changing is expected to be rare, I don't think it's worth introducing locks
+            //     // TODO: Change later if required
+            //
+            //     // About why Box::pin is needed: https://rust-lang.github.io/async-book/07_workarounds/04_recursion.html
+            //     Box::pin(self.handle_event(OrcaNetEvent::StopProxy)).await;
+            //     Box::pin(
+            //         self.handle_event(OrcaNetEvent::StartProxy(ProxyMode::ProxyClient(
+            //             client_config,
+            //         ))),
+            //     )
+            //     .await;
+            // }
             OrcaNetEvent::StartProxy(proxy_mode) => {
                 if self.proxy_event_sender.is_some() {
                     println!("Proxy server already running");
@@ -136,8 +136,8 @@ impl RequestHandlerLoop {
                             .start_providing(OrcaNetConfig::PROXY_PROVIDER_KEY_DHT.to_string())
                             .await;
                     }
-                    ProxyMode::ProxyClient(config) => {
-                        tracing::info!("Started proxy client with config: {:?}", config);
+                    ProxyMode::ProxyClient { session_id } => {
+                        tracing::info!("Started proxy client with config: {:?}", session_id);
                     }
                 }
 
@@ -163,7 +163,7 @@ impl RequestHandlerLoop {
                             .stop_providing(OrcaNetConfig::PROXY_PROVIDER_KEY_DHT.to_string())
                             .await;
                     }
-                    ProxyMode::ProxyClient(config) => {
+                    ProxyMode::ProxyClient { session_id } => {
                         // TODO: Pay remaining amount owed
                     }
                 }
@@ -209,7 +209,7 @@ impl RequestHandlerLoop {
             Some(ProxyMode::ProxyProvider) => {
                 let metadata = HTTPProxyMetadata {
                     proxy_address: "".to_string(),
-                    fee_rate_per_kb: OrcaNetConfig::get_proxy_fee_rate(),
+                    fee_rate_per_kb: OrcaNetConfig::get_proxy_fee_rate() as f32,
                     recipient_address: OrcaNetConfig::get_str_from_config(ConfigKey::BTCAddress),
                 };
 

@@ -47,7 +47,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let seed = opts.seed.unwrap_or_else(OrcaNetConfig::get_secret_key_seed);
 
     let (mut event_sender, event_receiver) = mpsc::channel::<OrcaNetEvent>(0);
-    let (mut network_client, network_event_loop) = network::new(seed, event_sender.clone()).await?;
+    let (mut network_client, network_event_loop) =
+        network::setup_network(seed, event_sender.clone()).await?;
     let mut request_handler_loop = RequestHandlerLoop::new(network_client.clone(), event_receiver);
 
     // Network event loop
@@ -72,6 +73,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             .expect("Proxy start event to be sent");
     }
 
+    // Listen for input from stdin (TODO: for testing only - comment out later)
     let mut stdin = io::BufReader::new(io::stdin()).lines();
 
     block_on(async {
@@ -170,15 +172,9 @@ async fn handle_input_line(
         }
         Some("startproxyclient") => {
             let _ = event_sender
-                .send(OrcaNetEvent::StartProxy(ProxyMode::ProxyClient(
-                    ProxyClientConfig {
-                        session_id: "abcd".to_string(),
-                        proxy_address: "http://130.245.173.221:3000".to_string(),
-                        client_id: "myclient1".to_string(),
-                        auth_token: "atsample123".to_string(),
-                        fee_rate_per_kb: 0.00050,
-                    },
-                )))
+                .send(OrcaNetEvent::StartProxy(ProxyMode::ProxyClient {
+                    session_id: "sess1".to_string(),
+                }))
                 .await;
         }
         Some("stopproxy") => {

@@ -1,4 +1,3 @@
-use crate::db::ProxySessionsTable;
 use diesel::{Insertable, Queryable, Selectable};
 use serde::Serialize;
 
@@ -41,7 +40,7 @@ pub mod table_schema {
             total_fee_owed -> Float, // TODO: Remove later as it is derivable
             fee_rate_per_kb -> Float,
             client_peer_id -> Text,
-            active -> Integer
+            status -> Integer
         }
     }
 
@@ -57,7 +56,9 @@ pub mod table_schema {
             total_fee_sent -> Float,
             total_fee_owed -> Float, // TODO: Remove later as it is derivable
             fee_rate_per_kb -> Float,
-            provider_peer_id -> Text
+            provider_peer_id -> Text,
+            recipient_address -> Text,
+            status -> Integer
         }
     }
 
@@ -120,7 +121,7 @@ pub struct ProxyClientInfo {
     pub total_fee_owed: f32,
     pub fee_rate_per_kb: f32,
     pub client_peer_id: String,
-    pub active: i32, // 1 - Active, 0 - terminated by client, -1 - terminated by server
+    pub status: i32, // 1 - Active, 0 - terminated by client, -1 - terminated by server
 }
 
 impl ProxyClientInfo {
@@ -130,7 +131,7 @@ impl ProxyClientInfo {
             client_id,
             auth_token,
             start_timestamp: Utils::get_unix_timestamp(),
-            active: 1,
+            status: 1,
             ..Self::default()
         }
     }
@@ -150,6 +151,8 @@ pub struct ProxySessionInfo {
     pub total_fee_owed: f32,
     pub fee_rate_per_kb: f32,
     pub provider_peer_id: String,
+    pub recipient_address: String,
+    pub status: i32, // 1 - Active, 0 - terminated by client, -1 - terminated by server
 }
 
 #[derive(Debug, Clone, Serialize, Insertable, Queryable, Selectable)]

@@ -20,7 +20,7 @@ use serde_json::json;
 use tokio::net::{TcpListener, TcpStream};
 
 use crate::common::{OrcaNetError, ProxyClientConfig};
-use crate::db::{ProxyClientsTable, ProxySessionsTable};
+use crate::db::{ProxyClientsTable, ProxySessionInfo, ProxySessionsTable};
 
 #[async_trait]
 pub trait RequestHandler: Send + Sync {
@@ -71,7 +71,7 @@ impl RequestHandler for ProxyProvider {
         };
 
         // Check proxy session status
-        match client_info.active {
+        match client_info.status {
             0 => {
                 // Inactive proxy provider session. Ask client to create new session
                 // Either party could have terminated the contract
@@ -114,19 +114,19 @@ impl RequestHandler for ProxyProvider {
 
 pub struct ProxyClient {
     http_client: Client<ProxyConnector<HttpConnector>, Incoming>,
-    config: ProxyClientConfig,
+    session_info: ProxySessionInfo, // We don't record any data here, but only use configuration values like client_id, auth_token etc
 }
 
 impl ProxyClient {
-    pub fn new(config: ProxyClientConfig) -> Self {
+    pub fn new(session_info: ProxySessionInfo) -> Self {
         // Configure the proxy
-        let proxy_uri = config
+        let proxy_uri = session_info
             .proxy_address
             .clone()
             .parse()
             .expect("Proxy address to be valid proxy URI");
         let mut proxy = Proxy::new(Intercept::All, proxy_uri);
-        let authorization = Authorization::bearer(config.auth_token.as_str())
+        let authorization = Authorization::bearer(session_info.auth_token.as_str())
             .expect("Authorization token to be valid");
         proxy.set_authorization(authorization);
 
@@ -138,7 +138,7 @@ impl ProxyClient {
 
         Self {
             http_client,
-            config,
+            session_info,
         }
     }
 }
@@ -149,20 +149,19 @@ impl RequestHandler for ProxyClient {
         &self,
         mut request: Request<Incoming>,
     ) -> Result<Response<Full<Bytes>>, Error> {
-        // Get token
         tracing::info!("Request headers: {:?}", request.headers());
 
-        // Send the request through proxy
         let path = request.uri().path();
         tracing::info!("Request path: {path}");
 
         // Add Bearer token
         // TODO: For some reason set_authorization in proxy is not setting the header. Check later.
-        let token = format!("Bearer {}", self.config.auth_token.as_str());
+        let token = format!("Bearer {}", self.session_info.auth_token.as_str());
         let token_hdr_value = HeaderValue::from_str(token.as_str())
             .expect("token value to be valid header value when parsed from string");
         request.headers_mut().insert(AUTHORIZATION, token_hdr_value);
 
+        // Send the request through proxy
         let response = self
             .http_client
             .request(request)
@@ -174,10 +173,10 @@ impl RequestHandler for ProxyClient {
 
         // Update usage info in DB
         let size_kb = (bytes.len() as f32) / 1000f32;
-        let amount_owed = self.config.fee_rate_per_kb * size_kb;
+        let amount_owed = self.session_info.fee_rate_per_kb * size_kb;
         let mut proxy_sessions_table = ProxySessionsTable::new(None);
         proxy_sessions_table
-            .update_data_transfer_info(self.config.session_id.as_str(), size_kb, amount_owed)
+            .update_data_transfer_info(self.session_info.session_id.as_str(), size_kb, amount_owed)
             .expect("Amount owed to be updated to DB");
 
         tracing::info!("Response body size: {:?}", bytes.len());
