@@ -3,7 +3,7 @@ use serde::Serialize;
 
 use crate::utils::Utils;
 
-pub mod table_schema {
+pub(super) mod table_schema {
     diesel::table! {
         provided_files (file_id) {
             file_id -> Text,

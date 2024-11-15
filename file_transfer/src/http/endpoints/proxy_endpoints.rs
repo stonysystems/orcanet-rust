@@ -17,7 +17,7 @@ pub fn get_proxy_endpoints() -> Vec<Route> {
 
 #[derive(Serialize, Deserialize, Debug)]
 struct ConnectToProxyRequest {
-    peer_id: PeerId,
+    peer_id: String,
 }
 
 #[get("/get-providers")]
@@ -87,12 +87,15 @@ async fn connect(
 
     // Send connect request to peer
     let mut network_client = state.network_client.clone();
+    let peer_id: PeerId = match request.peer_id.parse() {
+        Ok(peer_id) => peer_id,
+        Err(e) => {
+            return AppResponse::error("Invalid peer_id".to_string());
+        }
+    };
 
     let proxy_session = match network_client
-        .send_request(
-            request.peer_id.clone(),
-            OrcaNetRequest::HTTPProxyProvideRequest,
-        )
+        .send_request(peer_id.clone(), OrcaNetRequest::HTTPProxyProvideRequest)
         .await
     {
         Ok(OrcaNetResponse::HTTPProxyProvideResponse {
@@ -110,7 +113,7 @@ async fn connect(
                 start_timestamp: Utils::get_unix_timestamp(),
                 proxy_address: metadata.proxy_address,
                 fee_rate_per_kb: metadata.fee_rate_per_kb,
-                provider_peer_id: request.peer_id.to_string(),
+                provider_peer_id: request.peer_id.clone(),
                 recipient_address: metadata.recipient_address,
                 ..Default::default()
             };
