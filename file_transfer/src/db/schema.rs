@@ -1,7 +1,7 @@
+use crate::common::HTTPProxyMetadata;
+use crate::utils::Utils;
 use diesel::{Insertable, Queryable, Selectable};
 use serde::Serialize;
-
-use crate::utils::Utils;
 
 pub(super) mod table_schema {
     diesel::table! {
@@ -153,6 +153,27 @@ pub struct ProxySessionInfo {
     pub provider_peer_id: String,
     pub recipient_address: String,
     pub status: i32, // 1 - Active, 0 - terminated by client, -1 - terminated by server
+}
+
+impl ProxySessionInfo {
+    pub fn from_proxy_connect_response(
+        peer_id: String,
+        client_id: String,
+        auth_token: String,
+        metadata: HTTPProxyMetadata,
+    ) -> Self {
+        Self {
+            session_id: Utils::new_uuid(),
+            client_id,
+            auth_token,
+            start_timestamp: Utils::get_unix_timestamp(),
+            proxy_address: metadata.proxy_address,
+            fee_rate_per_kb: metadata.fee_rate_per_kb,
+            provider_peer_id: peer_id,
+            recipient_address: metadata.recipient_address,
+            ..Default::default()
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Insertable, Queryable, Selectable)]

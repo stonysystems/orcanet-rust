@@ -3,24 +3,23 @@
 #[macro_use]
 extern crate rocket;
 
-use std::error::Error;
-use std::path::Path;
-use std::process::exit;
-use std::str::FromStr;
+use crate::common::{OrcaNetConfig, OrcaNetEvent, ProxyMode};
+use crate::http::start_http_server;
+use crate::network_client::NetworkClient;
+use crate::request_handler::RequestHandlerLoop;
+use crate::utils::Utils;
 
 use async_std::task::block_on;
 use clap::Parser;
 use futures::channel::mpsc;
 use futures::{SinkExt, StreamExt};
+use std::error::Error;
+use std::path::Path;
+use std::process::exit;
+use std::str::FromStr;
 use tokio::io::AsyncBufReadExt;
 use tokio::{io, select};
 use tracing_subscriber::EnvFilter;
-
-use crate::common::{OrcaNetConfig, OrcaNetEvent, ProxyClientConfig, ProxyMode};
-use crate::http::start_http_server;
-use crate::network_client::NetworkClient;
-use crate::request_handler::RequestHandlerLoop;
-use crate::utils::Utils;
 
 mod btc_rpc;
 mod common;

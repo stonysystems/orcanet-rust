@@ -4,12 +4,14 @@ use crate::common::{
 use crate::db::{ProxySessionInfo, ProxySessionsTable};
 use crate::http::endpoints::{AppResponse, AppState};
 use crate::utils::Utils;
+
 use futures::SinkExt;
 use libp2p::PeerId;
 use rocket::serde::json::Json;
 use rocket::serde::{Deserialize, Serialize};
 use rocket::{Route, State};
 use serde_json::json;
+use tracing::metadata;
 
 pub fn get_proxy_endpoints() -> Vec<Route> {
     routes![get_providers]
@@ -62,13 +64,17 @@ async fn get_providers(state: &State<AppState>) -> Json<AppResponse> {
 #[post("/stop")]
 async fn stop_proxy(state: &State<AppState>) -> Json<AppResponse> {
     match OrcaNetConfig::get_proxy_config() {
-        Some(ProxyMode::ProxyProvider) => {
-            todo!()
-        }
-        Some(ProxyMode::ProxyClient { session_id }) => {
-            // Settle up remaining balances
-            // Inform the server about session end
-            todo!()
+        Some(_) => {
+            state
+                .event_sender
+                .clone()
+                .send(OrcaNetEvent::StopProxy)
+                .await
+                .expect("Sender not to be dropped");
+
+            AppResponse::success(json!({
+                "message": "proxy stopped"
+            }))
         }
         None => AppResponse::error("Proxy not running".to_string()),
     }
@@ -82,41 +88,39 @@ async fn connect(
     // Check if proxy is already active
     if OrcaNetConfig::get_proxy_config().is_some() {
         // Current proxy session should be stopped before connecting to new proxy
-        return AppResponse::error("Proxy already running. Stop it first.".to_string());
+        // Let's not do that automatically in here. Connect is only to initiate a new session.
+        return AppResponse::error(
+            "Proxy already running. Stop it before starting a new client session.".to_string(),
+        );
     }
 
     // Send connect request to peer
-    let mut network_client = state.network_client.clone();
     let peer_id: PeerId = match request.peer_id.parse() {
         Ok(peer_id) => peer_id,
         Err(e) => {
             return AppResponse::error("Invalid peer_id".to_string());
         }
     };
+    let mut network_client = state.network_client.clone();
 
-    let proxy_session = match network_client
+    let provide_resp = network_client
         .send_request(peer_id.clone(), OrcaNetRequest::HTTPProxyProvideRequest)
-        .await
-    {
+        .await;
+
+    // Persist session info in DB
+    let proxy_session = match provide_resp {
         Ok(OrcaNetResponse::HTTPProxyProvideResponse {
             metadata,
             auth_token,
             client_id,
         }) => {
-            // Persist data in DB
             let mut proxy_sessions_table = ProxySessionsTable::new(None);
-            let session_id = Utils::new_uuid();
-            let proxy_session_info = ProxySessionInfo {
-                session_id,
+            let proxy_session_info = ProxySessionInfo::from_proxy_connect_response(
+                request.peer_id.clone(),
                 client_id,
                 auth_token,
-                start_timestamp: Utils::get_unix_timestamp(),
-                proxy_address: metadata.proxy_address,
-                fee_rate_per_kb: metadata.fee_rate_per_kb,
-                provider_peer_id: request.peer_id.clone(),
-                recipient_address: metadata.recipient_address,
-                ..Default::default()
-            };
+                metadata,
+            );
 
             proxy_sessions_table
                 .insert_session_info(&proxy_session_info)
@@ -138,9 +142,11 @@ async fn connect(
     let mut event_sender = state.event_sender.clone();
     let _ = event_sender
         .send(OrcaNetEvent::StartProxy(ProxyMode::ProxyClient {
-            session_id: proxy_session.session_id,
+            session_id: proxy_session.session_id.clone(),
         }))
         .await;
 
-    todo!()
+    AppResponse::success(json!({
+        "session_id": proxy_session.session_id
+    }))
 }
