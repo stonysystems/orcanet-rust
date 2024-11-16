@@ -26,7 +26,7 @@ fn get_handler(mode: ProxyMode) -> Result<Box<dyn RequestHandler>, String> {
         ProxyMode::ProxyClient { session_id } => {
             let mut proxy_sessions_table = ProxySessionsTable::new(None);
             let session_info = proxy_sessions_table
-                .get_session_info(session_id)
+                .get_session_info(session_id.as_str())
                 .map_err(|e| e.to_string())?;
 
             if session_info.status != 1 {

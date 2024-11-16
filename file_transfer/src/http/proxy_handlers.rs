@@ -1,6 +1,11 @@
-use std::net::SocketAddr;
-use std::sync::Arc;
-
+use crate::btc_rpc::RPCWrapper;
+use crate::common::{
+    OrcaNetConfig, OrcaNetError, OrcaNetRequest, OrcaNetResponse, PrePaymentInfo,
+    PrePaymentResponse, ProxyClientConfig,
+};
+use crate::db::{ProxyClientsTable, ProxySessionInfo, ProxySessionsTable};
+use crate::network_client::NetworkClient;
+use bitcoin::Txid;
 use bytes::Bytes;
 use futures::channel::mpsc::Receiver;
 use futures::StreamExt;
@@ -16,11 +21,11 @@ use hyper_tls::HttpsConnector;
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::client::legacy::Client;
 use hyper_util::rt::TokioIo;
+use libp2p_swarm::derive_prelude::PeerId;
 use serde_json::json;
+use std::net::SocketAddr;
+use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
-
-use crate::common::{OrcaNetError, ProxyClientConfig};
-use crate::db::{ProxyClientsTable, ProxySessionInfo, ProxySessionsTable};
 
 #[async_trait]
 pub trait RequestHandler: Send + Sync {
@@ -182,6 +187,91 @@ impl RequestHandler for ProxyClient {
         tracing::info!("Response body size: {:?}", bytes.len());
 
         Ok(Response::from_parts(parts, Full::new(bytes)))
+    }
+}
+
+pub struct ProxyPaymentLoop {
+    session_id: String,
+    network_client: NetworkClient,
+    proxy_sessions_table: ProxySessionsTable,
+}
+
+impl ProxyPaymentLoop {
+    async fn process_payment(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        // Get session info
+        let mut proxy_sessions_table = ProxySessionsTable::new(None);
+        let session_info = proxy_sessions_table.get_session_info(self.session_id.as_str())?;
+        let provider_peer = session_info
+            .provider_peer_id
+            .parse()
+            .expect("Provider peer id to be valid");
+
+        // Sent pre-payment request to make sure the server agrees and to get amount to be paid
+        let pre_payment_info = self.pre_payment_step(provider_peer, &session_info).await?;
+
+        // Create a transaction for the requested amount
+        let rpc_wrapper = RPCWrapper::new(OrcaNetConfig::get_network_type());
+        let comment = format!(
+            "Payment for proxy. Reference: {:?}",
+            pre_payment_info.payment_reference
+        );
+        let tx_id = rpc_wrapper.send_to_address(
+            pre_payment_info.recipient_address.as_str(),
+            pre_payment_info.amount_to_send as f64,
+            Some(comment.as_str()),
+        )?;
+
+        // Send post payment notification to the server
+        Ok(())
+    }
+
+    async fn pre_payment_step(
+        &mut self,
+        peer_id: PeerId,
+        session_info: &ProxySessionInfo,
+    ) -> Result<PrePaymentInfo, Box<dyn std::error::Error>> {
+        let resp = self
+            .network_client
+            .send_request(
+                peer_id,
+                OrcaNetRequest::HTTPProxyPrePaymentRequest {
+                    client_id: session_info.client_id.clone(),
+                    auth_token: session_info.auth_token.clone(),
+                    fee_owed: session_info.total_fee_owed,
+                    data_transferred_kb: session_info.data_transferred_kb,
+                },
+            )
+            .await
+            .map_err(|e| e as Box<dyn std::error::Error>)?;
+
+        match resp {
+            OrcaNetResponse::HTTPProxyPrePaymentResponse {
+                fee_owed,
+                data_transferred_kb,
+                pre_payment_response,
+            } => match pre_payment_response {
+                // Check if server's data differs too much
+                // If it does, send all remaining amount and terminate the connection
+                // TODO: Note down the incident so we can factor this into reputation calculation
+
+                // If not, proceed to handle the server's response
+                PrePaymentResponse::Accepted(pre_payment_info) => Ok(pre_payment_info),
+                PrePaymentResponse::RejectedDataTransferDiffers => {
+                    // Adjust to what the server says
+                    // At this point, we've decided that the server's values are not too different, so it's fine
+                    todo!()
+                }
+                PrePaymentResponse::RejectedFeeOwedDiffers => {
+                    // Adjust to what the server says
+                    todo!()
+                }
+            },
+            OrcaNetResponse::Error(e) => {
+                Err(format!("Got error for pre payment request {:?}", e).into())
+            }
+            // Err(e) => Err(format!("Got error for pre payment request {:?}", e).into()),
+            _ => Err("Got invalid response for pre payment request".into()),
+        }
     }
 }
 

@@ -1,3 +1,4 @@
+use std::error::Error;
 use std::fmt::{self, Display};
 use std::str::FromStr;
 
@@ -52,10 +53,8 @@ impl RPCWrapper {
         address_string: &str,
         btc_amount: f64,
         comment: Option<&str>,
-    ) -> Result<Txid, String> {
-        let recipient_address = Address::from_str(address_string)
-            .map_err(|e| e.to_string())?
-            .assume_checked();
+    ) -> Result<Txid, Box<dyn Error>> {
+        let recipient_address = Address::from_str(address_string)?.assume_checked();
         let amount = Amount::from_btc(btc_amount).map_err(|e| e.to_string())?;
 
         self.rpc_client
@@ -69,7 +68,7 @@ impl RPCWrapper {
                 None,
                 None,
             )
-            .map_err(|e| e.to_string())
+            .map_err(|e| Box::from(e))
     }
 
     pub fn load_wallet(&self, wallet: &str) {
@@ -98,15 +97,13 @@ impl RPCWrapper {
     }
 
     /// Generate a single block with given address as the coinbase recipient
-    pub fn generate_to_address(&self, address_string: &str) -> Result<BlockHash, String> {
-        let recipient_address = Address::from_str(address_string)
-            .map_err(|e| e.to_string())?
-            .assume_checked();
+    pub fn generate_to_address(&self, address_string: &str) -> Result<BlockHash, Box<dyn Error>> {
+        let recipient_address = Address::from_str(address_string)?.assume_checked();
 
         self.rpc_client
             .generate_to_address(1, &recipient_address)
             .map(|hashes| hashes[0])
-            .map_err(|e| e.to_string())
+            .map_err(|e| Box::from(e))
     }
 
     pub fn get_client(&self) -> &Client {

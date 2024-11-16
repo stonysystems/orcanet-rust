@@ -260,7 +260,7 @@ pub enum OrcaNetRequest {
         client_id: String,
         auth_token: String,
         data_transferred_kb: f32,
-        amount_owed: f32,
+        fee_owed: f32,
     },
     HTTPProxyPostPaymentNotification {
         client_id: String,
@@ -285,14 +285,17 @@ pub struct FileMetadata {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PrePaymentInfo {
+    pub amount_to_send: f32, // Server requests a specific amount <= amount_owed
+    pub payment_reference: String,
+    pub recipient_address: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum PrePaymentResponse {
-    Accepted {
-        amount_to_send: f32, // Server requests a specific amount <= amount_owed
-        payment_reference: String,
-        recipient_address: String,
-    },
-    RejectedDataTransferDiff,
-    RejectedAmountOwedDiff,
+    Accepted(PrePaymentInfo),
+    RejectedDataTransferDiffers,
+    RejectedFeeOwedDiffers,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -312,8 +315,8 @@ pub enum OrcaNetResponse {
         /// Data transferred according to server
         data_transferred_kb: f32,
         /// Amount owed according to server
-        amount_owed: f32,
-        response: PrePaymentResponse,
+        fee_owed: f32,
+        pre_payment_response: PrePaymentResponse, // TODO: Think of a better name
     },
     Error(OrcaNetError),
 }

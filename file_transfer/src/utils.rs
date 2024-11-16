@@ -93,6 +93,8 @@ impl Utils {
             .unwrap()
     }
 
+    /// Uses RequestResponse for small metadata requests.
+    /// Should not be used when Stream Request is required.
     pub async fn request_from_peers(
         request: OrcaNetRequest,
         network_client: NetworkClient,

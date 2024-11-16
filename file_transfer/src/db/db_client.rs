@@ -205,7 +205,7 @@ pub struct ProxySessionsTable {
 impl ProxySessionsTable {
     fn_table_new!();
 
-    pub fn get_session_info(&mut self, target_session_id: String) -> QueryResult<ProxySessionInfo> {
+    pub fn get_session_info(&mut self, target_session_id: &str) -> QueryResult<ProxySessionInfo> {
         use table_schema::proxy_sessions::dsl::*;
 
         proxy_sessions
