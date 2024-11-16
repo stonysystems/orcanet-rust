@@ -36,3 +36,4 @@ http-body-util = "0.1.2"
 hyper-util = { version = "0.1.9", features = ["http1"] }
 hyper-http-proxy = "1.0.0"
 headers = "0.4.0"
+tokio-util = "0.7.12"

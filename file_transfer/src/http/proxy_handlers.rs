@@ -1,7 +1,7 @@
 use crate::btc_rpc::RPCWrapper;
 use crate::common::{
-    OrcaNetConfig, OrcaNetError, OrcaNetRequest, OrcaNetResponse, PrePaymentInfo,
-    PrePaymentResponse, ProxyClientConfig,
+    ConfigKey, OrcaNetConfig, OrcaNetError, OrcaNetRequest, OrcaNetResponse, PaymentNotification,
+    PrePaymentInfo, PrePaymentResponse, ProxyClientConfig,
 };
 use crate::db::{ProxyClientsTable, ProxySessionInfo, ProxySessionsTable};
 use crate::network_client::NetworkClient;
@@ -23,9 +23,12 @@ use hyper_util::client::legacy::Client;
 use hyper_util::rt::TokioIo;
 use libp2p_swarm::derive_prelude::PeerId;
 use serde_json::json;
+use std::future::Future;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
+use tokio::time::{interval, Duration};
+use tokio_util::sync::CancellationToken;
 
 #[async_trait]
 pub trait RequestHandler: Send + Sync {
@@ -194,10 +197,43 @@ pub struct ProxyPaymentLoop {
     session_id: String,
     network_client: NetworkClient,
     proxy_sessions_table: ProxySessionsTable,
+    cancellation_token: CancellationToken,
 }
 
 impl ProxyPaymentLoop {
-    async fn process_payment(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    async fn start_payment_loop(mut self) {
+        let mut interval = interval(Duration::from_secs(
+            OrcaNetConfig::PROXY_PAYMENT_INTERVAL_SECS,
+        ));
+
+        loop {
+            tokio::select! {
+                _ = self.cancellation_token.cancelled() => {
+                    // Settle up
+                    // Cancel payment loop
+                    return;
+                }
+
+                interval_event = interval.tick() => {
+                    tracing::info!("Attempting payment for HTTP proxy");
+
+                    match self.process_payment().await {
+                        Ok(payment_reference) => {
+                            tracing::info!(
+                                "Payment attempt succeeded. Reference: {}",
+                                payment_reference
+                            );
+                        }
+                        Err(e) => {
+                            tracing::error!("Payment attempt failed: {:?}", e);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    async fn process_payment(&mut self) -> Result<String, Box<dyn std::error::Error>> {
         // Get session info
         let mut proxy_sessions_table = ProxySessionsTable::new(None);
         let session_info = proxy_sessions_table.get_session_info(self.session_id.as_str())?;
@@ -206,7 +242,7 @@ impl ProxyPaymentLoop {
             .parse()
             .expect("Provider peer id to be valid");
 
-        // Sent pre-payment request to make sure the server agrees and to get amount to be paid
+        // Send pre-payment request to make sure the server agrees and to get amount to be paid
         let pre_payment_info = self.pre_payment_step(provider_peer, &session_info).await?;
 
         // Create a transaction for the requested amount
@@ -221,8 +257,25 @@ impl ProxyPaymentLoop {
             Some(comment.as_str()),
         )?;
 
+        // Persist in database
+
         // Send post payment notification to the server
-        Ok(())
+        let _ = self.network_client.send_request(
+            provider_peer,
+            OrcaNetRequest::HTTPProxyPostPaymentNotification {
+                client_id: session_info.client_id.clone(),
+                auth_token: session_info.auth_token.clone(),
+                payment_notification: PaymentNotification {
+                    sender_address: OrcaNetConfig::get_str_from_config(ConfigKey::BTCAddress),
+                    receiver_address: pre_payment_info.recipient_address,
+                    amount_transferred: pre_payment_info.amount_to_send,
+                    tx_id: tx_id.to_string(),
+                    payment_reference: pre_payment_info.payment_reference.clone(),
+                },
+            },
+        );
+
+        Ok(pre_payment_info.payment_reference)
     }
 
     async fn pre_payment_step(
@@ -249,23 +302,25 @@ impl ProxyPaymentLoop {
                 fee_owed,
                 data_transferred_kb,
                 pre_payment_response,
-            } => match pre_payment_response {
+            } => {
                 // Check if server's data differs too much
                 // If it does, send all remaining amount and terminate the connection
                 // TODO: Note down the incident so we can factor this into reputation calculation
 
                 // If not, proceed to handle the server's response
-                PrePaymentResponse::Accepted(pre_payment_info) => Ok(pre_payment_info),
-                PrePaymentResponse::RejectedDataTransferDiffers => {
-                    // Adjust to what the server says
-                    // At this point, we've decided that the server's values are not too different, so it's fine
-                    todo!()
+                match pre_payment_response {
+                    PrePaymentResponse::Accepted(pre_payment_info) => Ok(pre_payment_info),
+                    PrePaymentResponse::RejectedDataTransferDiffers => {
+                        // Adjust to what the server says
+                        // At this point, we've decided that the server's values are not too different, so it's fine
+                        todo!()
+                    }
+                    PrePaymentResponse::RejectedFeeOwedDiffers => {
+                        // Adjust to what the server says
+                        todo!()
+                    }
                 }
-                PrePaymentResponse::RejectedFeeOwedDiffers => {
-                    // Adjust to what the server says
-                    todo!()
-                }
-            },
+            }
             OrcaNetResponse::Error(e) => {
                 Err(format!("Got error for pre payment request {:?}", e).into())
             }

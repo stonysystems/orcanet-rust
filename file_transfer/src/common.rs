@@ -43,6 +43,7 @@ impl OrcaNetConfig {
     pub const PROXY_PORT: u16 = 3000;
     pub const PROXY_PROVIDER_KEY_DHT: &'static str = "http_proxy_providers";
     pub const DEFAULT_SECRET_KEY_SEED: u64 = 4;
+    pub const PROXY_PAYMENT_INTERVAL_SECS: u64 = 10;
 
     pub fn get_bootstrap_peer_id() -> PeerId {
         "12D3KooWQd1K1k8XA9xVEzSAu7HUCodC7LJB6uW5Kw4VwkRdstPE"
@@ -235,14 +236,14 @@ pub enum StreamData {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PaymentNotification {
     /// Bitcoin address of the sender
-    sender_address: String,
+    pub sender_address: String,
     /// Should be bitcoin address of the server
-    receiver_address: String,
-    amount_transferred: f32,
+    pub receiver_address: String,
+    pub amount_transferred: f32,
     /// Transaction ID in the blockchain for the transaction created by the sender
-    tx_id: String,
+    pub tx_id: String,
     /// Server generated payment reference if provided
-    payment_reference: String,
+    pub payment_reference: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
