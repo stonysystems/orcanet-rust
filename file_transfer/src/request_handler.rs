@@ -212,64 +212,9 @@ impl RequestHandlerLoop {
             OrcaNetRequest::HTTPProxyMetadataRequest | OrcaNetRequest::HTTPProxyProvideRequest => {
                 Self::handle_http_proxy_request(request, from_peer)
             }
-            OrcaNetRequest::HTTPProxyPrePaymentRequest { .. } => {
-                todo!()
-            }
-            OrcaNetRequest::HTTPProxyPostPaymentNotification { .. } => {
-                todo!()
-            }
-        }
-    }
-
-    fn handle_http_proxy_request(request: OrcaNetRequest, from_peer: PeerId) -> OrcaNetResponse {
-        match OrcaNetConfig::get_proxy_config() {
-            Some(ProxyMode::ProxyProvider) => {
-                let metadata = HTTPProxyMetadata {
-                    proxy_address: OrcaNetConfig::get_str_from_config(
-                        ConfigKey::ProxyProviderServerAddress,
-                    ),
-                    fee_rate_per_kb: OrcaNetConfig::get_proxy_fee_rate(),
-                    recipient_address: OrcaNetConfig::get_str_from_config(ConfigKey::BTCAddress),
-                };
-
-                match request {
-                    OrcaNetRequest::HTTPProxyMetadataRequest => {
-                        OrcaNetResponse::HTTPProxyMetadataResponse(metadata)
-                    }
-                    OrcaNetRequest::HTTPProxyProvideRequest => {
-                        // Create new client
-                        let client_id = Utils::new_uuid();
-                        let auth_token = Utils::new_uuid();
-
-                        let mut proxy_clients_table = ProxyClientsTable::new(None);
-                        let proxy_client_info = ProxyClientInfo::with_defaults(
-                            client_id.clone(),
-                            auth_token.clone(),
-                            from_peer.to_string(),
-                        );
-
-                        match proxy_clients_table.add_client(&proxy_client_info) {
-                            Ok(_) => {
-                                tracing::info!("Created new client: {:?}", proxy_client_info);
-                                OrcaNetResponse::HTTPProxyProvideResponse {
-                                    metadata,
-                                    client_id,
-                                    auth_token,
-                                }
-                            }
-                            Err(_) => OrcaNetResponse::Error(OrcaNetError::InternalServerError(
-                                "Error creating client".to_string(),
-                            )),
-                        }
-                    }
-                    _ => panic!("Expected only proxy requests in handle_proxy_requests"),
-                }
-            }
-            _ => {
-                // Not providing
-                OrcaNetResponse::Error(OrcaNetError::NotAProvider(
-                    "Not a proxy provider".to_string(),
-                ))
+            OrcaNetRequest::HTTPProxyPrePaymentRequest { .. }
+            | OrcaNetRequest::HTTPProxyPostPaymentNotification { .. } => {
+                Self::handle_payment_request(request, from_peer)
             }
         }
     }
@@ -329,6 +274,76 @@ impl RequestHandlerLoop {
                 }
             }
             _ => panic!("Expected file request"),
+        }
+    }
+
+    fn handle_http_proxy_request(request: OrcaNetRequest, from_peer: PeerId) -> OrcaNetResponse {
+        match OrcaNetConfig::get_proxy_config() {
+            Some(ProxyMode::ProxyProvider) => {
+                let metadata = HTTPProxyMetadata {
+                    proxy_address: OrcaNetConfig::get_str_from_config(
+                        ConfigKey::ProxyProviderServerAddress,
+                    ),
+                    fee_rate_per_kb: OrcaNetConfig::get_proxy_fee_rate(),
+                    recipient_address: OrcaNetConfig::get_str_from_config(ConfigKey::BTCAddress),
+                };
+
+                match request {
+                    OrcaNetRequest::HTTPProxyMetadataRequest => {
+                        OrcaNetResponse::HTTPProxyMetadataResponse(metadata)
+                    }
+                    OrcaNetRequest::HTTPProxyProvideRequest => {
+                        // Create new client
+                        let client_id = Utils::new_uuid();
+                        let auth_token = Utils::new_uuid();
+
+                        let mut proxy_clients_table = ProxyClientsTable::new(None);
+                        let proxy_client_info = ProxyClientInfo::with_defaults(
+                            client_id.clone(),
+                            auth_token.clone(),
+                            from_peer.to_string(),
+                        );
+
+                        match proxy_clients_table.add_client(&proxy_client_info) {
+                            Ok(_) => {
+                                tracing::info!("Created new client: {:?}", proxy_client_info);
+                                OrcaNetResponse::HTTPProxyProvideResponse {
+                                    metadata,
+                                    client_id,
+                                    auth_token,
+                                }
+                            }
+                            Err(_) => OrcaNetResponse::Error(OrcaNetError::InternalServerError(
+                                "Error creating client".to_string(),
+                            )),
+                        }
+                    }
+                    _ => panic!("Expected only proxy requests in handle_proxy_requests"),
+                }
+            }
+            _ => {
+                // Not providing
+                OrcaNetResponse::Error(OrcaNetError::NotAProvider(
+                    "Not a proxy provider".to_string(),
+                ))
+            }
+        }
+    }
+
+    fn handle_payment_request(request: OrcaNetRequest, from_peer: PeerId) -> OrcaNetResponse {
+        match request {
+            OrcaNetRequest::HTTPProxyPrePaymentRequest {
+                client_id,
+                auth_token,
+                fee_owed,
+                data_transferred_kb,
+            } => {
+                todo!()
+            }
+            OrcaNetRequest::HTTPProxyPostPaymentNotification { .. } => {
+                todo!()
+            }
+            _ => panic!("Expected payment request"),
         }
     }
 }

@@ -243,6 +243,8 @@ impl ProxyPaymentLoop {
         // Send pre-payment request to make sure the server agrees and to get amount to be paid
         let pre_payment_info = self.pre_payment_step(provider_peer, &session_info).await?;
 
+        return Ok(pre_payment_info.payment_reference); // TODO: For testing
+
         // Create a transaction for the requested amount
         let rpc_wrapper = RPCWrapper::new(OrcaNetConfig::get_network_type());
         let comment = format!(
@@ -301,7 +303,18 @@ impl ProxyPaymentLoop {
                 data_transferred_kb,
                 pre_payment_response,
             } => {
+                tracing::info!(
+                    "Received pre payment response {:?}. Data transferred: {}, fee_owed: {}",
+                    pre_payment_response,
+                    data_transferred_kb,
+                    fee_owed
+                );
+
                 // Check if server's data differs too much
+                // if data_transferred_kb != session_info.data_transferred_kb {
+                //
+                // }
+
                 // If it does, send all remaining amount and terminate the connection
                 // TODO: Note down the incident so we can factor this into reputation calculation
 
