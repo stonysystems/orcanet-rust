@@ -226,7 +226,7 @@ impl RequestHandlerLoop {
             Some(ProxyMode::ProxyProvider) => {
                 let metadata = HTTPProxyMetadata {
                     proxy_address: "".to_string(),
-                    fee_rate_per_kb: OrcaNetConfig::get_proxy_fee_rate() as f32,
+                    fee_rate_per_kb: OrcaNetConfig::get_proxy_fee_rate(),
                     recipient_address: OrcaNetConfig::get_str_from_config(ConfigKey::BTCAddress),
                 };
 

@@ -239,7 +239,7 @@ pub struct PaymentNotification {
     pub sender_address: String,
     /// Should be bitcoin address of the server
     pub receiver_address: String,
-    pub amount_transferred: f32,
+    pub amount_transferred: f64,
     /// Transaction ID in the blockchain for the transaction created by the sender
     pub tx_id: String,
     /// Server generated payment reference if provided
@@ -260,8 +260,8 @@ pub enum OrcaNetRequest {
     HTTPProxyPrePaymentRequest {
         client_id: String,
         auth_token: String,
-        data_transferred_kb: f32,
-        fee_owed: f32,
+        data_transferred_kb: f64,
+        fee_owed: f64,
     },
     HTTPProxyPostPaymentNotification {
         client_id: String,
@@ -273,7 +273,7 @@ pub enum OrcaNetRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HTTPProxyMetadata {
     pub proxy_address: String, // IP address with port
-    pub fee_rate_per_kb: f32,
+    pub fee_rate_per_kb: f64,
     pub recipient_address: String,
 }
 
@@ -287,7 +287,7 @@ pub struct FileMetadata {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PrePaymentInfo {
-    pub amount_to_send: f32, // Server requests a specific amount <= amount_owed
+    pub amount_to_send: f64, // Server requests a specific amount <= amount_owed
     pub payment_reference: String,
     pub recipient_address: String,
 }
@@ -314,9 +314,9 @@ pub enum OrcaNetResponse {
     },
     HTTPProxyPrePaymentResponse {
         /// Data transferred according to server
-        data_transferred_kb: f32,
+        data_transferred_kb: f64,
         /// Amount owed according to server
-        fee_owed: f32,
+        fee_owed: f64,
         pre_payment_response: PrePaymentResponse, // TODO: Think of a better name
     },
     Error(OrcaNetError),
@@ -338,7 +338,7 @@ pub struct ProxyClientConfig {
     pub proxy_address: String,
     pub client_id: String,
     pub auth_token: String,
-    pub fee_rate_per_kb: f32,
+    pub fee_rate_per_kb: f64,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

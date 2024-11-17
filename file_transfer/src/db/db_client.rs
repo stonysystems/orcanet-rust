@@ -184,8 +184,8 @@ impl ProxyClientsTable {
     pub fn update_data_transfer_info(
         &mut self,
         target_client_id: &str,
-        transferred_kb: f32,
-        fee_owed: f32,
+        transferred_kb: f64,
+        fee_owed: f64,
     ) -> QueryResult<usize> {
         use table_schema::proxy_clients::dsl::*;
 
@@ -224,8 +224,8 @@ impl ProxySessionsTable {
     pub fn update_data_transfer_info(
         &mut self,
         target_session_id: &str,
-        transferred_kb: f32,
-        fee_owed: f32,
+        transferred_kb: f64,
+        fee_owed: f64,
     ) -> QueryResult<usize> {
         use table_schema::proxy_sessions::dsl::*;
 

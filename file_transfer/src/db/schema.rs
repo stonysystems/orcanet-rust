@@ -21,9 +21,9 @@ pub(super) mod table_schema {
             file_id -> Text,
             file_path -> Text,
             file_name -> Text,
-            file_size_kb -> Float,
-            fee_rate_per_kb -> Nullable<Float>,
-            price -> Nullable<Float>,
+            file_size_kb -> Double,
+            fee_rate_per_kb -> Nullable<Double>,
+            price -> Nullable<Double>,
             payment_tx_id -> Nullable<Text>,
             peer_id -> Text,
             download_timestamp -> BigInt
@@ -35,10 +35,10 @@ pub(super) mod table_schema {
             client_id -> Text,
             auth_token -> Text,
             start_timestamp -> BigInt,
-            data_transferred_kb -> Float,
-            total_fee_received -> Float,
-            total_fee_owed -> Float, // TODO: Remove later as it is derivable
-            fee_rate_per_kb -> Float,
+            data_transferred_kb -> Double,
+            total_fee_received -> Double,
+            total_fee_owed -> Double, // TODO: Remove later as it is derivable
+            fee_rate_per_kb -> Double,
             client_peer_id -> Text,
             status -> Integer
         }
@@ -52,10 +52,10 @@ pub(super) mod table_schema {
             proxy_address -> Text,
             start_timestamp -> BigInt,
             end_timestamp -> Nullable<BigInt>,
-            data_transferred_kb -> Float,
-            total_fee_sent -> Float,
-            total_fee_owed -> Float, // TODO: Remove later as it is derivable
-            fee_rate_per_kb -> Float,
+            data_transferred_kb -> Double,
+            total_fee_sent -> Double,
+            total_fee_owed -> Double, // TODO: Remove later as it is derivable
+            fee_rate_per_kb -> Double,
             provider_peer_id -> Text,
             recipient_address -> Text,
             status -> Integer
@@ -102,9 +102,9 @@ pub struct DownloadedFileInfo {
     pub file_id: String,
     pub file_path: String,
     pub file_name: String,
-    pub file_size_kb: f32,
-    pub fee_rate_per_kb: Option<f32>, // May not be rate but fixed price
-    pub price: Option<f32>,           // Size * rate if rate is present
+    pub file_size_kb: f64,
+    pub fee_rate_per_kb: Option<f64>, // May not be rate but fixed price
+    pub price: Option<f64>,           // Size * rate if rate is present
     pub payment_tx_id: Option<String>, // Transaction may not have started, so can be NULL ?
     pub peer_id: String,
     pub download_timestamp: i64,
@@ -116,10 +116,10 @@ pub struct ProxyClientInfo {
     pub client_id: String,
     pub auth_token: String,
     pub start_timestamp: i64,
-    pub data_transferred_kb: f32,
-    pub total_fee_received: f32,
-    pub total_fee_owed: f32,
-    pub fee_rate_per_kb: f32,
+    pub data_transferred_kb: f64,
+    pub total_fee_received: f64,
+    pub total_fee_owed: f64,
+    pub fee_rate_per_kb: f64,
     pub client_peer_id: String,
     pub status: i32, // 1 - Active, 0 - terminated by client, -1 - terminated by server
 }
@@ -138,7 +138,7 @@ impl ProxyClientInfo {
     }
 }
 
-// We're using f32 here for Float in sqlite tables
+// We're using f32 here for Double in sqlite tables
 // There is an issue with f32 serialization that adds some arbitrary decimals at the end
 // Refer: https://stackoverflow.com/questions/73871891/how-to-serialize-a-struct-containing-f32-using-serde-json
 // TODO: Try fixing it later if required. This is P2, doesn't matter much at the moment.
@@ -151,10 +151,10 @@ pub struct ProxySessionInfo {
     pub proxy_address: String,
     pub start_timestamp: i64,
     pub end_timestamp: Option<i64>,
-    pub data_transferred_kb: f32,
-    pub total_fee_sent: f32,
-    pub total_fee_owed: f32,
-    pub fee_rate_per_kb: f32,
+    pub data_transferred_kb: f64,
+    pub total_fee_sent: f64,
+    pub total_fee_owed: f64,
+    pub fee_rate_per_kb: f64,
     pub provider_peer_id: String,
     pub recipient_address: String,
     pub status: i32, // 1 - Active, 0 - terminated by client, -1 - terminated by server

@@ -207,11 +207,11 @@ impl Utils {
                     id: Utils::new_uuid(),
                     file_id: metadata.file_id.clone(),
                     file_name: metadata.file_name.clone(),
-                    file_size_kb: size_kb.clone() as f32,
+                    file_size_kb: size_kb.clone(),
                     file_path: path.to_str().unwrap().to_string(),
-                    fee_rate_per_kb: Some(metadata.fee_rate_per_kb.clone() as f32),
+                    fee_rate_per_kb: Some(metadata.fee_rate_per_kb.clone()),
                     peer_id: peer_id.to_string(),
-                    price: Some(cost_btc as f32), // Will change if we use per-file price instead of rate
+                    price: Some(cost_btc), // Will change if we use per-file price instead of rate
                     payment_tx_id,
                     download_timestamp: Utils::get_unix_timestamp(),
                 };

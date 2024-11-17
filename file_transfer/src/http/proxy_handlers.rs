@@ -108,7 +108,7 @@ impl RequestHandler for ProxyProvider {
         let bytes = body.collect().await?.to_bytes();
 
         // Update client info in DB
-        let size_kb = (bytes.len() as f32) / 1000f32;
+        let size_kb = (bytes.len() as f64) / 1000f64;
         let amount_owed = client_info.fee_rate_per_kb * size_kb;
         proxy_clients_table
             .update_data_transfer_info(client_info.client_id.as_str(), size_kb, amount_owed)
@@ -180,7 +180,7 @@ impl RequestHandler for ProxyClient {
         let bytes = body.collect().await?.to_bytes();
 
         // Update usage info in DB
-        let size_kb = (bytes.len() as f32) / 1000f32;
+        let size_kb = (bytes.len() as f64) / 1000f64;
         let amount_owed = self.session_info.fee_rate_per_kb * size_kb;
         let mut proxy_sessions_table = ProxySessionsTable::new(None);
         proxy_sessions_table
