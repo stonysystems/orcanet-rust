@@ -138,10 +138,6 @@ impl ProxyClientInfo {
     }
 }
 
-// We're using f32 here for Double in sqlite tables
-// There is an issue with f32 serialization that adds some arbitrary decimals at the end
-// Refer: https://stackoverflow.com/questions/73871891/how-to-serialize-a-struct-containing-f32-using-serde-json
-// TODO: Try fixing it later if required. This is P2, doesn't matter much at the moment.
 #[derive(Default, Debug, Clone, Serialize, Insertable, Queryable, Selectable)]
 #[diesel(table_name = table_schema::proxy_sessions)]
 pub struct ProxySessionInfo {
