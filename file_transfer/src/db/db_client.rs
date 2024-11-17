@@ -185,15 +185,11 @@ impl ProxyClientsTable {
         &mut self,
         target_client_id: &str,
         transferred_kb: f64,
-        fee_owed: f64,
     ) -> QueryResult<usize> {
         use table_schema::proxy_clients::dsl::*;
 
         update(proxy_clients.filter(client_id.eq(target_client_id)))
-            .set((
-                data_transferred_kb.eq(data_transferred_kb + transferred_kb),
-                total_fee_owed.eq(total_fee_owed + fee_owed),
-            ))
+            .set(data_transferred_kb.eq(data_transferred_kb + transferred_kb))
             .execute(&mut self.conn)
     }
 }
@@ -225,15 +221,11 @@ impl ProxySessionsTable {
         &mut self,
         target_session_id: &str,
         transferred_kb: f64,
-        fee_owed: f64,
     ) -> QueryResult<usize> {
         use table_schema::proxy_sessions::dsl::*;
 
         update(proxy_sessions.filter(session_id.eq(target_session_id)))
-            .set((
-                data_transferred_kb.eq(data_transferred_kb + transferred_kb),
-                total_fee_owed.eq(total_fee_owed + fee_owed),
-            ))
+            .set(data_transferred_kb.eq(data_transferred_kb + transferred_kb))
             .execute(&mut self.conn)
     }
 }

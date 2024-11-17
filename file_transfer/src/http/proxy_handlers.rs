@@ -109,10 +109,9 @@ impl RequestHandler for ProxyProvider {
 
         // Update client info in DB
         let size_kb = (bytes.len() as f64) / 1000f64;
-        let amount_owed = client_info.fee_rate_per_kb * size_kb;
         proxy_clients_table
-            .update_data_transfer_info(client_info.client_id.as_str(), size_kb, amount_owed)
-            .expect("Owed amount to be updated in DB"); // TODO: May be failure is too strict ?
+            .update_data_transfer_info(client_info.client_id.as_str(), size_kb)
+            .expect("Data transfer info to be updated in DB"); // TODO: May be failure is too strict ?
 
         tracing::info!("Response body size: {:?}", bytes.len());
 
@@ -181,11 +180,10 @@ impl RequestHandler for ProxyClient {
 
         // Update usage info in DB
         let size_kb = (bytes.len() as f64) / 1000f64;
-        let amount_owed = self.session_info.fee_rate_per_kb * size_kb;
         let mut proxy_sessions_table = ProxySessionsTable::new(None);
         proxy_sessions_table
-            .update_data_transfer_info(self.session_info.session_id.as_str(), size_kb, amount_owed)
-            .expect("Amount owed to be updated to DB");
+            .update_data_transfer_info(self.session_info.session_id.as_str(), size_kb)
+            .expect("Data transfer info to be updated in DB");
 
         tracing::info!("Response body size: {:?}", bytes.len());
 
@@ -290,7 +288,7 @@ impl ProxyPaymentLoop {
                 OrcaNetRequest::HTTPProxyPrePaymentRequest {
                     client_id: session_info.client_id.clone(),
                     auth_token: session_info.auth_token.clone(),
-                    fee_owed: session_info.total_fee_owed,
+                    fee_owed: session_info.get_fee_owed(),
                     data_transferred_kb: session_info.data_transferred_kb,
                 },
             )

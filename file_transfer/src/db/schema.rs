@@ -37,7 +37,7 @@ pub(super) mod table_schema {
             start_timestamp -> BigInt,
             data_transferred_kb -> Double,
             total_fee_received -> Double,
-            total_fee_owed -> Double, // TODO: Remove later as it is derivable
+            total_fee_received_unconfirmed -> Double,
             fee_rate_per_kb -> Double,
             client_peer_id -> Text,
             status -> Integer
@@ -54,7 +54,7 @@ pub(super) mod table_schema {
             end_timestamp -> Nullable<BigInt>,
             data_transferred_kb -> Double,
             total_fee_sent -> Double,
-            total_fee_owed -> Double, // TODO: Remove later as it is derivable
+            total_fee_sent_unconfirmed -> Double, // Sent but has not gotten into the blockchain
             fee_rate_per_kb -> Double,
             provider_peer_id -> Text,
             recipient_address -> Text,
@@ -110,6 +110,25 @@ pub struct DownloadedFileInfo {
     pub download_timestamp: i64,
 }
 
+pub enum ProxySessionStatus {
+    Active = 1,
+    TerminatedByClient = 0,
+    TerminatedByServer = 2,
+}
+
+impl TryFrom<u8> for ProxySessionStatus {
+    type Error = ();
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(Self::TerminatedByClient),
+            1 => Ok(Self::Active),
+            2 => Ok(Self::TerminatedByServer),
+            _ => Err(()),
+        }
+    }
+}
+
 #[derive(Default, Debug, Clone, Serialize, Insertable, Queryable, Selectable)]
 #[diesel(table_name = table_schema::proxy_clients)]
 pub struct ProxyClientInfo {
@@ -118,10 +137,10 @@ pub struct ProxyClientInfo {
     pub start_timestamp: i64,
     pub data_transferred_kb: f64,
     pub total_fee_received: f64,
-    pub total_fee_owed: f64,
+    pub total_fee_received_unconfirmed: f64, // Received a transaction, but is not in the blockchain yet
     pub fee_rate_per_kb: f64,
     pub client_peer_id: String,
-    pub status: i32, // 1 - Active, 0 - terminated by client, -1 - terminated by server
+    pub status: i32, // ProxyStatus
 }
 
 impl ProxyClientInfo {
@@ -136,6 +155,12 @@ impl ProxyClientInfo {
             ..Self::default()
         }
     }
+
+    pub fn get_fee_owed(&self) -> f64 {
+        self.data_transferred_kb * self.fee_rate_per_kb
+            - self.total_fee_received
+            - self.total_fee_received_unconfirmed
+    }
 }
 
 #[derive(Default, Debug, Clone, Serialize, Insertable, Queryable, Selectable)]
@@ -149,7 +174,7 @@ pub struct ProxySessionInfo {
     pub end_timestamp: Option<i64>,
     pub data_transferred_kb: f64,
     pub total_fee_sent: f64,
-    pub total_fee_owed: f64,
+    pub total_fee_sent_unconfirmed: f64,
     pub fee_rate_per_kb: f64,
     pub provider_peer_id: String,
     pub recipient_address: String,
@@ -175,6 +200,12 @@ impl ProxySessionInfo {
             status: 1,
             ..Default::default()
         }
+    }
+
+    pub fn get_fee_owed(&self) -> f64 {
+        self.data_transferred_kb * self.fee_rate_per_kb
+            - self.total_fee_sent
+            - self.total_fee_sent_unconfirmed
     }
 }
 
