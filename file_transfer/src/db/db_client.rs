@@ -10,6 +10,7 @@ use serde::Serialize;
 use crate::common::{ConfigKey, OrcaNetConfig};
 use crate::db::{
     table_schema, DownloadedFileInfo, ProvidedFileInfo, ProxyClientInfo, ProxySessionInfo,
+    TransactionInfo,
 };
 
 fn create_connection(db_path: Option<String>) -> SqliteConnection {
@@ -226,6 +227,30 @@ impl ProxySessionsTable {
 
         update(proxy_sessions.filter(session_id.eq(target_session_id)))
             .set(data_transferred_kb.eq(data_transferred_kb + transferred_kb))
+            .execute(&mut self.conn)
+    }
+}
+
+pub struct TransactionsTable {
+    conn: SqliteConnection,
+}
+
+impl TransactionsTable {
+    fn_table_new!();
+
+    pub fn get_transaction_info(&mut self, target_tx_id: &str) -> QueryResult<TransactionInfo> {
+        use table_schema::transactions::dsl::*;
+
+        transactions
+            .filter(tx_id.eq(target_tx_id))
+            .first::<TransactionInfo>(&mut self.conn)
+    }
+
+    pub fn insert_session_info(&mut self, session_info: &ProxySessionInfo) -> QueryResult<usize> {
+        use table_schema::proxy_sessions::dsl::*;
+
+        insert_into(proxy_sessions)
+            .values(session_info)
             .execute(&mut self.conn)
     }
 }

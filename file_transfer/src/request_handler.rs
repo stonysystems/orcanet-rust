@@ -392,7 +392,21 @@ impl RequestHandlerLoop {
                     pre_payment_response,
                 })
             }
-            OrcaNetRequest::HTTPProxyPostPaymentNotification { .. } => {
+            OrcaNetRequest::HTTPProxyPostPaymentNotification {
+                client_id,
+                auth_token,
+                payment_notification,
+            } => {
+                let mut proxy_clients_table = ProxyClientsTable::new(None);
+                let client_info =
+                    proxy_clients_table.get_client_by_auth_token(auth_token.as_str())?;
+
+                // Assume the client is honest and sent you a valid transaction
+                // It may take a while for the transaction to reach this node
+
+                // Handle the dishonesty case in which the client gave you a random tx that doesn't exist
+                // May be handle that in a separate thread that reads the DB, checks unconfirmed transactions,
+                // marks confirmed ones, blacklists cheating clients etc
                 todo!()
             }
             _ => panic!("Expected payment request"),

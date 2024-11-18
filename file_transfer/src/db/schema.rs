@@ -1,7 +1,8 @@
 use crate::common::{HTTPProxyMetadata, OrcaNetConfig};
+use crate::impl_str_serde;
 use crate::utils::Utils;
 use diesel::{Insertable, Queryable, Selectable};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 pub(super) mod table_schema {
     diesel::table! {
@@ -63,12 +64,24 @@ pub(super) mod table_schema {
     }
 
     diesel::table! {
-        kv_store (key) {
-            key -> Text,
-            value -> Text,
-            last_modified -> BigInt,
+        transactions (tx_id) {
+            tx_id -> Text,
+            from_address -> Text,
+            to_address -> Text,
+            expected_amount_btc -> Nullable<Double>,
+            amount_btc -> Double,
+            category -> Text,
+            status -> Text
         }
     }
+
+    // diesel::table! {
+    //     kv_store (key) {
+    //         key -> Text,
+    //         value -> Text,
+    //         last_modified -> BigInt,
+    //     }
+    // }
 }
 
 #[derive(Debug, Clone, Serialize, Insertable, Queryable, Selectable)]
@@ -217,10 +230,36 @@ impl ProxySessionInfo {
     }
 }
 
+// #[derive(Debug, Clone, Serialize, Insertable, Queryable, Selectable)]
+// #[diesel(table_name = table_schema::kv_store)]
+// pub struct KVStoreRecord {
+//     pub key: String,
+//     pub value: String,
+//     pub last_modified: i64,
+// }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum TransactionStatus {
+    Pending,
+    Confirmed,
+}
+impl_str_serde!(TransactionStatus);
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum TransactionCategory {
+    Receive,
+    Sent,
+}
+impl_str_serde!(TransactionCategory);
+
 #[derive(Debug, Clone, Serialize, Insertable, Queryable, Selectable)]
-#[diesel(table_name = table_schema::kv_store)]
-pub struct KVStoreRecord {
-    pub key: String,
-    pub value: String,
-    pub last_modified: i64,
+#[diesel(table_name = table_schema::transactions)]
+pub struct TransactionInfo {
+    pub tx_id: String,
+    pub from_address: String,
+    pub to_address: String,
+    pub expected_amount_btc: Option<f64>,
+    pub amount_btc: f64,
+    pub category: String,
+    pub status: String,
 }

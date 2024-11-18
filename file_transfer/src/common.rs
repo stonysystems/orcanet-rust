@@ -1,9 +1,7 @@
 use std::collections::HashSet;
 use std::error::Error;
-use std::fmt::{self, Display};
 use std::io::{Read, Write};
 use std::path::PathBuf;
-use std::str::FromStr;
 
 use futures::channel::oneshot;
 use libp2p::request_response::ResponseChannel;
@@ -90,9 +88,9 @@ impl OrcaNetConfig {
     }
 
     pub fn get_from_config(config_key: ConfigKey) -> Option<Value> {
-        return Self::get_config_json()
+        Self::get_config_json()
             .get(config_key.to_string().as_str())
-            .cloned();
+            .cloned()
     }
 
     pub fn get_str_from_config(config_key: ConfigKey) -> String {

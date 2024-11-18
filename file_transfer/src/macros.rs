@@ -15,7 +15,7 @@ macro_rules! expect_input {
 #[macro_export]
 macro_rules! impl_str_serde {
     ($name:ident) => {
-        impl FromStr for $name {
+        impl std::str::FromStr for $name {
             type Err = serde_json::Error;
 
             fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -27,8 +27,8 @@ macro_rules! impl_str_serde {
             }
         }
 
-        impl Display for $name {
-            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        impl core::fmt::Display for $name {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
                 let s = serde_json::to_string(self).unwrap();
                 write!(f, "{}", &s[1..(s.len() - 1)])
             }
