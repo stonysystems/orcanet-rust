@@ -9,9 +9,12 @@ use tracing_subscriber::filter::FilterExt;
 
 use crate::common::{
     ConfigKey, FileMetadata, HTTPProxyMetadata, OrcaNetConfig, OrcaNetError, OrcaNetEvent,
-    OrcaNetRequest, OrcaNetResponse, PaymentInfo, PrePaymentResponse, ProxyMode,
+    OrcaNetRequest, OrcaNetResponse, PaymentRequest, PrePaymentResponse, ProxyMode,
 };
-use crate::db::{ProvidedFileInfo, ProvidedFilesTable, ProxyClientInfo, ProxyClientsTable};
+use crate::db::{
+    PaymentCategory, PaymentInfo, PaymentStatus, PaymentsTable, ProvidedFileInfo,
+    ProvidedFilesTable, ProxyClientInfo, ProxyClientsTable,
+};
 use crate::http::start_http_proxy;
 use crate::network_client::NetworkClient;
 use crate::utils::Utils;
@@ -361,7 +364,7 @@ impl RequestHandlerLoop {
                     || data_trans_percent_diff > OrcaNetConfig::PROXY_TERMINATION_PD_THRESHOLD
                 {
                     // If either differ too much, terminate the connection
-                    PrePaymentResponse::Accepted(PaymentInfo {
+                    PrePaymentResponse::Accepted(PaymentRequest {
                         payment_reference: "".to_string(),
                         amount_to_send: fee_owed,
                         recipient_address: "".to_string(),
@@ -372,16 +375,30 @@ impl RequestHandlerLoop {
                     PrePaymentResponse::RejectedFeeOwedDiffers
                 } else {
                     let payment_reference = Utils::new_uuid();
+                    let btc_address = OrcaNetConfig::get_btc_address();
+                    // TODO: May be create a random float between fee_owed and say 90% of fee_owed ?
+                    // This would reduce the chances of cheating, i.e double spend where a client
+                    // tries to report a previously sent transaction for a new payment cuz we
+                    // request a specific amount that a previous transaction may not have
+                    let amount_to_send = fee_owed;
 
                     // TODO: Persist in DB
+                    let mut payments_table = PaymentsTable::new(None);
+                    let payment_info = PaymentInfo {
+                        payment_id: payment_reference.clone(),
+                        to_address: btc_address.clone(),
+                        expected_amount_btc: Some(amount_to_send),
+                        category: PaymentCategory::Receive.to_string(),
+                        status: PaymentStatus::AwaitingClientConfirmation.to_string(),
+                        from_peer: Some(from_peer.to_string()),
+                        ..Default::default()
+                    };
 
-                    PrePaymentResponse::Accepted(PaymentInfo {
+                    payments_table.insert_payment_info(&payment_info)?;
+
+                    PrePaymentResponse::Accepted(PaymentRequest {
                         payment_reference,
-                        // TODO: May be create a random float between fee_owed and say 90% of fee_owed ?
-                        // This would reduce the chances of cheating, i.e double spend where a client
-                        // tries to report a previously sent transaction for a new payment cuz we
-                        // request a specific amount that a previous transaction may not have
-                        amount_to_send: fee_owed,
+                        amount_to_send,
                         recipient_address: OrcaNetConfig::get_btc_address(),
                     })
                 };
@@ -400,6 +417,34 @@ impl RequestHandlerLoop {
                 let mut proxy_clients_table = ProxyClientsTable::new(None);
                 let client_info =
                     proxy_clients_table.get_client_by_auth_token(auth_token.as_str())?;
+
+                let mut payments_table = PaymentsTable::new(None);
+                let mut payment_info = match payments_table
+                    .get_payment_info(payment_notification.payment_reference.as_str())
+                {
+                    Ok(payment_info) => payment_info,
+                    Err(_) => {
+                        // Client should send us a payment reference we gave it
+                        return Ok(OrcaNetResponse::Error(
+                            OrcaNetError::PaymentReferenceMismatch,
+                        ));
+                    }
+                };
+
+                // Update payment info
+                payment_info.tx_id = Some(payment_notification.tx_id);
+                payment_info.from_address = Some(payment_notification.sender_address);
+                payment_info.status = PaymentStatus::TransactionPending.to_string();
+                payments_table.update_payment_info(&payment_info)?;
+
+                // Update client info
+                // This is temporary - Must be changed if we wait and find the transaction is fake
+                // We do this so that if it takes some time for the transaction to reach us and our verification to complete,
+                // we don't terminate the connection unnecessarily for a honest client
+                proxy_clients_table.update_total_fee_received_unconfirmed(
+                    client_info.client_id.as_str(),
+                    payment_notification.amount_transferred,
+                )?;
 
                 // Assume the client is honest and sent you a valid transaction
                 // It may take a while for the transaction to reach this node

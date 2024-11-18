@@ -9,8 +9,8 @@ use serde::Serialize;
 
 use crate::common::{ConfigKey, OrcaNetConfig};
 use crate::db::{
-    table_schema, DownloadedFileInfo, ProvidedFileInfo, ProxyClientInfo, ProxySessionInfo,
-    TransactionInfo,
+    table_schema, DownloadedFileInfo, PaymentInfo, ProvidedFileInfo, ProxyClientInfo,
+    ProxySessionInfo,
 };
 
 fn create_connection(db_path: Option<String>) -> SqliteConnection {
@@ -39,6 +39,7 @@ macro_rules! fn_table_new {
     };
 }
 
+// TODO: make all methods static and pass &mut SqliteConnection as param instead
 pub struct ProvidedFilesTable {
     conn: SqliteConnection,
 }
@@ -80,7 +81,7 @@ impl ProvidedFilesTable {
     pub fn increment_download_count(&mut self, target_file_id: &str) -> QueryResult<usize> {
         use table_schema::provided_files::dsl::*;
 
-        update(provided_files.filter(file_id.eq(target_file_id)))
+        update(provided_files.find(target_file_id))
             .set(downloads_count.eq(downloads_count + 1))
             .execute(&mut self.conn)
     }
@@ -93,7 +94,7 @@ impl ProvidedFilesTable {
     ) -> QueryResult<usize> {
         use table_schema::provided_files::dsl::*;
 
-        update(provided_files.filter(file_id.eq(target_file_id)))
+        update(provided_files.find(target_file_id))
             .set((
                 status.eq(status_val as i32),
                 provide_start_timestamp.eq(timestamp_val),
@@ -189,8 +190,32 @@ impl ProxyClientsTable {
     ) -> QueryResult<usize> {
         use table_schema::proxy_clients::dsl::*;
 
-        update(proxy_clients.filter(client_id.eq(target_client_id)))
+        update(proxy_clients.find(target_client_id))
             .set(data_transferred_kb.eq(data_transferred_kb + transferred_kb))
+            .execute(&mut self.conn)
+    }
+
+    pub fn update_total_fee_received(
+        &mut self,
+        target_client_id: &str,
+        amount: f64,
+    ) -> QueryResult<usize> {
+        use table_schema::proxy_clients::dsl::*;
+
+        update(proxy_clients.find(target_client_id))
+            .set(total_fee_received.eq(total_fee_received + amount))
+            .execute(&mut self.conn)
+    }
+
+    pub fn update_total_fee_received_unconfirmed(
+        &mut self,
+        target_client_id: &str,
+        amount: f64,
+    ) -> QueryResult<usize> {
+        use table_schema::proxy_clients::dsl::*;
+
+        update(proxy_clients.find(target_client_id))
+            .set(total_fee_received_unconfirmed.eq(total_fee_received_unconfirmed + amount))
             .execute(&mut self.conn)
     }
 }
@@ -225,32 +250,48 @@ impl ProxySessionsTable {
     ) -> QueryResult<usize> {
         use table_schema::proxy_sessions::dsl::*;
 
-        update(proxy_sessions.filter(session_id.eq(target_session_id)))
+        update(proxy_sessions.find(target_session_id))
             .set(data_transferred_kb.eq(data_transferred_kb + transferred_kb))
             .execute(&mut self.conn)
     }
 }
 
-pub struct TransactionsTable {
+pub struct PaymentsTable {
     conn: SqliteConnection,
 }
 
-impl TransactionsTable {
+impl PaymentsTable {
     fn_table_new!();
 
-    pub fn get_transaction_info(&mut self, target_tx_id: &str) -> QueryResult<TransactionInfo> {
-        use table_schema::transactions::dsl::*;
+    pub fn get_payment_info(&mut self, target_payment_id: &str) -> QueryResult<PaymentInfo> {
+        use table_schema::payments::dsl::*;
 
-        transactions
-            .filter(tx_id.eq(target_tx_id))
-            .first::<TransactionInfo>(&mut self.conn)
+        payments
+            .filter(payment_id.eq(target_payment_id))
+            .first::<PaymentInfo>(&mut self.conn)
     }
 
-    pub fn insert_session_info(&mut self, session_info: &ProxySessionInfo) -> QueryResult<usize> {
-        use table_schema::proxy_sessions::dsl::*;
+    pub fn insert_payment_info(&mut self, payment_info: &PaymentInfo) -> QueryResult<usize> {
+        use table_schema::payments::dsl::*;
 
-        insert_into(proxy_sessions)
-            .values(session_info)
+        insert_into(payments)
+            .values(payment_info)
+            .execute(&mut self.conn)
+    }
+
+    pub fn filter_by_status(&mut self, target_status: &str) -> QueryResult<Vec<PaymentInfo>> {
+        use table_schema::payments::dsl::*;
+
+        payments
+            .filter(status.eq(target_status))
+            .load::<PaymentInfo>(&mut self.conn)
+    }
+
+    pub fn update_payment_info(&mut self, payment_info: &PaymentInfo) -> QueryResult<usize> {
+        use table_schema::payments::dsl::*;
+
+        update(payments.find(payment_info.payment_id.as_str()))
+            .set(payment_info)
             .execute(&mut self.conn)
     }
 }

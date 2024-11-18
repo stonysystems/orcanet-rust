@@ -1,7 +1,7 @@
 use crate::common::{HTTPProxyMetadata, OrcaNetConfig};
 use crate::impl_str_serde;
 use crate::utils::Utils;
-use diesel::{Insertable, Queryable, Selectable};
+use diesel::{AsChangeset, Insertable, Queryable, Selectable};
 use serde::{Deserialize, Serialize};
 
 pub(super) mod table_schema {
@@ -64,14 +64,18 @@ pub(super) mod table_schema {
     }
 
     diesel::table! {
-        transactions (tx_id) {
-            tx_id -> Text,
-            from_address -> Text,
+        payments (payment_id) {
+            payment_id -> Text,
+            tx_id -> Nullable<Text>,
+            from_address -> Nullable<Text>,
             to_address -> Text,
             expected_amount_btc -> Nullable<Double>,
-            amount_btc -> Double,
+            amount_btc -> Nullable<Double>,
             category -> Text,
-            status -> Text
+            status -> Text,
+            payment_reference -> Nullable<Text>,
+            from_peer -> Nullable<Text>,
+            to_peer -> Nullable<Text>
         }
     }
 
@@ -239,27 +243,33 @@ impl ProxySessionInfo {
 // }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum TransactionStatus {
-    Pending,
-    Confirmed,
+pub enum PaymentStatus {
+    AwaitingClientConfirmation,
+    TransactionPending,
+    TransactionConfirmed,
 }
-impl_str_serde!(TransactionStatus);
+impl_str_serde!(PaymentStatus);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum TransactionCategory {
+pub enum PaymentCategory {
     Receive,
-    Sent,
+    Send,
 }
-impl_str_serde!(TransactionCategory);
+impl_str_serde!(PaymentCategory);
 
-#[derive(Debug, Clone, Serialize, Insertable, Queryable, Selectable)]
-#[diesel(table_name = table_schema::transactions)]
-pub struct TransactionInfo {
-    pub tx_id: String,
-    pub from_address: String,
+#[derive(Debug, Clone, Default, Serialize, Insertable, Queryable, Selectable, AsChangeset)]
+#[diesel(table_name = table_schema::payments)]
+pub struct PaymentInfo {
+    pub payment_id: String,
+    pub tx_id: Option<String>,
+    pub from_address: Option<String>,
     pub to_address: String,
+    /// If a provider is expecting a certain amount for a transaction
     pub expected_amount_btc: Option<f64>,
-    pub amount_btc: f64,
+    pub amount_btc: Option<f64>,
     pub category: String,
     pub status: String,
+    pub payment_reference: Option<String>,
+    pub from_peer: Option<String>,
+    pub to_peer: Option<String>,
 }

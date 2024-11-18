@@ -292,7 +292,7 @@ pub struct FileMetadata {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PaymentInfo {
+pub struct PaymentRequest {
     pub amount_to_send: f64, // Server requests a specific amount <= amount_owed
     pub payment_reference: String,
     pub recipient_address: String,
@@ -300,11 +300,11 @@ pub struct PaymentInfo {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum PrePaymentResponse {
-    Accepted(PaymentInfo),
+    Accepted(PaymentRequest),
     RejectedDataTransferDiffers,
     RejectedFeeOwedDiffers,
     /// Server wants to terminate the connection and requests a final payment
-    ServerTerminatingConnection(PaymentInfo),
+    ServerTerminatingConnection(PaymentRequest),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -336,6 +336,7 @@ pub enum OrcaNetError {
     AuthorizationFailed(String),
     NotAProvider(String),
     InternalServerError(String),
+    PaymentReferenceMismatch,
     SessionTerminatedByProvider,
 }
 
