@@ -359,48 +359,49 @@ impl RequestHandlerLoop {
 
                 // Verify the client's claim about data transfer and fee owed
                 // Accept if they are within acceptable range, reject otherwise
-                let pre_payment_response = if fee_owed_percent_diff
-                    > OrcaNetConfig::PROXY_TERMINATION_PD_THRESHOLD
-                    || data_trans_percent_diff > OrcaNetConfig::PROXY_TERMINATION_PD_THRESHOLD
-                {
-                    // If either differ too much, terminate the connection
-                    PrePaymentResponse::Accepted(PaymentRequest {
-                        payment_reference: "".to_string(),
-                        amount_to_send: fee_owed,
-                        recipient_address: "".to_string(),
-                    })
-                } else if fee_owed_percent_diff > OrcaNetConfig::FEE_OWED_PD_ALLOWED {
-                    PrePaymentResponse::RejectedDataTransferDiffers
-                } else if data_trans_percent_diff > OrcaNetConfig::DATA_TRANSFER_PD_ALLOWED {
-                    PrePaymentResponse::RejectedFeeOwedDiffers
-                } else {
-                    let payment_reference = Utils::new_uuid();
-                    let btc_address = OrcaNetConfig::get_btc_address();
-                    // TODO: May be create a random float between fee_owed and say 90% of fee_owed ?
-                    // This would reduce the chances of cheating, i.e double spend where a client
-                    // tries to report a previously sent transaction for a new payment cuz we
-                    // request a specific amount that a previous transaction may not have
-                    let amount_to_send = fee_owed;
+                let pre_payment_response = {
+                    if fee_owed_percent_diff > OrcaNetConfig::PROXY_TERMINATION_PD_THRESHOLD
+                        || data_trans_percent_diff > OrcaNetConfig::PROXY_TERMINATION_PD_THRESHOLD
+                    {
+                        // If either differ too much, terminate the connection
+                        PrePaymentResponse::Accepted(PaymentRequest {
+                            payment_reference: Utils::new_uuid(),
+                            amount_to_send: fee_owed,
+                            recipient_address: OrcaNetConfig::get_btc_address(),
+                        })
+                    } else if fee_owed_percent_diff > OrcaNetConfig::FEE_OWED_PD_ALLOWED {
+                        PrePaymentResponse::RejectedDataTransferDiffers
+                    } else if data_trans_percent_diff > OrcaNetConfig::DATA_TRANSFER_PD_ALLOWED {
+                        PrePaymentResponse::RejectedFeeOwedDiffers
+                    } else {
+                        let payment_reference = Utils::new_uuid();
+                        let btc_address = OrcaNetConfig::get_btc_address();
+                        // TODO: May be create a random float between fee_owed and say 90% of fee_owed ?
+                        // This would reduce the chances of cheating, i.e double spend where a client
+                        // tries to report a previously sent transaction for a new payment cuz we
+                        // request a specific amount that a previous transaction may not have
+                        let amount_to_send = fee_owed;
 
-                    // TODO: Persist in DB
-                    let mut payments_table = PaymentsTable::new(None);
-                    let payment_info = PaymentInfo {
-                        payment_id: payment_reference.clone(),
-                        to_address: btc_address.clone(),
-                        expected_amount_btc: Some(amount_to_send),
-                        category: PaymentCategory::Receive.to_string(),
-                        status: PaymentStatus::AwaitingClientConfirmation.to_string(),
-                        from_peer: Some(from_peer.to_string()),
-                        ..Default::default()
-                    };
+                        // TODO: Persist in DB
+                        let mut payments_table = PaymentsTable::new(None);
+                        let payment_info = PaymentInfo {
+                            payment_id: payment_reference.clone(),
+                            to_address: btc_address.clone(),
+                            expected_amount_btc: Some(amount_to_send),
+                            category: PaymentCategory::Receive.to_string(),
+                            status: PaymentStatus::AwaitingClientConfirmation.to_string(),
+                            from_peer: Some(from_peer.to_string()),
+                            ..Default::default()
+                        };
 
-                    payments_table.insert_payment_info(&payment_info)?;
+                        payments_table.insert_payment_info(&payment_info)?;
 
-                    PrePaymentResponse::Accepted(PaymentRequest {
-                        payment_reference,
-                        amount_to_send,
-                        recipient_address: OrcaNetConfig::get_btc_address(),
-                    })
+                        PrePaymentResponse::Accepted(PaymentRequest {
+                            payment_reference,
+                            amount_to_send,
+                            recipient_address: OrcaNetConfig::get_btc_address(),
+                        })
+                    }
                 };
 
                 Ok(OrcaNetResponse::HTTPProxyPrePaymentResponse {

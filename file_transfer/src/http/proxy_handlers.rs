@@ -272,7 +272,7 @@ impl ProxyPaymentLoop {
         let tx_id = rpc_wrapper.send_to_address(
             payment_request.recipient_address.as_str(),
             payment_request.amount_to_send,
-            Some(comment.as_str()),
+            None,
         )?;
 
         // Persist in database
@@ -291,11 +291,15 @@ impl ProxyPaymentLoop {
         };
         payments_table.insert_payment_info(&payment_info)?;
 
+        tracing::info!("Inserted payment record");
+
         let mut sessions_table = ProxySessionsTable::new(None);
         sessions_table.update_total_fee_sent_unconfirmed(
             self.session_id.as_str(),
             payment_request.amount_to_send,
         )?;
+
+        tracing::info!("Updated session record");
 
         // Send post payment notification to the server
         let res = self
@@ -315,6 +319,8 @@ impl ProxyPaymentLoop {
                 },
             )
             .await;
+
+        tracing::info!("Sent post payment notification");
 
         Ok(Some(payment_request.payment_reference))
     }
