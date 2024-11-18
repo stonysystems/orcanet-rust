@@ -328,6 +328,7 @@ pub enum OrcaNetResponse {
         pre_payment_response: PrePaymentResponse, // TODO: Think of a better name
     },
     Error(OrcaNetError),
+    NullResponse, // For testing
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

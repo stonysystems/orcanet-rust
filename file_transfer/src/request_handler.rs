@@ -456,7 +456,8 @@ impl RequestHandlerLoop {
                 // Handle the dishonesty case in which the client gave you a random tx that doesn't exist
                 // May be handle that in a separate thread that reads the DB, checks unconfirmed transactions,
                 // marks confirmed ones, blacklists cheating clients etc
-                todo!()
+                // todo!()
+                Ok(OrcaNetResponse::NullResponse)
             }
             _ => panic!("Expected payment request"),
         }
