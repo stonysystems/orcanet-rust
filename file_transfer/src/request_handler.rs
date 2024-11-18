@@ -363,7 +363,7 @@ impl RequestHandlerLoop {
                     // If either differ too much, terminate the connection
                     PrePaymentResponse::Accepted(PaymentInfo {
                         payment_reference: "".to_string(),
-                        amount_to_send: 0f64,
+                        amount_to_send: fee_owed,
                         recipient_address: "".to_string(),
                     })
                 } else if fee_owed_percent_diff > OrcaNetConfig::FEE_OWED_PD_ALLOWED {

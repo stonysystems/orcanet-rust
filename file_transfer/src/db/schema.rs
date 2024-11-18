@@ -1,4 +1,4 @@
-use crate::common::HTTPProxyMetadata;
+use crate::common::{HTTPProxyMetadata, OrcaNetConfig};
 use crate::utils::Utils;
 use diesel::{Insertable, Queryable, Selectable};
 use serde::Serialize;
@@ -153,6 +153,7 @@ impl ProxyClientInfo {
             client_peer_id,
             start_timestamp: Utils::get_unix_timestamp(),
             status: 1,
+            fee_rate_per_kb: OrcaNetConfig::get_proxy_fee_rate(),
             ..Self::default()
         }
     }
