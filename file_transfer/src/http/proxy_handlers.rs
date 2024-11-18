@@ -232,10 +232,12 @@ impl ProxyPaymentLoop {
 
                     match self.process_payment().await {
                         Ok(payment_reference) => {
-                            tracing::info!(
+                            if payment_reference.is_some() {
+                                 tracing::info!(
                                 "Payment attempt succeeded. Reference: {:?}",
                                 payment_reference
-                            );
+                                );
+                            }
                         }
                         Err(e) => {
                             tracing::error!("Payment attempt failed: {:?}", e);
@@ -252,6 +254,7 @@ impl ProxyPaymentLoop {
         let session_info = proxy_sessions_table.get_session_info(self.session_id.as_str())?;
 
         if session_info.get_fee_owed() == 0f64 {
+            tracing::info!("No pending amount. Payment not required.");
             return Ok(None);
         }
 

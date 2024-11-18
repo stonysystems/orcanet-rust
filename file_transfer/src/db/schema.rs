@@ -182,6 +182,7 @@ impl ProxyClientInfo {
                 - self.total_fee_received_unconfirmed,
             OrcaNetConfig::BTC_PRECISION,
         )
+        .max(0f64)
     }
 }
 
@@ -231,6 +232,7 @@ impl ProxySessionInfo {
                 - self.total_fee_sent_unconfirmed,
             OrcaNetConfig::BTC_PRECISION,
         )
+        .max(0f64)
     }
 }
 
