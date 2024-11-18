@@ -141,7 +141,11 @@ impl RequestHandlerLoop {
                 }
 
                 let (proxy_event_sender, proxy_event_receiver) = mpsc::channel::<OrcaNetEvent>(0);
-                tokio::task::spawn(start_http_proxy(proxy_mode.clone(), proxy_event_receiver));
+                tokio::task::spawn(start_http_proxy(
+                    proxy_mode.clone(),
+                    self.network_client.clone(),
+                    proxy_event_receiver,
+                ));
                 self.proxy_event_sender = Some(proxy_event_sender);
 
                 match &proxy_mode {

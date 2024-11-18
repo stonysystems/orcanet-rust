@@ -36,6 +36,8 @@ pub trait RequestHandler: Send + Sync {
         &self,
         request: Request<Incoming>,
     ) -> Result<Response<Full<Bytes>>, hyper::Error>;
+
+    async fn clean_up(&self) {}
 }
 
 pub struct ProxyProvider {
@@ -121,11 +123,16 @@ impl RequestHandler for ProxyProvider {
 
 pub struct ProxyClient {
     http_client: Client<ProxyConnector<HttpConnector>, Incoming>,
+    network_client: NetworkClient,
     session_info: ProxySessionInfo, // We don't record any data here, but only use configuration values like client_id, auth_token etc
+    payment_loop_cancellation_token: Option<CancellationToken>,
 }
 
 impl ProxyClient {
-    pub fn new(session_info: ProxySessionInfo) -> Self {
+    pub fn new(
+        session_info: ProxySessionInfo,
+        payment_loop_cancellation_token: CancellationToken,
+    ) -> Self {
         // Configure the proxy
         let proxy_uri = session_info
             .proxy_address
@@ -146,6 +153,7 @@ impl ProxyClient {
         Self {
             http_client,
             session_info,
+            payment_loop_cancellation_token,
         }
     }
 }
@@ -189,13 +197,17 @@ impl RequestHandler for ProxyClient {
 
         Ok(Response::from_parts(parts, Full::new(bytes)))
     }
+
+    async fn clean_up(&self) {
+        self.payment_loop_cancellation_token.cancelled().await;
+    }
 }
 
 pub struct ProxyPaymentLoop {
-    session_id: String,
-    network_client: NetworkClient,
-    proxy_sessions_table: ProxySessionsTable,
-    cancellation_token: CancellationToken,
+    pub session_id: String,
+    pub network_client: NetworkClient,
+    pub proxy_sessions_table: ProxySessionsTable,
+    pub cancellation_token: CancellationToken,
 }
 
 impl ProxyPaymentLoop {

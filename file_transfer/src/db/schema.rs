@@ -110,16 +110,17 @@ pub struct DownloadedFileInfo {
     pub download_timestamp: i64,
 }
 
+#[derive(PartialEq)]
 pub enum ProxySessionStatus {
     Active = 1,
     TerminatedByClient = 0,
     TerminatedByServer = 2,
 }
 
-impl TryFrom<u8> for ProxySessionStatus {
+impl TryFrom<i32> for ProxySessionStatus {
     type Error = ();
 
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
         match value {
             0 => Ok(Self::TerminatedByClient),
             1 => Ok(Self::Active),
