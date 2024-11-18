@@ -202,6 +202,7 @@ impl RequestHandler for ProxyClient {
     }
 
     async fn clean_up(&self) {
+        tracing::info!("Sending loop cancellation");
         self.payment_loop_cancellation_token.cancelled().await;
     }
 }
@@ -222,6 +223,7 @@ impl ProxyPaymentLoop {
         loop {
             tokio::select! {
                 _ = self.cancellation_token.cancelled() => {
+                    tracing::info!("Received loop cancellation");
                     // Settle up
                     // Cancel payment loop
                     return;

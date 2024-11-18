@@ -42,10 +42,12 @@ impl OrcaNetConfig {
     pub const PROXY_PROVIDER_KEY_DHT: &'static str = "http_proxy_providers";
     pub const DEFAULT_SECRET_KEY_SEED: u64 = 4;
     pub const PROXY_PAYMENT_INTERVAL_SECS: u64 = 10;
-    pub const FEE_OWED_PD_ALLOWED: f64 = 20.0; // Percent diff allowed
-    pub const DATA_TRANSFER_PD_ALLOWED: f64 = 20.0; // Percent diff allowed
-    pub const PROXY_TERMINATION_PD_THRESHOLD: f64 = 35.0; // Beyond this, terminate the connection
     pub const BTC_PRECISION: u32 = 8; // Bitcoin max precision is 8 decimals
+
+    // TODO: Having high values for testing. Decide these later.
+    pub const FEE_OWED_PD_ALLOWED: f64 = 300.0; // Percent diff allowed
+    pub const DATA_TRANSFER_PD_ALLOWED: f64 = 300.0; // Percent diff allowed
+    pub const PROXY_TERMINATION_PD_THRESHOLD: f64 = 300.0; // Beyond this, terminate the connection
 
     pub fn get_bootstrap_peer_id() -> PeerId {
         "12D3KooWQd1K1k8XA9xVEzSAu7HUCodC7LJB6uW5Kw4VwkRdstPE"
