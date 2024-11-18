@@ -53,7 +53,7 @@ impl Utils {
     }
 
     pub async fn start_async_block_gen() {
-        let address = OrcaNetConfig::get_str_from_config(ConfigKey::BTCAddress);
+        let address = OrcaNetConfig::get_btc_address();
         tokio::task::spawn(async move {
             let rpc_wrapper = RPCWrapper::new(OrcaNetConfig::get_network_type());
             let _ = rpc_wrapper.generate_to_address(address.as_str());
@@ -126,6 +126,24 @@ impl Utils {
         results
     }
 
+    pub fn get_percent_diff(value: f64, target: f64) -> f64 {
+        if target == 0.0 {
+            return 0.0;
+        }
+
+        let difference = ((value - target) / target).abs() * 100.0;
+        difference
+    }
+
+    pub fn within_percentage(value: f64, target: f64, percent: f64) -> bool {
+        if target == 0.0 {
+            return value == 0.0;
+        }
+
+        let difference = ((value - target) / target).abs() * 100.0;
+        difference <= percent
+    }
+
     // pub fn get_file_metadata(file_id: String, db_client: &mut DBClient) -> Option<(FileInfo, FileMetadata)> {
     //     match db_client.get_provided_file_info(file_id.as_str()) {
     //         Ok(file_info) => {
@@ -179,7 +197,7 @@ impl Utils {
 
                 // Send payment after computing size
                 let btc_wrapper = RPCWrapper::new(BTCNetwork::RegTest);
-                let btc_addr = OrcaNetConfig::get_str_from_config(ConfigKey::BTCAddress);
+                let btc_addr = OrcaNetConfig::get_btc_address();
                 let cost_btc = metadata.fee_rate_per_kb * size_kb;
                 let comment = format!("Payment for {}", metadata.file_id);
                 tracing::info!("Initiating transfer of {:?} BTC to {}", cost_btc, btc_addr);

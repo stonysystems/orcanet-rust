@@ -9,7 +9,7 @@ use tracing_subscriber::filter::FilterExt;
 
 use crate::common::{
     ConfigKey, FileMetadata, HTTPProxyMetadata, OrcaNetConfig, OrcaNetError, OrcaNetEvent,
-    OrcaNetRequest, OrcaNetResponse, ProxyMode,
+    OrcaNetRequest, OrcaNetResponse, PaymentInfo, PrePaymentResponse, ProxyMode,
 };
 use crate::db::{ProvidedFileInfo, ProvidedFilesTable, ProxyClientInfo, ProxyClientsTable};
 use crate::http::start_http_proxy;
@@ -55,7 +55,10 @@ impl RequestHandlerLoop {
                 from_peer,
                 channel,
             } => {
-                let response = self.handle_request(request, from_peer);
+                let response = self.handle_request(request, from_peer).unwrap_or_else(|e| {
+                    tracing::error!("Error while handling orcanet request: {:?}", e);
+                    OrcaNetResponse::Error(OrcaNetError::InternalServerError(e.to_string()))
+                });
                 self.network_client.respond(response, channel).await;
             }
             OrcaNetEvent::StreamRequest {
@@ -63,7 +66,10 @@ impl RequestHandlerLoop {
                 from_peer,
                 sender,
             } => {
-                let response = self.handle_request(request, from_peer);
+                let response = self.handle_request(request, from_peer).unwrap_or_else(|e| {
+                    tracing::error!("Error while handling request: {:?}", e);
+                    OrcaNetResponse::Error(OrcaNetError::InternalServerError(e.to_string()))
+                });
                 let _ = sender.send(response);
             }
             OrcaNetEvent::ProvideFile { file_id, file_path } => {
@@ -203,7 +209,11 @@ impl RequestHandlerLoop {
         }
     }
 
-    fn handle_request(&mut self, request: OrcaNetRequest, from_peer: PeerId) -> OrcaNetResponse {
+    fn handle_request(
+        &mut self,
+        request: OrcaNetRequest,
+        from_peer: PeerId,
+    ) -> Result<OrcaNetResponse, Box<dyn std::error::Error>> {
         match request {
             OrcaNetRequest::FileMetadataRequest { .. }
             | OrcaNetRequest::FileContentRequest { .. } => {
@@ -219,7 +229,10 @@ impl RequestHandlerLoop {
         }
     }
 
-    fn handle_file_request(request: OrcaNetRequest, from_peer: PeerId) -> OrcaNetResponse {
+    fn handle_file_request(
+        request: OrcaNetRequest,
+        from_peer: PeerId,
+    ) -> Result<OrcaNetResponse, Box<dyn std::error::Error>> {
         let file_id = match &request {
             OrcaNetRequest::FileMetadataRequest { file_id } => file_id,
             OrcaNetRequest::FileContentRequest { file_id } => file_id,
@@ -232,9 +245,9 @@ impl RequestHandlerLoop {
         if file_info_resp.is_err() {
             // Most likely not present in DB
             tracing::error!("Requested file not found in DB");
-            return OrcaNetResponse::Error(OrcaNetError::NotAProvider(
+            return Ok(OrcaNetResponse::Error(OrcaNetError::NotAProvider(
                 "Not a provider of requested file".to_string(),
-            ));
+            )));
         }
 
         let file_info = file_info_resp.unwrap();
@@ -244,40 +257,33 @@ impl RequestHandlerLoop {
             file_id: file_id.clone(),
             file_name: file_info.file_name,
             fee_rate_per_kb: OrcaNetConfig::get_file_fee_rate(),
-            recipient_address: OrcaNetConfig::get_str_from_config(ConfigKey::BTCAddress),
+            recipient_address: OrcaNetConfig::get_btc_address(),
         };
 
         match request {
             OrcaNetRequest::FileMetadataRequest { .. } => {
                 tracing::info!("Received metadata request for file_id: {}", file_id);
 
-                OrcaNetResponse::FileMetadataResponse(file_metadata)
+                Ok(OrcaNetResponse::FileMetadataResponse(file_metadata))
             }
             OrcaNetRequest::FileContentRequest { .. } => {
                 tracing::info!("Received content request for file_id: {}", file_id);
+                let content = std::fs::read(&file_info.file_path)?;
+                let _ = provided_files_table.increment_download_count(file_id.as_str());
 
-                match std::fs::read(&file_info.file_path) {
-                    Ok(content) => {
-                        let _ = provided_files_table.increment_download_count(file_id.as_str());
-
-                        OrcaNetResponse::FileContentResponse {
-                            metadata: file_metadata,
-                            content,
-                        }
-                    }
-                    Err(e) => {
-                        tracing::error!("Error reading file: {:?}", e);
-                        OrcaNetResponse::Error(OrcaNetError::FileProvideError(
-                            "Error while reading file".to_string(),
-                        ))
-                    }
-                }
+                Ok(OrcaNetResponse::FileContentResponse {
+                    metadata: file_metadata,
+                    content,
+                })
             }
             _ => panic!("Expected file request"),
         }
     }
 
-    fn handle_http_proxy_request(request: OrcaNetRequest, from_peer: PeerId) -> OrcaNetResponse {
+    fn handle_http_proxy_request(
+        request: OrcaNetRequest,
+        from_peer: PeerId,
+    ) -> Result<OrcaNetResponse, Box<dyn std::error::Error>> {
         match OrcaNetConfig::get_proxy_config() {
             Some(ProxyMode::ProxyProvider) => {
                 let metadata = HTTPProxyMetadata {
@@ -285,12 +291,12 @@ impl RequestHandlerLoop {
                         ConfigKey::ProxyProviderServerAddress,
                     ),
                     fee_rate_per_kb: OrcaNetConfig::get_proxy_fee_rate(),
-                    recipient_address: OrcaNetConfig::get_str_from_config(ConfigKey::BTCAddress),
+                    recipient_address: OrcaNetConfig::get_btc_address(),
                 };
 
                 match request {
                     OrcaNetRequest::HTTPProxyMetadataRequest => {
-                        OrcaNetResponse::HTTPProxyMetadataResponse(metadata)
+                        Ok(OrcaNetResponse::HTTPProxyMetadataResponse(metadata))
                     }
                     OrcaNetRequest::HTTPProxyProvideRequest => {
                         // Create new client
@@ -303,42 +309,84 @@ impl RequestHandlerLoop {
                             auth_token.clone(),
                             from_peer.to_string(),
                         );
+                        proxy_clients_table.add_client(&proxy_client_info)?;
 
-                        match proxy_clients_table.add_client(&proxy_client_info) {
-                            Ok(_) => {
-                                tracing::info!("Created new client: {:?}", proxy_client_info);
-                                OrcaNetResponse::HTTPProxyProvideResponse {
-                                    metadata,
-                                    client_id,
-                                    auth_token,
-                                }
-                            }
-                            Err(_) => OrcaNetResponse::Error(OrcaNetError::InternalServerError(
-                                "Error creating client".to_string(),
-                            )),
-                        }
+                        Ok(OrcaNetResponse::HTTPProxyProvideResponse {
+                            metadata,
+                            client_id,
+                            auth_token,
+                        })
                     }
                     _ => panic!("Expected only proxy requests in handle_proxy_requests"),
                 }
             }
             _ => {
                 // Not providing
-                OrcaNetResponse::Error(OrcaNetError::NotAProvider(
+                Ok(OrcaNetResponse::Error(OrcaNetError::NotAProvider(
                     "Not a proxy provider".to_string(),
-                ))
+                )))
             }
         }
     }
 
-    fn handle_payment_request(request: OrcaNetRequest, from_peer: PeerId) -> OrcaNetResponse {
+    fn handle_payment_request(
+        request: OrcaNetRequest,
+        from_peer: PeerId,
+    ) -> Result<OrcaNetResponse, Box<dyn std::error::Error>> {
         match request {
             OrcaNetRequest::HTTPProxyPrePaymentRequest {
                 client_id,
                 auth_token,
-                fee_owed,
-                data_transferred_kb,
+                fee_owed: fee_owed_client,
+                data_transferred_kb: data_transferred_kb_client,
             } => {
-                todo!()
+                let mut proxy_clients_table = ProxyClientsTable::new(None);
+                let client_info =
+                    proxy_clients_table.get_client_by_auth_token(auth_token.as_str())?;
+                let fee_owed = client_info.get_fee_owed();
+                let fee_owed_percent_diff = Utils::get_percent_diff(fee_owed_client, fee_owed);
+                let data_trans_percent_diff = Utils::get_percent_diff(
+                    data_transferred_kb_client,
+                    client_info.data_transferred_kb,
+                );
+
+                // Verify the client's claim about data transfer and fee owed
+                // Accept if they are within acceptable range, reject otherwise
+                let pre_payment_response = if fee_owed_percent_diff
+                    > OrcaNetConfig::PROXY_TERMINATION_PD_THRESHOLD
+                    || data_trans_percent_diff > OrcaNetConfig::PROXY_TERMINATION_PD_THRESHOLD
+                {
+                    // If either differ too much, terminate the connection
+                    PrePaymentResponse::Accepted(PaymentInfo {
+                        payment_reference: "".to_string(),
+                        amount_to_send: 0f64,
+                        recipient_address: "".to_string(),
+                    })
+                } else if fee_owed_percent_diff > OrcaNetConfig::FEE_OWED_PD_ALLOWED {
+                    PrePaymentResponse::RejectedDataTransferDiffers
+                } else if data_trans_percent_diff > OrcaNetConfig::DATA_TRANSFER_PD_ALLOWED {
+                    PrePaymentResponse::RejectedFeeOwedDiffers
+                } else {
+                    let payment_reference = Utils::new_uuid();
+
+                    // TODO: Persist in DB
+
+                    PrePaymentResponse::Accepted(PaymentInfo {
+                        payment_reference,
+                        // TODO: May be create a random float between fee_owed and say 90% of fee_owed ?
+                        // This would reduce the chances of cheating, i.e double spend where a client
+                        // tries to report a previously sent transaction for a new payment cuz we
+                        // request a specific amount that a previous transaction may not have
+                        amount_to_send: fee_owed,
+                        recipient_address: OrcaNetConfig::get_btc_address(),
+                    })
+                };
+
+                Ok(OrcaNetResponse::HTTPProxyPrePaymentResponse {
+                    data_transferred_kb: client_info.data_transferred_kb,
+                    fee_owed,
+                    pre_payment_response,
+                })
             }
             OrcaNetRequest::HTTPProxyPostPaymentNotification { .. } => {
                 todo!()

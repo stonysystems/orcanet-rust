@@ -1,7 +1,7 @@
 use crate::btc_rpc::RPCWrapper;
 use crate::common::{
-    ConfigKey, OrcaNetConfig, OrcaNetError, OrcaNetRequest, OrcaNetResponse, PaymentNotification,
-    PrePaymentInfo, PrePaymentResponse, ProxyClientConfig,
+    ConfigKey, OrcaNetConfig, OrcaNetError, OrcaNetRequest, OrcaNetResponse, PaymentInfo,
+    PaymentNotification, PrePaymentResponse, ProxyClientConfig,
 };
 use crate::db::{ProxyClientsTable, ProxySessionInfo, ProxySessionsTable};
 use crate::network_client::NetworkClient;
@@ -241,19 +241,19 @@ impl ProxyPaymentLoop {
             .expect("Provider peer id to be valid");
 
         // Send pre-payment request to make sure the server agrees and to get amount to be paid
-        let pre_payment_info = self.pre_payment_step(provider_peer, &session_info).await?;
+        let payment_info = self.pre_payment_step(provider_peer, &session_info).await?;
 
-        return Ok(pre_payment_info.payment_reference); // TODO: For testing
+        return Ok(payment_info.payment_reference); // TODO: For testing
 
         // Create a transaction for the requested amount
         let rpc_wrapper = RPCWrapper::new(OrcaNetConfig::get_network_type());
         let comment = format!(
             "Payment for proxy. Reference: {:?}",
-            pre_payment_info.payment_reference
+            payment_info.payment_reference
         );
         let tx_id = rpc_wrapper.send_to_address(
-            pre_payment_info.recipient_address.as_str(),
-            pre_payment_info.amount_to_send as f64,
+            payment_info.recipient_address.as_str(),
+            payment_info.amount_to_send as f64,
             Some(comment.as_str()),
         )?;
 
@@ -266,23 +266,23 @@ impl ProxyPaymentLoop {
                 client_id: session_info.client_id.clone(),
                 auth_token: session_info.auth_token.clone(),
                 payment_notification: PaymentNotification {
-                    sender_address: OrcaNetConfig::get_str_from_config(ConfigKey::BTCAddress),
-                    receiver_address: pre_payment_info.recipient_address,
-                    amount_transferred: pre_payment_info.amount_to_send,
+                    sender_address: OrcaNetConfig::get_btc_address(),
+                    receiver_address: payment_info.recipient_address,
+                    amount_transferred: payment_info.amount_to_send,
                     tx_id: tx_id.to_string(),
-                    payment_reference: pre_payment_info.payment_reference.clone(),
+                    payment_reference: payment_info.payment_reference.clone(),
                 },
             },
         );
 
-        Ok(pre_payment_info.payment_reference)
+        Ok(payment_info.payment_reference)
     }
 
     async fn pre_payment_step(
         &mut self,
         peer_id: PeerId,
         session_info: &ProxySessionInfo,
-    ) -> Result<PrePaymentInfo, Box<dyn std::error::Error>> {
+    ) -> Result<PaymentInfo, Box<dyn std::error::Error>> {
         let resp = self
             .network_client
             .send_request(
@@ -320,7 +320,7 @@ impl ProxyPaymentLoop {
 
                 // If not, proceed to handle the server's response
                 match pre_payment_response {
-                    PrePaymentResponse::Accepted(pre_payment_info) => Ok(pre_payment_info),
+                    PrePaymentResponse::Accepted(payment_info) => Ok(payment_info),
                     PrePaymentResponse::RejectedDataTransferDiffers => {
                         // Adjust to what the server says
                         // At this point, we've decided that the server's values are not too different, so it's fine
@@ -328,6 +328,9 @@ impl ProxyPaymentLoop {
                     }
                     PrePaymentResponse::RejectedFeeOwedDiffers => {
                         // Adjust to what the server says
+                        todo!()
+                    }
+                    PrePaymentResponse::ServerTerminatingConnection(payment_info) => {
                         todo!()
                     }
                 }
