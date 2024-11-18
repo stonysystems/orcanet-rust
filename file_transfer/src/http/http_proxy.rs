@@ -81,6 +81,7 @@ pub async fn start_http_proxy(
             event = receiver.next() => match event {
                 Some(OrcaNetEvent::StopProxy) => {
                     tracing::info!("Stopping proxy server");
+                    handler.clean_up().await;
                     return Ok(());
                 }
                 _ => {}

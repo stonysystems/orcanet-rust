@@ -135,13 +135,10 @@ impl Utils {
         difference
     }
 
-    pub fn within_percentage(value: f64, target: f64, percent: f64) -> bool {
-        if target == 0.0 {
-            return value == 0.0;
-        }
-
-        let difference = ((value - target) / target).abs() * 100.0;
-        difference <= percent
+    pub(crate) fn round(x: f64, decimals: u32) -> f64 {
+        // May not be fully accurate for long number but good enough for our case
+        let y = 10i32.pow(decimals) as f64;
+        (x * y).round() / y
     }
 
     // pub fn get_file_metadata(file_id: String, db_client: &mut DBClient) -> Option<(FileInfo, FileMetadata)> {

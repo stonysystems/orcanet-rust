@@ -159,9 +159,12 @@ impl ProxyClientInfo {
     }
 
     pub fn get_fee_owed(&self) -> f64 {
-        self.data_transferred_kb * self.fee_rate_per_kb
-            - self.total_fee_received
-            - self.total_fee_received_unconfirmed
+        Utils::round(
+            self.data_transferred_kb * self.fee_rate_per_kb
+                - self.total_fee_received
+                - self.total_fee_received_unconfirmed,
+            OrcaNetConfig::BTC_PRECISION,
+        )
     }
 }
 
@@ -205,9 +208,12 @@ impl ProxySessionInfo {
     }
 
     pub fn get_fee_owed(&self) -> f64 {
-        self.data_transferred_kb * self.fee_rate_per_kb
-            - self.total_fee_sent
-            - self.total_fee_sent_unconfirmed
+        Utils::round(
+            self.data_transferred_kb * self.fee_rate_per_kb
+                - self.total_fee_sent
+                - self.total_fee_sent_unconfirmed,
+            OrcaNetConfig::BTC_PRECISION,
+        )
     }
 }
 

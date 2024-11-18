@@ -47,6 +47,7 @@ impl OrcaNetConfig {
     pub const FEE_OWED_PD_ALLOWED: f64 = 20.0; // Percent diff allowed
     pub const DATA_TRANSFER_PD_ALLOWED: f64 = 20.0; // Percent diff allowed
     pub const PROXY_TERMINATION_PD_THRESHOLD: f64 = 35.0; // Beyond this, terminate the connection
+    pub const BTC_PRECISION: u32 = 8; // Bitcoin max precision is 8 decimals
 
     pub fn get_bootstrap_peer_id() -> PeerId {
         "12D3KooWQd1K1k8XA9xVEzSAu7HUCodC7LJB6uW5Kw4VwkRdstPE"
