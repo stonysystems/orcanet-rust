@@ -255,6 +255,12 @@ impl ProxyPaymentLoop {
             return Ok(None);
         }
 
+        tracing::info!(
+            "Processing payment for {} Fee owed {}",
+            session_info.session_id,
+            session_info.get_fee_owed()
+        );
+
         let provider_peer = session_info
             .provider_peer_id
             .parse()
