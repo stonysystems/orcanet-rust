@@ -233,7 +233,7 @@ impl ProxyPaymentLoop {
                     match self.process_payment().await {
                         Ok(payment_reference) => {
                             tracing::info!(
-                                "Payment attempt succeeded. Reference: {}",
+                                "Payment attempt succeeded. Reference: {:?}",
                                 payment_reference
                             );
                         }
@@ -246,10 +246,15 @@ impl ProxyPaymentLoop {
         }
     }
 
-    async fn process_payment(&mut self) -> Result<String, Box<dyn std::error::Error>> {
+    async fn process_payment(&mut self) -> Result<Option<String>, Box<dyn std::error::Error>> {
         // Get session info
         let mut proxy_sessions_table = ProxySessionsTable::new(None);
         let session_info = proxy_sessions_table.get_session_info(self.session_id.as_str())?;
+
+        if session_info.get_fee_owed() == 0f64 {
+            return Ok(None);
+        }
+
         let provider_peer = session_info
             .provider_peer_id
             .parse()
@@ -286,23 +291,32 @@ impl ProxyPaymentLoop {
         };
         payments_table.insert_payment_info(&payment_info)?;
 
-        // Send post payment notification to the server
-        let _ = self.network_client.send_request(
-            provider_peer,
-            OrcaNetRequest::HTTPProxyPostPaymentNotification {
-                client_id: session_info.client_id.clone(),
-                auth_token: session_info.auth_token.clone(),
-                payment_notification: PaymentNotification {
-                    sender_address: OrcaNetConfig::get_btc_address(),
-                    receiver_address: payment_request.recipient_address,
-                    amount_transferred: payment_request.amount_to_send,
-                    tx_id: tx_id.to_string(),
-                    payment_reference: payment_request.payment_reference.clone(),
-                },
-            },
-        );
+        let mut sessions_table = ProxySessionsTable::new(None);
+        sessions_table.update_total_fee_sent_unconfirmed(
+            self.session_id.as_str(),
+            payment_request.amount_to_send,
+        )?;
 
-        Ok(payment_request.payment_reference)
+        // Send post payment notification to the server
+        let res = self
+            .network_client
+            .send_request(
+                provider_peer,
+                OrcaNetRequest::HTTPProxyPostPaymentNotification {
+                    client_id: session_info.client_id.clone(),
+                    auth_token: session_info.auth_token.clone(),
+                    payment_notification: PaymentNotification {
+                        sender_address: OrcaNetConfig::get_btc_address(),
+                        receiver_address: payment_request.recipient_address,
+                        amount_transferred: payment_request.amount_to_send,
+                        tx_id: tx_id.to_string(),
+                        payment_reference: payment_request.payment_reference.clone(),
+                    },
+                },
+            )
+            .await;
+
+        Ok(Some(payment_request.payment_reference))
     }
 
     async fn pre_payment_step(

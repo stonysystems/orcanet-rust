@@ -231,7 +231,7 @@ impl ProxySessionsTable {
         use table_schema::proxy_sessions::dsl::*;
 
         proxy_sessions
-            .filter(session_id.eq(target_session_id))
+            .find(target_session_id)
             .first::<ProxySessionInfo>(&mut self.conn)
     }
 
@@ -252,6 +252,18 @@ impl ProxySessionsTable {
 
         update(proxy_sessions.find(target_session_id))
             .set(data_transferred_kb.eq(data_transferred_kb + transferred_kb))
+            .execute(&mut self.conn)
+    }
+
+    pub fn update_total_fee_sent_unconfirmed(
+        &mut self,
+        target_session_id: &str,
+        amount: f64,
+    ) -> QueryResult<usize> {
+        use table_schema::proxy_sessions::dsl::*;
+
+        update(proxy_sessions.find(target_session_id))
+            .set(total_fee_sent_unconfirmed.eq(total_fee_sent_unconfirmed + amount))
             .execute(&mut self.conn)
     }
 }

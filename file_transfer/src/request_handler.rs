@@ -419,6 +419,9 @@ impl RequestHandlerLoop {
                     proxy_clients_table.get_client_by_auth_token(auth_token.as_str())?;
 
                 let mut payments_table = PaymentsTable::new(None);
+                // TODO: Verify tx_id doesnt already exist in the database
+                // This means the client is trying to double spend a transaction with us
+
                 let mut payment_info = match payments_table
                     .get_payment_info(payment_notification.payment_reference.as_str())
                 {
