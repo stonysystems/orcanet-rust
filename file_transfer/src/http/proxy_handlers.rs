@@ -123,9 +123,8 @@ impl RequestHandler for ProxyProvider {
 
 pub struct ProxyClient {
     http_client: Client<ProxyConnector<HttpConnector>, Incoming>,
-    network_client: NetworkClient,
     session_info: ProxySessionInfo, // We don't record any data here, but only use configuration values like client_id, auth_token etc
-    payment_loop_cancellation_token: Option<CancellationToken>,
+    payment_loop_cancellation_token: CancellationToken,
 }
 
 impl ProxyClient {
@@ -211,7 +210,7 @@ pub struct ProxyPaymentLoop {
 }
 
 impl ProxyPaymentLoop {
-    async fn start_payment_loop(mut self) {
+    pub async fn start_loop(mut self) {
         let mut interval = interval(Duration::from_secs(
             OrcaNetConfig::PROXY_PAYMENT_INTERVAL_SECS,
         ));

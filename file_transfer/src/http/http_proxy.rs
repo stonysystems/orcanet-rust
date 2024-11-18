@@ -35,6 +35,7 @@ fn get_handler(
                 .get_session_info(session_id.as_str())
                 .map_err(|e| e.to_string())?;
 
+            // TODO: Move this into proxy client set up
             let cancellation_token = CancellationToken::new();
             let proxy_payment_loop = ProxyPaymentLoop {
                 session_id,
@@ -42,6 +43,9 @@ fn get_handler(
                 proxy_sessions_table,
                 cancellation_token: cancellation_token.clone(),
             };
+
+            // TODO: Move this into proxy client set up
+            tokio::spawn(proxy_payment_loop.start_loop());
 
             let proxy_status = ProxySessionStatus::try_from(session_info.status)
                 .expect("Status to be valid proxy status");
