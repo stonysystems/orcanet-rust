@@ -5,7 +5,7 @@ edition = "2021"
 
 [workspace]
 members = [
-    "file_transfer",
+    "orca_node",
     "relay_server"
 ]
 

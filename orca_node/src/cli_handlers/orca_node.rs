@@ -1,49 +1,26 @@
-#![feature(proc_macro_hygiene, decl_macro)]
-
-#[macro_use]
-extern crate rocket;
-
 use crate::common::{OrcaNetConfig, OrcaNetEvent, ProxyMode};
 use crate::http::start_http_server;
 use crate::network_client::NetworkClient;
 use crate::request_handler::RequestHandlerLoop;
 use crate::utils::Utils;
 
+use crate::{expect_input, network};
 use async_std::task::block_on;
-use clap::Parser;
 use futures::channel::mpsc;
 use futures::{SinkExt, StreamExt};
 use std::error::Error;
 use std::path::Path;
 use std::process::exit;
-use std::str::FromStr;
 use tokio::io::AsyncBufReadExt;
 use tokio::{io, select};
 use tracing_subscriber::EnvFilter;
 
-mod btc_rpc;
-mod common;
-mod db;
-mod http;
-mod macros;
-mod network;
-mod network_client;
-mod request_handler;
-mod utils;
-
-#[derive(Parser)]
-struct Opts {
-    #[arg(long)]
-    seed: Option<u64>,
-}
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
+pub async fn start_orca_node(seed: Option<u64>) -> Result<(), Box<dyn Error>> {
     let _ = tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env())
         .try_init();
-    let opts = Opts::parse();
-    let seed = opts.seed.unwrap_or_else(OrcaNetConfig::get_secret_key_seed);
+
+    let seed = seed.unwrap_or_else(OrcaNetConfig::get_secret_key_seed);
 
     let (mut event_sender, event_receiver) = mpsc::channel::<OrcaNetEvent>(0);
     let (mut network_client, network_event_loop) =

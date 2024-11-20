@@ -13,7 +13,7 @@ use crate::db::{
     ProxySessionInfo,
 };
 
-fn create_connection(db_path: Option<String>) -> SqliteConnection {
+pub fn create_sqlite_connection(db_path: Option<String>) -> SqliteConnection {
     let _db_path = db_path.unwrap_or_else(|| OrcaNetConfig::get_str_from_config(ConfigKey::DBPath));
 
     match SqliteConnection::establish(_db_path.as_str()) {
@@ -33,7 +33,7 @@ macro_rules! fn_table_new {
     () => {
         pub fn new(db_path: Option<String>) -> Self {
             Self {
-                conn: create_connection(db_path),
+                conn: create_sqlite_connection(db_path),
             }
         }
     };

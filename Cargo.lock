@@ -1399,45 +1399,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "file_transfer"
-version = "0.1.0"
-dependencies = [
- "async-std",
- "bincode",
- "bitcoin",
- "bitcoincore-rpc",
- "bytes",
- "chrono",
- "clap",
- "data-encoding",
- "diesel",
- "dirs",
- "futures",
- "futures-timer",
- "headers",
- "hex",
- "http-body-util",
- "hyper 1.5.0",
- "hyper-http-proxy",
- "hyper-tls",
- "hyper-util",
- "libp2p",
- "libp2p-stream",
- "libp2p-swarm",
- "rand",
- "ring 0.17.8",
- "rocket",
- "rusqlite",
- "serde",
- "serde_json",
- "tokio",
- "tokio-util",
- "tracing",
- "tracing-subscriber",
- "uuid",
-]
-
-[[package]]
 name = "fnv"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3294,6 +3255,46 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
 
 [[package]]
+name = "orca_node"
+version = "0.1.0"
+dependencies = [
+ "async-std",
+ "bincode",
+ "bitcoin",
+ "bitcoincore-rpc",
+ "bytes",
+ "chrono",
+ "clap",
+ "data-encoding",
+ "diesel",
+ "dirs",
+ "futures",
+ "futures-timer",
+ "headers",
+ "hex",
+ "http-body-util",
+ "hyper 1.5.0",
+ "hyper-http-proxy",
+ "hyper-tls",
+ "hyper-util",
+ "libp2p",
+ "libp2p-stream",
+ "libp2p-swarm",
+ "rand",
+ "ring 0.17.8",
+ "rocket",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
 name = "overload"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4195,6 +4196,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_yaml"
+version = "0.9.34+deprecated"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6a8b1a1a2ebf674015cc02edccce75287f1a0130d394307b36743c2f5d504b47"
+dependencies = [
+ "indexmap",
+ "itoa",
+ "ryu",
+ "serde",
+ "unsafe-libyaml",
+]
+
+[[package]]
 name = "sha1"
 version = "0.10.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4773,6 +4787,12 @@ dependencies = [
  "crypto-common",
  "subtle",
 ]
+
+[[package]]
+name = "unsafe-libyaml"
+version = "0.2.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "673aac59facbab8a9007c7f6108d11f63b603f7cabff99fabf650fea5c32b861"
 
 [[package]]
 name = "unsigned-varint"
