@@ -55,8 +55,8 @@ Proxy metadata request is to get metadata about the proxy. If the node is not a 
 - Success Response
     - When node is a proxy provider
     - Metadata
-        - IP_Addr:Port of proxy node
-        - fee_rate_per_kb
+        - IP_Addr:Port of proxy node (ex: `130.245.173.221:3000`)
+        - fee rate
 - Failure Response
     - Not a proxy provider
     - Internal error
@@ -69,7 +69,7 @@ Response
 
 - client_id
 - auth_token
-- metadata
+- metadata (same as metadata request)
 
 ## Proxy Payment
 
