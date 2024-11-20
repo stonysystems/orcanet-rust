@@ -482,37 +482,34 @@ impl EventLoop {
                 let content_bytes = bincode::serialize(&stream_req).unwrap();
                 tracing::info!("Sending {} bytes", content_bytes.len());
 
-                let protocol_future = async move {
-                    match control
-                        .open_stream(
-                            peer_id.clone(),
-                            StreamProtocol::new(OrcaNetConfig::STREAM_PROTOCOL),
-                        )
-                        .await
-                    {
-                        Ok(mut stream) => {
-                            tracing::info!("Opened stream");
-                            match stream.write_all(content_bytes.as_slice()).await {
-                                Ok(_) => {
-                                    tracing::info!("Wrote successfully");
+                let open_stream_resp = control
+                    .open_stream(
+                        peer_id.clone(),
+                        StreamProtocol::new(OrcaNetConfig::STREAM_PROTOCOL),
+                    )
+                    .await;
 
-                                    if let Some(sender) = sender {
-                                        self.pending_stream_requests
-                                            .insert(stream_req.request_id, sender);
-                                    }
+                match open_stream_resp {
+                    Ok(mut stream) => {
+                        tracing::info!("Opened stream");
+                        match stream.write_all(content_bytes.as_slice()).await {
+                            Ok(_) => {
+                                tracing::info!("Wrote successfully");
 
-                                    let _ = stream.close().await;
+                                if let Some(sender) = sender {
+                                    self.pending_stream_requests
+                                        .insert(stream_req.request_id, sender);
                                 }
-                                Err(e) => tracing::error!("Failed to write to stream: {:?}", e),
+
+                                let _ = stream.close().await;
                             }
-                        }
-                        Err(e) => {
-                            tracing::error!("Failed to open stream: {:?}", e)
+                            Err(e) => tracing::error!("Failed to write to stream: {:?}", e),
                         }
                     }
-                };
-
-                protocol_future.await;
+                    Err(e) => {
+                        tracing::error!("Failed to open stream: {:?}", e)
+                    }
+                }
             }
         }
     }

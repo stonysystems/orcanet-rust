@@ -195,7 +195,10 @@ impl Utils {
                 // Send payment after computing size
                 let btc_wrapper = RPCWrapper::new(BTCNetwork::RegTest);
                 let btc_addr = OrcaNetConfig::get_btc_address();
-                let cost_btc = metadata.fee_rate_per_kb * size_kb;
+                let cost_btc = Utils::round(
+                    metadata.fee_rate_per_kb * size_kb,
+                    OrcaNetConfig::BTC_PRECISION,
+                );
                 let comment = format!("Payment for {}", metadata.file_id);
                 tracing::info!("Initiating transfer of {:?} BTC to {}", cost_btc, btc_addr);
 

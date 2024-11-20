@@ -17,5 +17,9 @@ vim ~/.orcanet/config.json
 # Paste contents of sample_config.json and modify the values as necessary
 # Make sure you give DBPath as the path of the file you created
 ```
+4. Use nightly rust
+```bash
+rustup default nightly
+```
 
 
