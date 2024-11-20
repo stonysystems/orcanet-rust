@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::io::{Read, Write};
 use std::path::PathBuf;
@@ -22,7 +22,6 @@ pub enum ConfigKey {
     NetworkType,
     RunHTTPServer,
     ProxyConfig,
-    TstFileSavePath, // For testing, remove later
     SecretKeySeed,
     ProxyProviderServerAddress, // For provider
 }
@@ -105,10 +104,20 @@ impl OrcaNetConfig {
 
     /// Update the config JSON file
     pub fn modify_config(key: &str, value: Value) -> Result<(), Box<dyn Error>> {
-        let mut json: Value = Self::get_config_json();
+        Self::modify_config_with_kv_pair(HashMap::from([(key.to_string(), value)]))
+    }
 
-        if let Some(obj) = json.as_object_mut() {
-            obj.insert(key.to_string(), value);
+    /// Update the config JSON file
+    pub fn modify_config_with_kv_pair(
+        kv_pair: HashMap<String, Value>,
+    ) -> Result<(), Box<dyn Error>> {
+        let mut json: Value = Self::get_config_json();
+        let object_mut = json
+            .as_object_mut()
+            .expect("Config to be a valid json object");
+
+        for (k, v) in kv_pair {
+            object_mut.insert(k, v);
         }
 
         let updated_json = serde_json::to_string_pretty(&json)?;

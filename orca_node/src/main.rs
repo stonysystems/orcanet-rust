@@ -3,8 +3,8 @@
 #[macro_use]
 extern crate rocket;
 
-use crate::cli_handlers::orca_node::start_orca_node;
-use crate::cli_handlers::setup_handler::handle_setup;
+use crate::cli_handlers::setup::handle_setup;
+use crate::cli_handlers::start_node::start_orca_node;
 use clap::{Parser, Subcommand};
 use futures::{SinkExt, StreamExt};
 use std::error::Error;
@@ -28,26 +28,31 @@ struct Args {
     command: OrcaCLICommand,
 }
 
+#[derive(Parser)]
+struct SetupArgs {
+    #[arg(long, required = true)]
+    db_path: String,
+    #[arg(long, required = true)]
+    btc_address: String,
+}
+
 #[derive(Subcommand)]
 enum OrcaCLICommand {
-    Setup {
-        #[arg(long, required = true)]
-        db_path: String,
-    },
+    Setup(SetupArgs),
     StartNode {
         #[arg(long, required = false)]
         seed: Option<u64>,
     },
 }
 
-#[rocket::main]
-// #[tokio::main]
+// #[rocket::main]
+#[tokio::main]
 async fn main() {
     let args = Args::parse();
 
     match args.command {
-        OrcaCLICommand::Setup { db_path } => {
-            handle_setup(db_path);
+        OrcaCLICommand::Setup(setup_args) => {
+            handle_setup(setup_args.db_path, setup_args.btc_address);
         }
         OrcaCLICommand::StartNode { seed } => {
             // This will block

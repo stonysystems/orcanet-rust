@@ -172,7 +172,7 @@ impl Utils {
                         let app_data_path =
                             OrcaNetConfig::get_str_from_config(ConfigKey::AppDataPath);
                         Path::new(&app_data_path)
-                            .join(OrcaNetConfig::FILE_SAVE_DIR)
+                            // .join(OrcaNetConfig::FILE_SAVE_DIR)
                             .join(format!(
                                 "{}_{}",
                                 &metadata.file_id[..16],
