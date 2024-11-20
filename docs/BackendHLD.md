@@ -155,6 +155,7 @@ There are several responsibilities for a node and hence we have several threads 
         - Network commands for outgoing network requests
 - RequestHandlerLoop
     - This thread handles all the requests from other peers. The network event loop is only an entry point for requests and it forwards all requests to the request handler.
+    - It also handles local requests for file providing and stopping file providing, starting and stopping proxy etc.
 - ProxyPaymentLoop
     - This thread handles proxy payments. It periodically checks if there are pending payments based on the data transferred since the last check and uses the 2 phase payment protocol to pay the provider
 - PaymentVerificationLoop
