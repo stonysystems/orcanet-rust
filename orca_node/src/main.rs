@@ -34,8 +34,10 @@ struct SetupArgs {
     db_path: String,
     #[arg(long, required = true)]
     btc_wallet_name: String,
+    #[arg(long, required = true)]
+    btc_address: String, // TODO: Can be removed if account creation is implemented later
     #[arg(long, required = false)]
-    btc_address: Option<String>, // TODO: Can be removed if account creation is implemented later
+    seed: Option<u64>,
 }
 
 #[derive(Subcommand)]

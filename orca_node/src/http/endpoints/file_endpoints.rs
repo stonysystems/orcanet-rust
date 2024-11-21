@@ -158,8 +158,8 @@ async fn download_file(
         return AppResponse::error("A file with the same name already exists in the given path. Provide a different name or path.".to_string());
     }
 
-    // Validate that parent exists
-    if path.parent().map_or(true, |v| !v.exists()) {
+    // Validate the path
+    if path.is_dir() || path.parent().is_some_and(|v| !v.exists()) {
         return AppResponse::error(
             "Invalid path. Either it's not a file path or the parent directory does not exist"
                 .to_string(),
@@ -174,7 +174,7 @@ async fn download_file(
     };
 
     // Download
-    match state
+    let download_resp = state
         .network_client
         .clone()
         .download_file_from_peer(
@@ -182,8 +182,9 @@ async fn download_file(
             peer_id,
             Some(request.dest_path.clone()),
         )
-        .await
-    {
+        .await;
+
+    match download_resp {
         Ok(_) => AppResponse::success(json!("Downloaded file")),
         Err(e) => AppResponse::error(format!("Error downloading file: {:?}", e)),
     }

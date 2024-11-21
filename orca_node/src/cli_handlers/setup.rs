@@ -2,11 +2,13 @@ use crate::common::{ConfigKey, OrcaNetConfig};
 use crate::db::create_sqlite_connection;
 use crate::SetupArgs;
 use diesel::RunQueryDsl;
+use rand::{thread_rng, Rng};
 use rocket::serde::Deserialize;
 use rocket::yansi::Paint;
 use serde_json::json;
 use std::collections::HashMap;
 use std::fs;
+use std::path::Path;
 
 const DB_COMMANDS_FILE_PATH: &'static str = "src/assets/db_commands.yaml";
 const DEFAULT_CONFIG_PATH: &'static str = "src/assets/default_config.json";
@@ -26,9 +28,14 @@ struct Queries {
 fn setup_database(db_path: &str) {
     println!("{}", "Setting up database...".yellow());
 
+    let path = Path::new(db_path);
+    if path.is_dir() || path.parent().is_some_and(|v| !v.exists()) {
+        panic!("Db path must be valid file path in an existing directory");
+    }
+
     let mut conn = create_sqlite_connection(Some(db_path.to_string()));
     let contents = fs::read_to_string(DB_COMMANDS_FILE_PATH)
-        .expect("File read to work to proceed with table creation");
+        .expect("DB commands file path to be a valid file path that can be read");
     let queries: Queries =
         serde_yaml::from_str(&contents).expect("DB commands YAML to be a valid YAML");
     let mut failures = 0;
@@ -80,6 +87,9 @@ fn setup_config_file(setup_args: &SetupArgs) {
 
     // Update the config
     // TODO: Automate wallet creation and BTC address generation ?
+    let seed = setup_args
+        .seed
+        .unwrap_or(thread_rng().gen_range(1..u64::MAX));
 
     let kv_pair = HashMap::from([
         (
@@ -93,6 +103,10 @@ fn setup_config_file(setup_args: &SetupArgs) {
         (
             ConfigKey::BTCAddress.to_string(),
             json!(setup_args.btc_address),
+        ),
+        (
+            ConfigKey::SecretKeySeed.to_string(), //
+            json!(seed),
         ),
     ]);
 
