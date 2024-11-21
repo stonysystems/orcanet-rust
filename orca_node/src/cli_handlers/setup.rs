@@ -18,7 +18,7 @@ const BTC_CORE_SETUP_SCRIPT_PATH: &'static str = "src/assets/btc_core_setup.sh";
 pub fn handle_setup(setup_args: &SetupArgs) {
     setup_database(setup_args.db_path.as_str());
     setup_btc_core();
-    // setup_config_file(setup_args);
+    setup_config_file(setup_args);
 }
 
 fn run_command(command: &str, comment: &str) {

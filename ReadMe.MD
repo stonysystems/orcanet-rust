@@ -13,17 +13,22 @@
 ```bash
 rustup default nightly
 ```
-
-3. Use the `setup` command to set up the database and config file. Use the wallet name and BTC address that you generated in step 1. DB_PATH must be a path in an
+3. Build the orca_node code
+```bash
+cd orca_node
+cargo build --release
+```
+3. Use the `setup` command to set up the database and config file. The binary will be in `<repo_root>/target/release`. Use the wallet name and BTC address that you generated in step 1. DB_PATH must be a path in an
    existing directory. The file need not be present.
 ```bash
-cargo run setup --db-path <DB_PATH> --btc-wallet-name <BTC_WALLET_NAME> --btc-address <BTC_ADDRESS>
+cd ../target/release
+./orca_node setup --db-path <DB_PATH> --btc-wallet-name <BTC_WALLET_NAME> --btc-address <BTC_ADDRESS>
 ```
 
 ### Run the node
-Use the `start-node` command to start the node
+Use the `start-node` command to start the node. The binary will be in `<repo_root>/target/release`.
 ```bash
-cargo run start-node
+./orca_node start-node
 ```
 
 
