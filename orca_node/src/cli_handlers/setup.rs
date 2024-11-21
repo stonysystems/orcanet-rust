@@ -1,7 +1,9 @@
 use crate::common::{ConfigKey, OrcaNetConfig};
 use crate::db::create_sqlite_connection;
+use crate::SetupArgs;
 use diesel::RunQueryDsl;
 use rocket::serde::Deserialize;
+use rocket::yansi::Paint;
 use serde_json::json;
 use std::collections::HashMap;
 use std::fs;
@@ -9,11 +11,9 @@ use std::fs;
 const DB_COMMANDS_FILE_PATH: &'static str = "src/assets/db_commands.yaml";
 const DEFAULT_CONFIG_PATH: &'static str = "src/assets/default_config.json";
 
-pub fn handle_setup(db_path: String, btc_address: String) {
-    // Create db file, tables and indexes
-    setup_database(db_path.as_str());
-
-    // Set up config file
+pub fn handle_setup(setup_args: &SetupArgs) {
+    setup_database(setup_args.db_path.as_str());
+    setup_config_file(setup_args);
 }
 
 #[derive(Debug, Deserialize)]
@@ -22,38 +22,81 @@ struct Queries {
     indexes: HashMap<String, String>,
 }
 
+/// Create db file, tables and indexes
 fn setup_database(db_path: &str) {
+    println!("{}", "Setting up database...".yellow());
+
     let mut conn = create_sqlite_connection(Some(db_path.to_string()));
     let contents = fs::read_to_string(DB_COMMANDS_FILE_PATH)
         .expect("File read to work to proceed with table creation");
     let queries: Queries =
         serde_yaml::from_str(&contents).expect("DB commands YAML to be a valid YAML");
+    let mut failures = 0;
 
     for (table_name, query_string) in queries.tables {
         match diesel::sql_query(query_string.to_owned() + ";").execute(&mut conn) {
-            Ok(_) => println!("Table {table_name} created"),
-            Err(e) => println!("Table creation failed for {table_name}. Error {:?}", e),
+            Ok(_) => {
+                println!("{}", format!("Table {table_name} created").green())
+            }
+            Err(e) => {
+                failures += 1;
+                println!(
+                    "{}",
+                    format!("Table creation failed for {table_name}. Error {:?}", e).red()
+                )
+            }
         }
     }
 
     for (index_name, query_string) in queries.indexes {
         match diesel::sql_query(query_string.to_owned() + ";").execute(&mut conn) {
-            Ok(_) => println!("Index {index_name} created"),
-            Err(e) => println!("Index creation failed for {index_name}. Error {:?}", e),
+            Ok(_) => println!("{}", format!("Index {index_name} created").green()),
+            Err(e) => {
+                failures += 1;
+                println!(
+                    "{}",
+                    format!("Index creation failed for {index_name}. Error {:?}", e).red()
+                )
+            }
         }
+    }
+
+    if failures > 0 {
+        println!(
+            "{}",
+            format!("Had {failures} failures in database setup.").yellow()
+        );
+    } else {
+        println!("{}", "All steps in database setup completed!".green());
     }
 }
 
-fn setup_config_file(db_path: &str, btc_address: &str) {
+fn setup_config_file(setup_args: &SetupArgs) {
+    println!("{}", "\nSetting up config file...".yellow());
+
     // Copy default config to dest
     fs::copy(DEFAULT_CONFIG_PATH, OrcaNetConfig::get_config_file_path())
         .expect("Default config to be copied to config file path");
 
     // Update the config
+    // TODO: Automate wallet creation and BTC address generation ?
+
     let kv_pair = HashMap::from([
-        (ConfigKey::DBPath.to_string(), json!(db_path)),
-        (ConfigKey::BTCAddress.to_string(), json!(btc_address)),
+        (
+            ConfigKey::DBPath.to_string(), //
+            json!(setup_args.db_path),
+        ),
+        (
+            ConfigKey::BTCWalletName.to_string(),
+            json!(setup_args.btc_wallet_name),
+        ),
+        (
+            ConfigKey::BTCAddress.to_string(),
+            json!(setup_args.btc_address),
+        ),
     ]);
 
     OrcaNetConfig::modify_config_with_kv_pair(kv_pair).expect("DB path to be modified");
+
+    println!("{}", "Config file setup completed!".green());
 }

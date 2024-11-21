@@ -1,8 +1,8 @@
 {
-  "AppDataPath": "/Users/sethu/Documents/orcanet",
-  "BTCAddress": "bcrt1qfpwdt4untdxya2kxw7hce496e76nkrmkpff3ym",
-  "DBPath": "/Users/sethu/sqlite_dbs/orcanet_db.db",
-  "FileFeeRatePerKB": "0.0025",
+  "AppDataPath": "~/Downloads",
+  "BTCAddress": "<MUST BE MODIFIED DURING SETUP>",
+  "DBPath": "<MUST BE MODIFIED DURING SETUP>",
+  "FileFeeRatePerKB": 0.0025,
   "NetworkType": "RegTest",
   "ProxyConfig": null,
   "RunHTTPServer": true,

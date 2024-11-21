@@ -16,6 +16,7 @@ use crate::impl_str_serde;
 pub enum ConfigKey {
     DBPath,
     AppDataPath,
+    BTCWalletName,
     BTCAddress,
     FileFeeRatePerKB,
     ProxyFeeRatePerKB,

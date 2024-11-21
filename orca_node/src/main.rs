@@ -33,7 +33,9 @@ struct SetupArgs {
     #[arg(long, required = true)]
     db_path: String,
     #[arg(long, required = true)]
-    btc_address: String,
+    btc_wallet_name: String,
+    #[arg(long, required = false)]
+    btc_address: Option<String>, // TODO: Can be removed if account creation is implemented later
 }
 
 #[derive(Subcommand)]
@@ -52,7 +54,7 @@ async fn main() {
 
     match args.command {
         OrcaCLICommand::Setup(setup_args) => {
-            handle_setup(setup_args.db_path, setup_args.btc_address);
+            handle_setup(&setup_args);
         }
         OrcaCLICommand::StartNode { seed } => {
             // This will block
