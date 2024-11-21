@@ -22,7 +22,7 @@ esac
 # Clone repo
 echo "${YELLOW}=> Cloning modified bitcoind repo...${RESET}"
 git clone https://github.com/Sethu98/bitcoin.git
-cd bitcoin
+cd bitcoin || exit
 git checkout mod_27_v2
 
 # Build
@@ -36,3 +36,7 @@ echo "${YELLOW}=> Installing bitcoin core...${RESET}"
 sudo make install
 
 echo "${GREEN}=> Bitcoin core setup complete!${RESET}"
+
+## Delete the repo ?
+#cd .. || exit
+#rm -rf bitcoin
