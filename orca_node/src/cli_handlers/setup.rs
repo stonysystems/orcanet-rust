@@ -18,7 +18,7 @@ const BTC_CORE_SETUP_SCRIPT_PATH: &'static str = "src/assets/btc_core_setup.sh";
 pub fn handle_setup(setup_args: &SetupArgs) {
     setup_database(setup_args.db_path.as_str());
     setup_btc_core();
-    setup_config_file(setup_args);
+    // setup_config_file(setup_args);
 }
 
 fn run_command(command: &str, comment: &str) {
@@ -35,10 +35,19 @@ fn setup_btc_core() {
     let which_bitcoind = Command::new("sh")
         .arg("-c")
         .arg("which bitcoind")
-        .status()
+        .output()
         .expect("which bitcoind to run");
 
-    if !which_bitcoind.success() {
+    if which_bitcoind.status.success() {
+        let bitcoind_loc = String::from_utf8(which_bitcoind.stdout)
+            .expect("which bitcoind output to be utf8 string");
+        println!(
+            "bitcoind {} at {}. Setup skipped.",
+            "found".green(),
+            bitcoind_loc.trim()
+        );
+    } else {
+        println!("{}", "bitcoind not found. Installing..".yellow());
         // Install only if bitcoind is not found
         Command::new("sh")
             .arg(BTC_CORE_SETUP_SCRIPT_PATH)
@@ -74,27 +83,29 @@ fn setup_database(db_path: &str) {
     for (table_name, query_string) in queries.tables {
         match diesel::sql_query(query_string.to_owned() + ";").execute(&mut conn) {
             Ok(_) => {
-                println!("{}", format!("Table {table_name} created").green())
+                println!("Table {table_name} {}", "created".green());
             }
             Err(e) => {
                 failures += 1;
                 println!(
-                    "{}",
-                    format!("Table creation failed for {table_name}. Error {:?}", e).red()
-                )
+                    "Table creation {} for {table_name}. Error {:?}",
+                    "failed".red(),
+                    e
+                );
             }
         }
     }
 
     for (index_name, query_string) in queries.indexes {
         match diesel::sql_query(query_string.to_owned() + ";").execute(&mut conn) {
-            Ok(_) => println!("{}", format!("Index {index_name} created").green()),
+            Ok(_) => println!("Index {index_name} {}", "created".green()),
             Err(e) => {
                 failures += 1;
                 println!(
-                    "{}",
-                    format!("Index creation failed for {index_name}. Error {:?}", e).red()
-                )
+                    "Index creation {} for {index_name}. Error {:?}",
+                    "failed".red(),
+                    e
+                );
             }
         }
     }
@@ -102,7 +113,7 @@ fn setup_database(db_path: &str) {
     if failures > 0 {
         println!(
             "{}",
-            format!("Had {failures} failures in database setup.").yellow()
+            format!("Had {} failures in database setup.", failures.red()).yellow()
         );
     } else {
         println!("{}", "All steps in database setup completed!".green());
