@@ -1,9 +1,10 @@
-use crate::common::{OrcaNetConfig, OrcaNetEvent, ProxyMode};
+use crate::common::{ConfigKey, OrcaNetConfig, OrcaNetEvent, ProxyMode};
 use crate::http::start_http_server;
 use crate::network_client::NetworkClient;
 use crate::request_handler::RequestHandlerLoop;
 use crate::utils::Utils;
 
+use crate::btc_rpc::RPCWrapper;
 use crate::{expect_input, network};
 use async_std::task::block_on;
 use futures::channel::mpsc;
@@ -48,6 +49,13 @@ pub async fn start_orca_node(seed: Option<u64>) -> Result<(), Box<dyn Error>> {
             .await
             .expect("Proxy start event to be sent");
     }
+
+    // Load the BTC wallet
+    let wallet_name = OrcaNetConfig::get_str_from_config(ConfigKey::BTCWalletName);
+    let rpc_wrapper = RPCWrapper::new(OrcaNetConfig::get_network_type());
+    // We don't handle error at the moment as the likely cause is that the wallet is already loaded
+    // TODO: Assert that the wallet is loaded
+    rpc_wrapper.load_wallet(wallet_name.as_str());
 
     // Listen for input from stdin (TODO: for testing only - comment out later)
     let mut stdin = io::BufReader::new(io::stdin()).lines();
