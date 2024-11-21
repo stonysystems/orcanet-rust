@@ -9,13 +9,44 @@ use serde_json::json;
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
+use std::process::Command;
 
 const DB_COMMANDS_FILE_PATH: &'static str = "src/assets/db_commands.yaml";
 const DEFAULT_CONFIG_PATH: &'static str = "src/assets/default_config.json";
+const BTC_CORE_SETUP_SCRIPT_PATH: &'static str = "src/assets/btc_core_setup.sh";
 
 pub fn handle_setup(setup_args: &SetupArgs) {
     setup_database(setup_args.db_path.as_str());
+    setup_btc_core();
     setup_config_file(setup_args);
+}
+
+fn run_command(command: &str, comment: &str) {
+    Command::new("sh")
+        .arg("-c")
+        .arg(command)
+        .status()
+        .expect(format!("{comment} command to run").as_str())
+        .exit_ok()
+        .expect(format!("{comment} command to succeed").as_str());
+}
+
+fn setup_btc_core() {
+    let which_bitcoind = Command::new("sh")
+        .arg("-c")
+        .arg("which bitcoind")
+        .status()
+        .expect("which bitcoind to run");
+
+    if !which_bitcoind.success() {
+        // Install only if bitcoind is not found
+        Command::new("sh")
+            .arg(BTC_CORE_SETUP_SCRIPT_PATH)
+            .status()
+            .expect("Btc core setup script to run")
+            .exit_ok()
+            .expect("Btc core setup script to succeed");
+    }
 }
 
 #[derive(Debug, Deserialize)]
