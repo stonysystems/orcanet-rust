@@ -30,13 +30,27 @@ struct Args {
 
 #[derive(Parser)]
 struct SetupArgs {
-    #[arg(long, required = true)]
+    #[arg(
+        long,
+        required = true,
+        help = "Path of sqlite db file. Must be in an existing directory"
+    )]
     db_path: String,
-    #[arg(long, required = true)]
+    #[arg(
+        long,
+        required = true,
+        help = "Path where app data is stored included downloaded files when path is not explicitly specified. Must be in an existing directory"
+    )]
+    app_data_path: String,
+    #[arg(long, required = true, help = "Name of the Bitcoin wallet")]
     btc_wallet_name: String,
-    #[arg(long, required = true)]
+    #[arg(
+        long,
+        required = true,
+        help = "Bitcoin address within the given wallet"
+    )]
     btc_address: String, // TODO: Can be removed if account creation is implemented later
-    #[arg(long, required = false)]
+    #[arg(long, required = false, help = "Seed for generating Peer ID")]
     seed: Option<u64>,
 }
 

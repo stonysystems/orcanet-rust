@@ -149,7 +149,7 @@ impl ProxyClient {
 
         // Create the http client
         let proxy_connector = ProxyConnector::from_proxy(HttpConnector::new(), proxy)
-            .expect("Proxy connector creation to be successful");
+            .expect("Proxy connector creation failed");
         let http_client =
             Client::builder(hyper_util::rt::TokioExecutor::new()).build(proxy_connector);
 
