@@ -10,39 +10,20 @@
 
 [//]: # (   document: [a relative link]&#40;/docs/BitcoinCoreSetup.md&#41;.)
 
-### 1. Install sqlite3
-- If you are on a Mac, it should already be installed. In case it's not, install with:
-  ```bash
-  brew install sqlite3
-  ```
-- If you are on Linux, install with:
-  ```bash
-  sudo apt install sqlite3 
-  ```
+### 1. Build the code
+In this step, we'll:
+- Install `sqlite3` if not present
+- Install `rust` if not present
+- Build orca_node
 
-### 2. Build the code
-#### Install Rust
-Install rust if not installed by following [this](https://www.rust-lang.org/tools/install).
-
-#### Switch to nightly rust
+Run the `orcanet-rust/build.sh` script (run as superuser if one linux):
 ```bash
-rustup default nightly
+sh ./build.sh
 ```
 
-#### Build the orca_node package
-```bash
-cd orca_node
-cargo build --release
-```
+The binary will be present in `orcanet-rust/target/release`.
 
-The binary for `orca_node` will be present in `target/release`. 
-You need to use it directly from `repo_root/target/release` for the moment as we're using some relative paths in the `setup` command. Use it from `target/release` at least for the `setup` command in `Step 5`.
-```bash
-# Change dir to the location of orca_node binary
-cd ../target/release
-```
-
-### 4. Setup bitcoin
+### 2. Setup bitcoin
 
 #### Install
 You can install in 2 ways:
@@ -64,24 +45,23 @@ Note these down as we need it for the next step.
 
 **Note**: We currently don't have user account and login features. If we add it in the future, then wallet and BTC address creation/configuration will be moved to the UI.
 
-### 5. Run the setup command
-Use the `setup` command to set up the database and config file. Run this within the `orca_node` package root (i.e `orcanet-rust/orca_node`).
-   - Use the wallet name and BTC address that you generated in step 4. 
-   - DB_PATH must be a path in an existing directory. The file will be created if not be present. 
-   - APP_DATA_PATH can be any directory path within an existing directory. The directory will be created if not present.
-   - SECRET_KEY_SEED should be some positive integer. It is **Optional** to provide this. It can be any positive integer (It SHOULD NOT be `0` as it is reserved for the relay server).
+### 3. Setup database and config file
+Use the `setup-node` command to set up the database and config file that are needed for the node to work. For now, use the binary directly from `orcanet-rust/target/release` for the `setup-node` command as this command uses some relative paths. 
+   - Use the wallet name and BTC address that you generated in step 2. 
+   - DB_PATH and APP_DATA_PATH must be a path in an existing directory. The file/dir will be created if not be present.
+   - SECRET_KEY_SEED should be some positive integer (It SHOULD NOT be `0` as it is reserved for the relay server). It is **Optional** to provide this.
 
 ```bash
-./orca_node setup --db-path DB_PATH \
+./orca_node setup-node --db-path DB_PATH \
  --app-data-path APP_DATA_PATH \
  --btc-address BTC_ADDRESS \
  --btc-wallet-name WALLET_NAME \
  --secret-key-seed SECRET_KEY_SEED # Optional: A random number will be used if not provided
 ```
 
-You can use `-h` to get help about the `setup` command:
+You can use `-h` to get help about the `setup-node` command:
 ```bash
-./orca_node setup -h
+./orca_node setup-node -h
 ```
 
 #### Verify the config file
@@ -100,12 +80,12 @@ The config file can be found in `~/.orcanet/config`. Verify that the file is pre
 }
 ```
 
-You can modify any of these at any time.
-### 6. Run the node
+You can modify these as per your needs.
+### 4. Run the node
 
 [//]: # (TODO: Start bitcoin node at the start of start-node. Panic if bitcoind cannot be started.)
 
-Use the `start-node` command to start the node.Run this within the `orca_node` package root (i.e `orcanet-rust/orca_node`).
+Use the `start-node` command to start the node.
 ```bash
 ./orca_node start-node
 ```

@@ -57,7 +57,7 @@ struct SetupArgs {
 #[derive(Subcommand)]
 enum OrcaCLICommand {
     SetupBTCCore,
-    Setup(SetupArgs),
+    SetupNode(SetupArgs),
     StartNode {
         #[arg(long, required = false)]
         seed: Option<u64>,
@@ -73,7 +73,7 @@ async fn main() {
         OrcaCLICommand::SetupBTCCore => {
             setup_btc_core();
         }
-        OrcaCLICommand::Setup(setup_args) => {
+        OrcaCLICommand::SetupNode(setup_args) => {
             handle_setup(&setup_args);
         }
         OrcaCLICommand::StartNode { seed } => {
