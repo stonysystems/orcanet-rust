@@ -11,9 +11,10 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 
-const DB_COMMANDS_FILE_PATH: &'static str = "src/assets/db_commands.yaml";
-const DEFAULT_CONFIG_PATH: &'static str = "src/assets/default_config.json";
-const BTC_CORE_SETUP_SCRIPT_PATH: &'static str = "src/assets/btc_core_setup.sh";
+const ASSETS_PATH: &'static str = "../../orca_node/src/assets";
+const DB_COMMANDS_FILE_NAME: &'static str = "db_commands.yaml";
+const DEFAULT_CONFIG_FILE_NAME: &'static str = "default_config.json";
+const BTC_CORE_SETUP_SCRIPT_NAME: &'static str = "btc_core_setup.sh";
 
 pub fn handle_setup(setup_args: &SetupArgs) {
     setup_database(setup_args.db_path.as_str());
@@ -36,7 +37,8 @@ fn setup_database(db_path: &str) {
     }
 
     let mut conn = create_sqlite_connection(Some(db_path.to_string()));
-    let contents = fs::read_to_string(DB_COMMANDS_FILE_PATH)
+    let db_commands_file_path = Path::new(ASSETS_PATH).join(DB_COMMANDS_FILE_NAME);
+    let contents = fs::read_to_string(db_commands_file_path)
         .expect("DB commands file path to be a valid file path that can be read");
     let queries: Queries =
         serde_yaml::from_str(&contents) //
@@ -106,8 +108,10 @@ pub fn setup_btc_core() {
     } else {
         println!("{}", "bitcoind not found. Installing..".yellow());
         // Install only if bitcoind is not found
+        let btc_setup_script_path = Path::new(ASSETS_PATH).join(BTC_CORE_SETUP_SCRIPT_NAME);
+
         Command::new("sh")
-            .arg(BTC_CORE_SETUP_SCRIPT_PATH)
+            .arg(btc_setup_script_path)
             .status()
             .expect("Btc core setup script to run")
             .exit_ok()
@@ -140,13 +144,14 @@ fn setup_config_file(setup_args: &SetupArgs) {
         }
     }
 
-    fs::copy(DEFAULT_CONFIG_PATH, &config_file_path)
+    let default_config_file_path = Path::new(ASSETS_PATH).join(DEFAULT_CONFIG_FILE_NAME);
+    fs::copy(default_config_file_path, &config_file_path)
         .expect("Default config to be copied to config file path");
 
     // Update the config
     // TODO: Automate wallet creation and BTC address generation ?
     let seed = setup_args
-        .seed
+        .secret_key_seed
         .unwrap_or(thread_rng().gen_range(1..u64::MAX));
 
     let kv_pair = HashMap::from([

@@ -51,7 +51,7 @@ struct SetupArgs {
     )]
     btc_address: String, // TODO: Can be removed if account creation is implemented later
     #[arg(long, required = false, help = "Seed for generating Peer ID")]
-    seed: Option<u64>,
+    secret_key_seed: Option<u64>,
 }
 
 #[derive(Subcommand)]

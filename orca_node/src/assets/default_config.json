@@ -1,9 +1,10 @@
 {
-  "AppDataPath": "~/Downloads",
+  "AppDataPath": "<MUST BE MODIFIED DURING SETUP>",
   "BTCAddress": "<MUST BE MODIFIED DURING SETUP>",
   "DBPath": "<MUST BE MODIFIED DURING SETUP>",
   "FileFeeRatePerKB": 0.0025,
-  "NetworkType": "RegTest",
+  "ProxyFeeRatePerKB": 0.0025,
+  "NetworkType": "MainNet",
   "ProxyConfig": null,
   "RunHTTPServer": true,
   "SecretKeySeed": 6
