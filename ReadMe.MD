@@ -50,6 +50,8 @@ Use the `start-node` command to start the node.Run this within the `orca_node` p
 cargo run --release start-node
 ```
 
-
+## Doc links
+1. [Backend design HLD](/docs/BackendHLD.md)
+2. [Bitcoin core manual setup](/docs/BitcoinCoreSetup.md)
 
 
