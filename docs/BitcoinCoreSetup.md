@@ -87,12 +87,12 @@ This should start the bitcoin node in regtest mode based on the configuration fi
 Open another terminal and run these commands
 
 ```bash
-bitcoin-cli createwallet alice
-bitcoin-cli getnewaddress
+bitcoin-cli -regtest createwallet alice
+bitcoin-cli -regtest getnewaddress
 # Say the response for getnewaddress is BITCOIN_ADDRESS
 
-bitcoin-cli generatetoaddress 101 BITCOIN_ADDRESS
-bitcoin-cli getbalance
+bitcoin-cli -regtest generatetoaddress 101 BITCOIN_ADDRESS
+bitcoin-cli -regtest getbalance
 # Should output 50.00
 ```
 
@@ -102,7 +102,7 @@ Explanation:
 - The  `getnewaddress` command generates a new bitcoin address. To be specific, it creates a new asymmetric key pair, stores them in the wallet, hashes the public key and outputs that as the bitcoin address
 - The `generatetoaddress` command generates the given number of blocks with the given address as the recipient of the coinbase transaction for each of these blocks. Note that in the absence of any pending transactions, it will still mine blocks with just the coinbase transaction. Bitcoin allows having blocks with just the coinbase transaction. But in the real world, it won’t be a good choice to do that since you still have to do proof of work. So you might as well get transaction fees instead of mining with a single transaction.
 
-### Step 5: Connect to our class’s blockchain network
+### Step 6: Connect to our class’s blockchain network
 
 Start the bitcoind in mainnet:
 

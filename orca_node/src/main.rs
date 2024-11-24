@@ -3,7 +3,7 @@
 #[macro_use]
 extern crate rocket;
 
-use crate::cli_handlers::setup::handle_setup;
+use crate::cli_handlers::setup::{handle_setup, setup_btc_core};
 use crate::cli_handlers::start_node::start_orca_node;
 use clap::{Parser, Subcommand};
 use futures::{SinkExt, StreamExt};
@@ -56,6 +56,7 @@ struct SetupArgs {
 
 #[derive(Subcommand)]
 enum OrcaCLICommand {
+    SetupBTCCore,
     Setup(SetupArgs),
     StartNode {
         #[arg(long, required = false)]
@@ -69,6 +70,9 @@ async fn main() {
     let args = Args::parse();
 
     match args.command {
+        OrcaCLICommand::SetupBTCCore => {
+            setup_btc_core();
+        }
         OrcaCLICommand::Setup(setup_args) => {
             handle_setup(&setup_args);
         }
