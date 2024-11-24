@@ -16,7 +16,7 @@ In this step, we'll:
 - Install `rust` if not present
 - Build orca_node
 
-Run the `orcanet-rust/build.sh` script (run as superuser if one linux):
+Run the `orcanet-rust/build.sh` script (run as superuser if on linux):
 ```bash
 sh ./build.sh
 ```
