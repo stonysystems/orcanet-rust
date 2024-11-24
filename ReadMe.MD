@@ -29,19 +29,24 @@ Install rust if not installed by following [this](https://www.rust-lang.org/tool
 rustup default nightly
 ```
 
-#### Build
+#### Build the orca_node package
 ```bash
+cd orca_node
 cargo build --release
 ```
 
-The binary for `orca_node` is present in `target/release`. 
-You need to use it directly from `repo_root/target/release` for the moment as we're using some relative paths in the `setup` command. DO NOT add `target/release` to system path and run `orca_node` from somewhere else for now.
+The binary for `orca_node` will be present in `target/release`. 
+You need to use it directly from `repo_root/target/release` for the moment as we're using some relative paths in the `setup` command. Use it from `target/release` at least for the `setup` command in `Step 5`.
+```bash
+# Change dir to the location of orca_node binary
+cd ../target/release
+```
 
 ### 4. Setup bitcoin
 
 #### Install
 You can install in 2 ways:
-- Install bitcoin-core by following [Bitcoin-core setup](/docs/BitcoinCoreSetup.md).
+- Install bitcoin-core manually by following [Bitcoin-core setup](/docs/BitcoinCoreSetup.md).
 - Use the `setup-btc-core` command like this:
      ```bash
      ./orca_node setup-btc-core
@@ -57,7 +62,7 @@ We need a wallet and a BTC address to start using the blockchain. We need a BTC 
 Follow [Step 6](/docs/BitcoinCoreSetup.md#step-6-connect-to-our-classs-blockchain-network) from [Bitcoin-core setup](/docs/BitcoinCoreSetup.md) to create a new wallet and a new BTC address.
 Note these down as we need it for the next step.
 
-**Note**: We currently don't have user account and login features. If we add it in the future, then wallet and BTC address creation will be moved to the UI.
+**Note**: We currently don't have user account and login features. If we add it in the future, then wallet and BTC address creation/configuration will be moved to the UI.
 
 ### 5. Run the setup command
 Use the `setup` command to set up the database and config file. Run this within the `orca_node` package root (i.e `orcanet-rust/orca_node`).
