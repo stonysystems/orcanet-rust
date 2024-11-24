@@ -13,12 +13,14 @@ This document outlines the different protocols used to achieve the above feature
 
 ## File transfer (Download)
 
+![alt File Transfer](/diagrams/images/file_transfer.png)
+
 File transfer involves a 2-step protocol, one for fetching metadata and the other for the actual download. 
 Note that the 2nd step is only performed when you want to actually download a file. The protocol is detailed below:
 
 ### File Metadata Request
 
-File metadata request is used to fetch metadata about the a given file_hash. When a peer receives a metadata request, it responds with relevant information it provides the file and rejects if it doesn’t provide the file anymore.
+File metadata request is used to fetch metadata about a given file_hash. When a peer receives a metadata request, it responds with relevant information it provides the file and rejects if it doesn’t provide the file anymore.
 
 - Success response
     - File name
@@ -39,18 +41,20 @@ File content request is for the actual file transfer. This currently uses a prot
 
 A HTTP based protocol would be much simpler but requires the sender to have a public IP to cover all cases.
 
-## File Payment
+### File Payment
 
 The client node creates a transaction with the price of the file and then reports the transaction id to the server through a payment notification request. The server will store this and later validate that the transaction has gotten into a block. The server has to rely on the client to get to know the transaction id because we will have to jump through hoops (like using unique price or unique btc address per client) to properly match a transaction with a client without explicit notification from a client.
 
 ## HTTP proxy
+
+![alt File Transfer](/diagrams/images/proxy_connection.png)
 
 Proxy connection also uses a 2-step protocol, one for requesting metadata and one for the actual connection. 
 Just like file metadata, the 2nd step is only performed when an actual connection is required.
 
 ### Proxy Metadata Request
 
-Proxy metadata request is to get metadata about the proxy. If the node is not a provider, it should rejected this request.
+Proxy metadata request is to get metadata about the proxy. If the node is not a provider, it should reject this request.
 
 - Success Response
     - When node is a proxy provider
@@ -71,7 +75,7 @@ Response
 - auth_token
 - metadata (same as metadata request)
 
-## Proxy Payment
+### Proxy Payment
 
 Payment is a 2 phase process:
 

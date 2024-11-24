@@ -1,0 +1,21 @@
+title Proxy Connection
+
+actor Client
+
+par Metadata Requests
+    Client<-->Peer1: Proxy metadata request/response
+    Client<-->Peer2: Proxy metadata request/response
+    Client<-->Peer3: Proxy metadata request/response
+end
+
+note over Client: Client decides to use Peer 2 as proxy provider
+Client->Peer2: Proxy connect request
+Peer2-->Client: Proxy address(IP:Port), authtoken
+note over Client: Client starts using Peer 2 as HTTP proxy
+loop every T seconds
+  Client->Peer2: Data transferred, Fee owed
+  Peer2-->Client: Acknowledge(amount to pay, recipient BTC address)
+  note over Client: Client creates transaction
+  Client->Peer2: Payment notification (transaction id)
+  Peer2-->Client: Ack
+end

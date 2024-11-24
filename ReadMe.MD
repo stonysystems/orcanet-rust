@@ -1,7 +1,7 @@
 ## Prerequisites
 
-1. SQLite 3
-2. Rust and cargo
+1. Rust and cargo
+2. SQLite 3
 3. Bitcoin-core (modified)
 
 ## Setup
