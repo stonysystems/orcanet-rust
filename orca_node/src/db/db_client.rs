@@ -58,7 +58,7 @@ impl ProvidedFilesTable {
     pub fn remove_provided_file(&mut self, target_file_id: &str) -> QueryResult<usize> {
         use table_schema::provided_files::dsl::*;
 
-        delete(provided_files.filter(file_id.eq(target_file_id))).execute(&mut self.conn)
+        delete(provided_files.find(target_file_id)).execute(&mut self.conn)
     }
 
     pub fn get_provided_file_info(
@@ -68,7 +68,7 @@ impl ProvidedFilesTable {
         use table_schema::provided_files::dsl::*;
 
         provided_files
-            .filter(file_id.eq(target_file_id))
+            .find(target_file_id)
             .first::<ProvidedFileInfo>(&mut self.conn)
     }
 

@@ -17,6 +17,7 @@ pub fn get_file_endpoints() -> Vec<Route> {
         get_file_info,
         provide_file,
         stop_providing,
+        resume_providing,
         download_file,
         get_providers
     ]
@@ -145,12 +146,31 @@ async fn stop_providing(
     AppResponse::success(json!("Stopped providing file"))
 }
 
+/// Resume providing the given file. It must already be in the provided files table.
+#[post("/resume-providing/<file_id>")]
+async fn resume_providing(state: &State<AppState>, file_id: String) -> Json<AppResponse> {
+    let mut provided_files_table = ProvidedFilesTable::new(None);
+
+    match provided_files_table.set_provided_file_status(file_id.as_str(), true, None) {
+        Ok(_) => {
+            state.network_client.clone().start_providing(file_id).await;
+            AppResponse::success(json!("Resumed providing file"))
+        }
+        Err(e) => {
+            // File might not be provided already
+            AppResponse::error(format!("Failed to resume providing file: {:?}", e))
+        }
+    }
+}
+
 #[post("/download-file", format = "application/json", data = "<request>")]
 async fn download_file(
     state: &State<AppState>,
     request: Json<DownloadFileRequest>,
 ) -> Json<AppResponse> {
     // TODO: Add a check to make sure it's not already downloaded or provided
+    // TODO: Add a check to make sure we have enough funds to get the file
+    // TODO: Start providing after download
     tracing::info!("Download file request: {:?}", request);
     let path = Path::new(&request.dest_path);
 

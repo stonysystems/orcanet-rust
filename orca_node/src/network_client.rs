@@ -207,7 +207,10 @@ impl NetworkClient {
         match provided_files_table.get_provided_files() {
             Ok(provided_files) => {
                 for file_info in provided_files {
-                    self.start_providing(file_info.file_id).await;
+                    if file_info.status == 1 {
+                        // TODO: Change in DB query instead
+                        self.start_providing(file_info.file_id).await;
+                    }
                 }
             }
             Err(e) => {
