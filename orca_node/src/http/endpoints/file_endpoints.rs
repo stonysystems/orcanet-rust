@@ -152,7 +152,10 @@ async fn resume_providing(state: &State<AppState>, file_id: String) -> Json<AppR
     let mut provided_files_table = ProvidedFilesTable::new(None);
 
     match provided_files_table.set_provided_file_status(file_id.as_str(), true, None) {
-        Ok(_) => {
+        Ok(rows) => {
+            if rows == 0 {
+                return AppResponse::error(format!("File id {} is not provided", file_id));
+            }
             state.network_client.clone().start_providing(file_id).await;
             AppResponse::success(json!("Resumed providing file"))
         }
