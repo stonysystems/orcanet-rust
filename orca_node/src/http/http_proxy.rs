@@ -94,14 +94,18 @@ pub async fn start_http_proxy(
                 let handler_inner = handler.clone();
 
                 tokio::task::spawn(async move {
-                    if let Err(err) = http1::Builder::new()
-                        .serve_connection(io, service_fn(move |req| {
-                        let handler_inner_clone = handler_inner.clone();
-                        async move {
-                            handler_inner_clone.handle_request(req).await
-                        }
-                    }))
-                        .await {
+                    let resp = http1::Builder::new()
+                        .serve_connection(
+                            io,
+                            service_fn(move |req| {
+                                let handler_inner_clone = handler_inner.clone();
+                                async move { handler_inner_clone.handle_request(req).await }
+                            }),
+                        )
+                        .with_upgrades()
+                        .await;
+
+                    if let Err(err) = resp {
                         tracing::error!("Error serving connection: {:?}", err);
                     }
                 });

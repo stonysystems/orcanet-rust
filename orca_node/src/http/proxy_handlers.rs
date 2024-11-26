@@ -31,6 +31,7 @@ use serde_json::json;
 use std::future::Future;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::time::{interval, Duration};
 use tokio_util::sync::CancellationToken;
@@ -123,11 +124,62 @@ impl ProxyProvider {
         Ok(Response::from_parts(parts, Full::new(bytes)))
     }
 
+    // async fn handle_http_connect(
+    //     &self,
+    //     request: Request<Incoming>,
+    // ) -> Result<Response<Full<Bytes>>, hyper::Error> {
+    //     todo!()
+    // }
+
     async fn handle_http_connect(
         &self,
-        request: Request<Incoming>,
+        req: Request<Incoming>,
     ) -> Result<Response<Full<Bytes>>, hyper::Error> {
-        todo!()
+        println!("Got connect request");
+
+        let authority = req.uri().authority().unwrap().clone();
+        println!("Authority {:?}", authority);
+
+        match TcpStream::connect(authority.as_str()).await {
+            Ok(target_stream) => {
+                println!("Connected to authority");
+
+                tokio::task::spawn(async move {
+                    match hyper::upgrade::on(req).await {
+                        Ok(upgraded) => {
+                            println!("Upgraded");
+                            tunnel(upgraded, target_stream).await
+                        }
+                        Err(e) => eprintln!("upgrade error: {}", e),
+                    }
+                });
+
+                Ok(Response::builder()
+                    .status(StatusCode::OK)
+                    .body(Full::default())
+                    .unwrap())
+            }
+            Err(_) => Ok(Response::builder()
+                .status(StatusCode::BAD_GATEWAY)
+                .body(Full::default())
+                .unwrap()),
+        }
+    }
+}
+
+async fn tunnel(client_stream: hyper::upgrade::Upgraded, mut target_stream: TcpStream) {
+    let mut client_stream = TokioIo::new(client_stream);
+
+    match tokio::io::copy_bidirectional(&mut client_stream, &mut target_stream).await {
+        Ok((from_client, from_target)) => {
+            println!(
+                "Client wrote {} bytes and target wrote {} bytes",
+                from_client, from_target
+            );
+        }
+        Err(e) => {
+            eprintln!("Error in tunnel: {}", e);
+        }
     }
 }
 
@@ -141,16 +193,18 @@ impl RequestHandler for ProxyProvider {
         tracing::info!("Request body size {:?}", request.size_hint().exact());
 
         // Validate auth token and error out if it fails
-        if let Err(error_response) = self.validate_auth_token(&request) {
-            return Ok(error_response);
-        }
+        // if let Err(error_response) = self.validate_auth_token(&request) {
+        //     return Ok(error_response);
+        // }
 
         // Send the request
         let path = request.uri().path();
         tracing::info!("Request path: {path}");
 
         if request.method() == Method::CONNECT {
-            self.handle_http_connect(request).await
+            let resp = self.handle_http_connect(request).await;
+            tracing::info!("Connect response: {:?}", resp);
+            resp
         } else {
             self.handle_standard_http_request(request).await
         }
