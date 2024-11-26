@@ -5,12 +5,13 @@ use crate::common::{
 };
 use crate::db::{
     PaymentCategory, PaymentInfo, PaymentStatus, PaymentsTable, ProxyClientsTable,
-    ProxySessionInfo, ProxySessionsTable,
+    ProxySessionInfo, ProxySessionStatus, ProxySessionsTable,
 };
 use crate::network_client::NetworkClient;
 use crate::utils::Utils;
 use bitcoin::Txid;
 use bytes::Bytes;
+use clap::builder::styling::Reset;
 use futures::channel::mpsc::Receiver;
 use futures::StreamExt;
 use headers::Authorization;
@@ -19,7 +20,7 @@ use hyper::body::{Body, Incoming};
 use hyper::header::{HeaderValue, AUTHORIZATION};
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
-use hyper::{Error, Request, Response, StatusCode};
+use hyper::{Error, Method, Request, Response, StatusCode};
 use hyper_http_proxy::{Intercept, Proxy, ProxyConnector};
 use hyper_tls::HttpsConnector;
 use hyper_util::client::legacy::connect::HttpConnector;
@@ -45,15 +46,88 @@ pub trait RequestHandler: Send + Sync {
 }
 
 pub struct ProxyProvider {
-    http_client: Client<HttpConnector, Incoming>,
+    http_client: Client<HttpsConnector<HttpConnector>, Incoming>,
 }
 
 impl ProxyProvider {
     pub fn new() -> Self {
         Self {
             http_client: Client::builder(hyper_util::rt::TokioExecutor::new())
-                .build(HttpConnector::new()),
+                .build(HttpsConnector::new()),
         }
+    }
+
+    fn validate_auth_token(
+        &self,
+        request: &Request<Incoming>,
+    ) -> Result<(), Response<Full<Bytes>>> {
+        // Get auth token
+        let auth_token = match extract_bearer_token(&request) {
+            Ok(token) => token,
+            Err(e) => {
+                return Err(bad_request_with_err(OrcaNetError::AuthorizationFailed(e)));
+            }
+        };
+
+        // Validate auth token (must be present in table)
+        let mut proxy_clients_table = ProxyClientsTable::new(None);
+        let client_info = match proxy_clients_table.get_client_by_auth_token(auth_token.as_str()) {
+            Ok(client_info) => client_info,
+            Err(e) => {
+                tracing::error!("Error {:?}", e);
+                return Err(bad_request_with_err(OrcaNetError::AuthorizationFailed(
+                    "Auth token verification failed".to_string(),
+                )));
+            }
+        };
+
+        let proxy_session_status = ProxySessionStatus::try_from(client_info.status);
+
+        // Check proxy session status
+        match proxy_session_status {
+            Ok(ProxySessionStatus::TerminatedByClient) => {
+                // Inactive proxy provider session. Ask client to create new session
+                // Either party could have terminated the contract
+                Err(bad_request_with_err(OrcaNetError::AuthorizationFailed(
+                    "Received auth token for inactive session. Start a new session.".to_string(),
+                )))
+            }
+            Ok(ProxySessionStatus::TerminatedByServer) => {
+                // Server decided to terminate the contract due to client dishonesty
+                Err(bad_request_with_err(
+                    OrcaNetError::SessionTerminatedByProvider,
+                ))
+            }
+            _ => Ok(()),
+        }
+    }
+
+    async fn handle_standard_http_request(
+        &self,
+        request: Request<Incoming>,
+    ) -> Result<Response<Full<Bytes>>, hyper::Error> {
+        let response = self.http_client.request(request).await.unwrap();
+
+        let (parts, body) = response.into_parts();
+        let bytes = body.collect().await?.to_bytes();
+
+        // Update client info in DB
+        // let size_kb = (bytes.len() as f64) / 1000f64;
+
+        // proxy_clients_table
+        //     .update_data_transfer_info(client_info.client_id.as_str(), size_kb)
+        //     .expect("Data transfer info to be updated in DB"); // TODO: May be failure is too strict ?
+
+        tracing::info!("Response body size: {:?}", bytes.len());
+
+        Ok(Response::from_parts(parts, Full::new(bytes)))
+    }
+
+    async fn handle_http_connect(
+        &self,
+        request: Request<Incoming>,
+    ) -> Result<Response<Full<Bytes>>, hyper::Error> {
+        todo!()
     }
 }
 
@@ -64,64 +138,22 @@ impl RequestHandler for ProxyProvider {
         request: Request<Incoming>,
     ) -> Result<Response<Full<Bytes>>, hyper::Error> {
         tracing::info!("Request headers: {:?}", request.headers());
-        // Get auth token
-        let auth_token = match extract_bearer_token(&request) {
-            Ok(token) => token,
-            Err(e) => {
-                return Ok(bad_request_with_err(OrcaNetError::AuthorizationFailed(e)));
-            }
-        };
-
-        // Validate auth token (must be present in table)
-        let mut proxy_clients_table = ProxyClientsTable::new(None);
-        let client_info = match proxy_clients_table.get_client_by_auth_token(auth_token.as_str()) {
-            Ok(client_info) => client_info,
-            Err(e) => {
-                tracing::error!("Error {:?}", e);
-                return Ok(bad_request_with_err(OrcaNetError::AuthorizationFailed(
-                    "Auth token verification failed".to_string(),
-                )));
-            }
-        };
-
-        // Check proxy session status
-        match client_info.status {
-            0 => {
-                // Inactive proxy provider session. Ask client to create new session
-                // Either party could have terminated the contract
-                return Ok(bad_request_with_err(OrcaNetError::AuthorizationFailed(
-                    "Received auth token for inactive session. Start a new session.".to_string(),
-                )));
-            }
-            -1 => {
-                // Server decided to terminate the contract due to client dishonesty
-                return Ok(bad_request_with_err(
-                    OrcaNetError::SessionTerminatedByProvider,
-                ));
-            }
-            _ => {}
-        }
-
         tracing::info!("Request body size {:?}", request.size_hint().exact());
+
+        // Validate auth token and error out if it fails
+        if let Err(error_response) = self.validate_auth_token(&request) {
+            return Ok(error_response);
+        }
 
         // Send the request
         let path = request.uri().path();
         tracing::info!("Request path: {path}");
 
-        let response = self.http_client.request(request).await.unwrap();
-
-        let (parts, body) = response.into_parts();
-        let bytes = body.collect().await?.to_bytes();
-
-        // Update client info in DB
-        let size_kb = (bytes.len() as f64) / 1000f64;
-        proxy_clients_table
-            .update_data_transfer_info(client_info.client_id.as_str(), size_kb)
-            .expect("Data transfer info to be updated in DB"); // TODO: May be failure is too strict ?
-
-        tracing::info!("Response body size: {:?}", bytes.len());
-
-        Ok(Response::from_parts(parts, Full::new(bytes)))
+        if request.method() == Method::CONNECT {
+            self.handle_http_connect(request).await
+        } else {
+            self.handle_standard_http_request(request).await
+        }
     }
 }
 
