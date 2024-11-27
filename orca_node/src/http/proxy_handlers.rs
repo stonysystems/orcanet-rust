@@ -137,6 +137,8 @@ impl ProxyProvider {
                 tracing::info!("Connected to authority");
 
                 tokio::task::spawn(async move {
+                    tracing::info!("Upgrading request {:?}", req);
+
                     match hyper::upgrade::on(req).await {
                         Ok(upgraded) => {
                             tracing::info!("Upgraded connection");
@@ -310,18 +312,12 @@ impl ProxyClient {
     ) -> Result<Response<Full<Bytes>>, hyper::Error> {
         println!("Got HTTP connect request");
         // Forward CONNECT to remote proxy with auth
-        let (parts, body) = request.into_parts();
-        let bytes = body.collect().await?.to_bytes();
-
-        // Create first request
-        let request = Request::from_parts(parts.clone(), Full::new(bytes.clone()));
-
-        // Create second request
-
         let mut connect_req = Request::builder()
             .method(Method::CONNECT)
             .uri(request.uri().clone())
-            .body(Full::new(bytes))
+            .header(hyper::header::CONNECTION, "keep-alive")
+            .header("proxy-connection", "keep-alive")
+            .body(Full::default())
             .expect("Connect request creation needs to succeed to proceed");
 
         let token = format!("Bearer {}", self.session_info.auth_token.as_str());
@@ -339,6 +335,7 @@ impl ProxyClient {
                 match remote_response.status() {
                     StatusCode::OK => {
                         tokio::task::spawn(async move {
+                            tracing::info!("Upgrading request {:?} {:?}", request, remote_response);
                             if let (Ok(client_stream), Ok(remote_stream)) = (
                                 hyper::upgrade::on(request).await,
                                 hyper::upgrade::on(remote_response).await,
