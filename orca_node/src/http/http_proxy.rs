@@ -45,7 +45,7 @@ fn get_handler(
             };
 
             // TODO: Move this into proxy client set up
-            tokio::spawn(proxy_payment_loop.start_loop());
+            // tokio::spawn(proxy_payment_loop.start_loop());
 
             let proxy_status = ProxySessionStatus::try_from(session_info.status)
                 .expect("Status to be valid proxy status");

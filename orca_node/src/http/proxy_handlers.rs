@@ -15,9 +15,9 @@ use clap::builder::styling::Reset;
 use futures::channel::mpsc::Receiver;
 use futures::StreamExt;
 use headers::Authorization;
-use http_body_util::{BodyExt, Full};
+use http_body_util::{BodyExt, Empty, Full};
 use hyper::body::{Body, Incoming};
-use hyper::header::{HeaderValue, AUTHORIZATION};
+use hyper::header::{HeaderValue, PROXY_AUTHORIZATION};
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper::{Error, Method, Request, Response, StatusCode};
@@ -27,6 +27,7 @@ use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::client::legacy::Client;
 use hyper_util::rt::TokioIo;
 use libp2p_swarm::derive_prelude::PeerId;
+use rocket::form::{FromForm, Options};
 use serde_json::json;
 use std::future::Future;
 use std::net::SocketAddr;
@@ -124,45 +125,36 @@ impl ProxyProvider {
         Ok(Response::from_parts(parts, Full::new(bytes)))
     }
 
-    // async fn handle_http_connect(
-    //     &self,
-    //     request: Request<Incoming>,
-    // ) -> Result<Response<Full<Bytes>>, hyper::Error> {
-    //     todo!()
-    // }
-
     async fn handle_http_connect(
         &self,
         req: Request<Incoming>,
     ) -> Result<Response<Full<Bytes>>, hyper::Error> {
-        println!("Got connect request");
-
+        tracing::info!("Got HTTP CONNECT request");
         let authority = req.uri().authority().unwrap().clone();
-        println!("Authority {:?}", authority);
 
         match TcpStream::connect(authority.as_str()).await {
             Ok(target_stream) => {
-                println!("Connected to authority");
+                tracing::info!("Connected to authority");
 
                 tokio::task::spawn(async move {
                     match hyper::upgrade::on(req).await {
                         Ok(upgraded) => {
-                            println!("Upgraded");
+                            tracing::info!("Upgraded connection");
                             tunnel(upgraded, target_stream).await
                         }
-                        Err(e) => eprintln!("upgrade error: {}", e),
+                        Err(e) => tracing::error!("Hyper upgrade error: {:?}", e),
                     }
                 });
 
                 Ok(Response::builder()
                     .status(StatusCode::OK)
                     .body(Full::default())
-                    .unwrap())
+                    .expect("Response creation failed"))
             }
             Err(_) => Ok(Response::builder()
                 .status(StatusCode::BAD_GATEWAY)
                 .body(Full::default())
-                .unwrap()),
+                .expect("Response creation failed")),
         }
     }
 }
@@ -172,13 +164,14 @@ async fn tunnel(client_stream: hyper::upgrade::Upgraded, mut target_stream: TcpS
 
     match tokio::io::copy_bidirectional(&mut client_stream, &mut target_stream).await {
         Ok((from_client, from_target)) => {
-            println!(
+            tracing::info!(
                 "Client wrote {} bytes and target wrote {} bytes",
-                from_client, from_target
+                from_client,
+                from_target
             );
         }
         Err(e) => {
-            eprintln!("Error in tunnel: {}", e);
+            tracing::error!("Error in tunnel: {}", e);
         }
     }
 }
@@ -213,6 +206,7 @@ impl RequestHandler for ProxyProvider {
 
 pub struct ProxyClient {
     http_client: Client<ProxyConnector<HttpConnector>, Incoming>,
+    http_connect_client: Client<ProxyConnector<HttpConnector>, Full<Bytes>>,
     session_info: ProxySessionInfo, // We don't record any data here, but only use configuration values like client_id, auth_token etc
     payment_loop_cancellation_token: CancellationToken,
 }
@@ -237,10 +231,13 @@ impl ProxyClient {
         let proxy_connector = ProxyConnector::from_proxy(HttpConnector::new(), proxy)
             .expect("Proxy connector creation failed");
         let http_client =
+            Client::builder(hyper_util::rt::TokioExecutor::new()).build(proxy_connector.clone());
+        let http_connect_client =
             Client::builder(hyper_util::rt::TokioExecutor::new()).build(proxy_connector);
 
         Self {
             http_client,
+            http_connect_client,
             session_info,
             payment_loop_cancellation_token,
         }
@@ -253,17 +250,37 @@ impl RequestHandler for ProxyClient {
         &self,
         mut request: Request<Incoming>,
     ) -> Result<Response<Full<Bytes>>, Error> {
+        if request.method() == Method::CONNECT {
+            self.handle_http_connect(request).await
+        } else {
+            self.handle_standard_http_request(request).await
+        }
+    }
+
+    async fn clean_up(&self) {
+        tracing::info!("Sending loop cancellation");
+        self.payment_loop_cancellation_token.cancelled().await;
+    }
+}
+
+impl ProxyClient {
+    async fn handle_standard_http_request(
+        &self,
+        mut request: Request<Incoming>,
+    ) -> Result<Response<Full<Bytes>>, hyper::Error> {
         tracing::info!("Request headers: {:?}", request.headers());
 
         let path = request.uri().path();
         tracing::info!("Request path: {path}");
 
-        // Add Bearer token
-        // TODO: For some reason set_authorization in proxy is not setting the header. Check later.
+        // // Add Bearer token
+        // // TODO: For some reason set_authorization in proxy is not setting the header. Check later.
         let token = format!("Bearer {}", self.session_info.auth_token.as_str());
         let token_hdr_value = HeaderValue::from_str(token.as_str())
             .expect("token value to be valid header value when parsed from string");
-        request.headers_mut().insert(AUTHORIZATION, token_hdr_value);
+        request
+            .headers_mut()
+            .insert(PROXY_AUTHORIZATION, token_hdr_value);
 
         // Send the request through proxy
         let response = self
@@ -287,9 +304,94 @@ impl RequestHandler for ProxyClient {
         Ok(Response::from_parts(parts, Full::new(bytes)))
     }
 
-    async fn clean_up(&self) {
-        tracing::info!("Sending loop cancellation");
-        self.payment_loop_cancellation_token.cancelled().await;
+    async fn handle_http_connect(
+        &self,
+        mut request: Request<Incoming>,
+    ) -> Result<Response<Full<Bytes>>, hyper::Error> {
+        println!("Got HTTP connect request");
+        // Forward CONNECT to remote proxy with auth
+        let (parts, body) = request.into_parts();
+        let bytes = body.collect().await?.to_bytes();
+
+        // Create first request
+        let request = Request::from_parts(parts.clone(), Full::new(bytes.clone()));
+
+        // Create second request
+
+        let mut connect_req = Request::builder()
+            .method(Method::CONNECT)
+            .uri(request.uri().clone())
+            .body(Full::new(bytes))
+            .expect("Connect request creation needs to succeed to proceed");
+
+        let token = format!("Bearer {}", self.session_info.auth_token.as_str());
+        connect_req.headers_mut().insert(
+            PROXY_AUTHORIZATION,
+            HeaderValue::from_str(token.as_str()).unwrap(),
+        );
+
+        let session_id = self.session_info.session_id.clone();
+
+        match self.http_connect_client.request(connect_req).await {
+            Ok(remote_response) => {
+                println!("Remote response: {:?}", remote_response);
+
+                match remote_response.status() {
+                    StatusCode::OK => {
+                        tokio::task::spawn(async move {
+                            if let (Ok(client_stream), Ok(remote_stream)) = (
+                                hyper::upgrade::on(request).await,
+                                hyper::upgrade::on(remote_response).await,
+                            ) {
+                                println!("Upgrade complete");
+                                tunnel2(session_id, client_stream, remote_stream).await;
+                            }
+                        });
+
+                        Ok(Response::builder()
+                            .status(StatusCode::OK)
+                            .body(Full::default())
+                            .expect("Response creation failed"))
+                    }
+                    _ => Ok(Response::builder()
+                        .status(StatusCode::BAD_GATEWAY)
+                        .body(Full::default())
+                        .expect("Response creation failed")),
+                }
+            }
+            Err(e) => Ok(Response::builder()
+                .status(StatusCode::BAD_GATEWAY)
+                .body(Full::default())
+                .unwrap()),
+        }
+    }
+}
+
+async fn tunnel2(
+    session_id: String,
+    client_stream: hyper::upgrade::Upgraded,
+    remote_stream: hyper::upgrade::Upgraded,
+) {
+    println!("In tunnel 2 response");
+    let mut client_stream = TokioIo::new(client_stream);
+    let mut remote_stream = TokioIo::new(remote_stream);
+
+    match tokio::io::copy_bidirectional(&mut client_stream, &mut remote_stream).await {
+        Ok((from_client, from_remote)) => {
+            // let total_kb = (from_client + from_remote) as f64 / 1000f64;
+            // let mut proxy_sessions_table = ProxySessionsTable::new(None);
+            // proxy_sessions_table
+            //     .update_data_transfer_info(session_id, total_kb)
+            //     .expect("Data transfer info to be updated in DB");
+            tracing::info!(
+                "Client wrote {} bytes and target wrote {} bytes",
+                from_client,
+                from_remote
+            );
+        }
+        Err(e) => {
+            tracing::error!("Error in tunnel: {}", e);
+        }
     }
 }
 
@@ -504,7 +606,7 @@ fn extract_bearer_token(req: &Request<Incoming>) -> Result<String, String> {
     // Get the Authorization header
     let auth_header = req
         .headers()
-        .get(AUTHORIZATION)
+        .get(PROXY_AUTHORIZATION)
         .ok_or("Missing authorization header".to_string())?;
 
     let auth_str = auth_header
