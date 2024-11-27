@@ -236,9 +236,8 @@ impl ProxyClient {
         payment_loop_cancellation_token: CancellationToken,
     ) -> Self {
         // Configure the proxy
-        let proxy_uri = session_info
-            .proxy_address
-            .clone()
+        let proxy_uri_str = format!("http://{}", session_info.proxy_address.as_str());
+        let proxy_uri = proxy_uri_str
             .parse()
             .expect("Proxy address to be valid proxy URI");
         let mut proxy = Proxy::new(Intercept::All, proxy_uri);
@@ -269,6 +268,7 @@ impl RequestHandler for ProxyClient {
         &self,
         mut request: Request<Incoming>,
     ) -> Result<Response<Full<Bytes>>, Error> {
+        tracing::info!("Got request {:?}", request);
         if request.method() == Method::CONNECT {
             self.handle_http_connect(request).await
         } else {
@@ -325,67 +325,83 @@ impl ProxyClient {
 
     async fn handle_http_connect(
         &self,
-        mut request: Request<Incoming>,
+        request: Request<Incoming>,
     ) -> Result<Response<Full<Bytes>>, hyper::Error> {
-        println!("Got HTTP connect request");
-        let token = format!("Bearer {}", self.session_info.auth_token.as_str());
-
-        // Forward CONNECT to remote proxy with auth
+        // Create CONNECT request to proxy
         let mut connect_req = Request::builder()
             .method(Method::CONNECT)
-            .uri(self.session_info.proxy_address.as_str()) // Send request to proxy
-            .header("orca-proxy-request-uri", request.uri().clone().to_string())
             .header(
-                "orca-proxy-request-authority",
-                request.uri().authority().unwrap().as_str(),
+                PROXY_AUTHORIZATION,
+                format!("Bearer {}", self.session_info.auth_token),
             )
-            .header(PROXY_AUTHORIZATION, token)
+            .header(CONNECTION, "keep-alive")
             .body(Empty::<Bytes>::new())
-            .expect("Connect request creation needs to succeed to proceed");
+            .unwrap();
 
-        // Copy over headers
+        // Copy over relevant headers
         for (name, value) in request.headers() {
-            connect_req
-                .headers_mut()
-                .insert(name.clone(), value.clone());
+            if name != PROXY_AUTHORIZATION {
+                connect_req
+                    .headers_mut()
+                    .insert(name.clone(), value.clone());
+            }
         }
-
-        tracing::info!("Sending connect request {:?}", connect_req);
 
         let session_id = self.session_info.session_id.clone();
 
-        match self.http_connect_client.request(connect_req).await {
-            Ok(remote_response) => {
-                tracing::info!("Request {:?}", request);
-                println!("Remote response: {:?}", remote_response);
+        // Create TCP connection to proxy
+        let proxy_addr = self.session_info.proxy_address.clone();
+        let mut proxy_stream = TcpStream::connect("130.245.173.221:3000")
+            .await
+            .expect("TcpStream to be successfully opened to remote proxy");
 
-                match remote_response.status() {
-                    StatusCode::OK => {
-                        tokio::task::spawn(async move {
-                            if let (Ok(client_stream), Ok(remote_stream)) = (
-                                hyper::upgrade::on(request).await,
-                                hyper::upgrade::on(remote_response).await,
-                            ) {
-                                println!("Upgrade complete");
-                                tunnel2(session_id, client_stream, remote_stream).await;
-                            }
-                        });
+        // Send CONNECT request manually
+        let req_bytes = format!(
+            "{} {} HTTP/1.1\r\n{}\r\n\r\n",
+            Method::CONNECT,
+            request.uri().clone(),
+            connect_req
+                .headers()
+                .iter()
+                .map(|(k, v)| format!("{}: {}", k, v.to_str().unwrap()))
+                .collect::<Vec<_>>()
+                .join("\r\n")
+        );
+        proxy_stream
+            .write_all(req_bytes.as_bytes())
+            .await
+            .expect("Request to be written to TCP stream");
 
-                        Ok(Response::builder()
-                            .status(StatusCode::OK)
-                            .body(Full::default())
-                            .expect("Response creation failed"))
-                    }
-                    _ => Ok(Response::builder()
-                        .status(StatusCode::BAD_GATEWAY)
-                        .body(Full::default())
-                        .expect("Response creation failed")),
-                }
+        // Read response
+        let mut response = Vec::new();
+        let mut buffer = [0; 1024];
+        loop {
+            let n = proxy_stream
+                .read(&mut buffer)
+                .await
+                .expect("Response to be read from TCP stream");
+            response.extend_from_slice(&buffer[..n]);
+            if response.windows(4).any(|w| w == b"\r\n\r\n") {
+                break;
             }
-            Err(e) => Ok(Response::builder()
+        }
+
+        if response.starts_with(b"HTTP/1.1 200") {
+            tokio::task::spawn(async move {
+                if let Ok(client_stream) = hyper::upgrade::on(request).await {
+                    tunnel2(session_id, client_stream, proxy_stream).await;
+                }
+            });
+
+            Ok(Response::builder()
+                .status(StatusCode::OK)
+                .body(Full::default())
+                .unwrap())
+        } else {
+            Ok(Response::builder()
                 .status(StatusCode::BAD_GATEWAY)
                 .body(Full::default())
-                .unwrap()),
+                .unwrap())
         }
     }
 }
@@ -393,11 +409,10 @@ impl ProxyClient {
 async fn tunnel2(
     session_id: String,
     client_stream: hyper::upgrade::Upgraded,
-    remote_stream: hyper::upgrade::Upgraded,
+    mut remote_stream: TcpStream,
 ) {
     println!("In tunnel 2 response");
     let mut client_stream = TokioIo::new(client_stream);
-    let mut remote_stream = TokioIo::new(remote_stream);
 
     match tokio::io::copy_bidirectional(&mut client_stream, &mut remote_stream).await {
         Ok((from_client, from_remote)) => {
