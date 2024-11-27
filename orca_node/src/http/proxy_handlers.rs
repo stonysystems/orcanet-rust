@@ -17,7 +17,7 @@ use futures::StreamExt;
 use headers::Authorization;
 use http_body_util::{BodyExt, Empty, Full};
 use hyper::body::{Body, Incoming};
-use hyper::header::{HeaderValue, PROXY_AUTHORIZATION};
+use hyper::header::{HeaderValue, CONNECTION, PROXY_AUTHORIZATION};
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper::{Error, Method, Request, Response, StatusCode};
@@ -127,10 +127,15 @@ impl ProxyProvider {
 
     async fn handle_http_connect(
         &self,
-        req: Request<Incoming>,
+        mut req: Request<Incoming>,
     ) -> Result<Response<Full<Bytes>>, hyper::Error> {
         tracing::info!("Got HTTP CONNECT request");
         let authority = req.uri().authority().unwrap().clone();
+
+        req.headers_mut()
+            .insert(CONNECTION, "keep-alive".parse().unwrap());
+        req.headers_mut()
+            .insert("proxy-connection", "keep-alive".parse().unwrap());
 
         match TcpStream::connect(authority.as_str()).await {
             Ok(target_stream) => {
@@ -208,7 +213,7 @@ impl RequestHandler for ProxyProvider {
 
 pub struct ProxyClient {
     http_client: Client<ProxyConnector<HttpConnector>, Incoming>,
-    http_connect_client: Client<ProxyConnector<HttpConnector>, Full<Bytes>>,
+    http_connect_client: Client<ProxyConnector<HttpConnector>, Empty<Bytes>>,
     session_info: ProxySessionInfo, // We don't record any data here, but only use configuration values like client_id, auth_token etc
     payment_loop_cancellation_token: CancellationToken,
 }
@@ -225,9 +230,9 @@ impl ProxyClient {
             .parse()
             .expect("Proxy address to be valid proxy URI");
         let mut proxy = Proxy::new(Intercept::All, proxy_uri);
-        let authorization = Authorization::bearer(session_info.auth_token.as_str())
-            .expect("Authorization token to be valid");
-        proxy.set_authorization(authorization);
+        // let authorization = Authorization::bearer(session_info.auth_token.as_str())
+        //     .expect("Authorization token to be valid");
+        // proxy.set_authorization(authorization);
 
         // Create the http client
         let proxy_connector = ProxyConnector::from_proxy(HttpConnector::new(), proxy)
@@ -311,31 +316,35 @@ impl ProxyClient {
         mut request: Request<Incoming>,
     ) -> Result<Response<Full<Bytes>>, hyper::Error> {
         println!("Got HTTP connect request");
+        let token = format!("Bearer {}", self.session_info.auth_token.as_str());
+
         // Forward CONNECT to remote proxy with auth
         let mut connect_req = Request::builder()
             .method(Method::CONNECT)
             .uri(request.uri().clone())
-            .header(hyper::header::CONNECTION, "keep-alive")
-            .header("proxy-connection", "keep-alive")
-            .body(Full::default())
+            .header(PROXY_AUTHORIZATION, token)
+            .body(Empty::<Bytes>::new())
             .expect("Connect request creation needs to succeed to proceed");
 
-        let token = format!("Bearer {}", self.session_info.auth_token.as_str());
-        connect_req.headers_mut().insert(
-            PROXY_AUTHORIZATION,
-            HeaderValue::from_str(token.as_str()).unwrap(),
-        );
+        // Copy over headers
+        for (name, value) in request.headers() {
+            connect_req
+                .headers_mut()
+                .insert(name.clone(), value.clone());
+        }
+
+        tracing::info!("Sending connect request {:?}", connect_req);
 
         let session_id = self.session_info.session_id.clone();
 
         match self.http_connect_client.request(connect_req).await {
             Ok(remote_response) => {
+                tracing::info!("Request {:?}", request);
                 println!("Remote response: {:?}", remote_response);
 
                 match remote_response.status() {
                     StatusCode::OK => {
                         tokio::task::spawn(async move {
-                            tracing::info!("Upgrading request {:?} {:?}", request, remote_response);
                             if let (Ok(client_stream), Ok(remote_stream)) = (
                                 hyper::upgrade::on(request).await,
                                 hyper::upgrade::on(remote_response).await,
