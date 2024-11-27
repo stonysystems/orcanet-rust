@@ -18,6 +18,7 @@ use headers::Authorization;
 use http_body_util::{BodyExt, Empty, Full};
 use hyper::body::{Body, Incoming};
 use hyper::header::{HeaderValue, CONNECTION, PROXY_AUTHORIZATION};
+use hyper::http::uri::Authority;
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper::{Error, Method, Request, Response, StatusCode};
@@ -30,7 +31,9 @@ use libp2p_swarm::derive_prelude::PeerId;
 use rocket::form::{FromForm, Options};
 use serde_json::json;
 use std::future::Future;
+use std::hash::Hash;
 use std::net::SocketAddr;
+use std::str::FromStr;
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
@@ -130,6 +133,15 @@ impl ProxyProvider {
         mut req: Request<Incoming>,
     ) -> Result<Response<Full<Bytes>>, hyper::Error> {
         tracing::info!("Got HTTP CONNECT request");
+
+        let authority = match req.headers().get("orca-proxy-request-authority") {
+            Some(value) => Authority::from_str(value.to_str().unwrap())
+                .expect("orca-proxy-request-authority to be parsed"),
+            None => req.uri().authority().unwrap().clone(),
+        };
+
+        tracing::info!("HTTP CONNECT request authority: {:?}", authority);
+
         let authority = req.uri().authority().unwrap().clone();
 
         req.headers_mut()
@@ -213,7 +225,7 @@ impl RequestHandler for ProxyProvider {
 
 pub struct ProxyClient {
     http_client: Client<ProxyConnector<HttpConnector>, Incoming>,
-    http_connect_client: Client<ProxyConnector<HttpConnector>, Empty<Bytes>>,
+    http_connect_client: Client<HttpConnector, Empty<Bytes>>,
     session_info: ProxySessionInfo, // We don't record any data here, but only use configuration values like client_id, auth_token etc
     payment_loop_cancellation_token: CancellationToken,
 }
@@ -240,7 +252,7 @@ impl ProxyClient {
         let http_client =
             Client::builder(hyper_util::rt::TokioExecutor::new()).build(proxy_connector.clone());
         let http_connect_client =
-            Client::builder(hyper_util::rt::TokioExecutor::new()).build(proxy_connector);
+            Client::builder(hyper_util::rt::TokioExecutor::new()).build(HttpConnector::new());
 
         Self {
             http_client,
@@ -321,7 +333,12 @@ impl ProxyClient {
         // Forward CONNECT to remote proxy with auth
         let mut connect_req = Request::builder()
             .method(Method::CONNECT)
-            .uri(request.uri().clone())
+            .uri(self.session_info.proxy_address.as_str()) // Send request to proxy
+            .header("orca-proxy-request-uri", request.uri().clone().to_string())
+            .header(
+                "orca-proxy-request-authority",
+                request.uri().authority().unwrap().as_str(),
+            )
             .header(PROXY_AUTHORIZATION, token)
             .body(Empty::<Bytes>::new())
             .expect("Connect request creation needs to succeed to proceed");
