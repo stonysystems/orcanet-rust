@@ -5,3 +5,4 @@ mod endpoints;
 mod http_proxy;
 mod http_server;
 mod proxy_handlers;
+mod proxy_payment;

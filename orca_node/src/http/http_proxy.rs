@@ -17,6 +17,7 @@ use tracing_subscriber::fmt::format;
 use crate::common::{OrcaNetEvent, ProxyMode};
 use crate::db::{ProxySessionStatus, ProxySessionsTable};
 use crate::http::proxy_handlers::*;
+use crate::http::proxy_payment::ProxyPaymentLoop;
 use crate::network_client::NetworkClient;
 
 const ORCA_NET_CLIENT_ID_HEADER: &str = "orca-net-client-id";

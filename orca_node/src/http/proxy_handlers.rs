@@ -4,7 +4,7 @@ use crate::common::{
     PaymentRequest, PrePaymentResponse, ProxyClientConfig,
 };
 use crate::db::{
-    PaymentCategory, PaymentInfo, PaymentStatus, PaymentsTable, ProxyClientsTable,
+    PaymentCategory, PaymentInfo, PaymentStatus, PaymentsTable, ProxyClientInfo, ProxyClientsTable,
     ProxySessionInfo, ProxySessionStatus, ProxySessionsTable,
 };
 use crate::network_client::NetworkClient;
@@ -21,7 +21,7 @@ use hyper::header::{HeaderValue, CONNECTION, PROXY_AUTHORIZATION};
 use hyper::http::uri::Authority;
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
-use hyper::{Error, Method, Request, Response, StatusCode};
+use hyper::{Error, Method, Request, Response, StatusCode, Uri};
 use hyper_http_proxy::{Intercept, Proxy, ProxyConnector};
 use hyper_tls::HttpsConnector;
 use hyper_util::client::legacy::connect::HttpConnector;
@@ -30,6 +30,7 @@ use hyper_util::rt::TokioIo;
 use libp2p_swarm::derive_prelude::PeerId;
 use rocket::form::{FromForm, Options};
 use serde_json::json;
+use std::collections::HashMap;
 use std::future::Future;
 use std::hash::Hash;
 use std::net::SocketAddr;
@@ -65,7 +66,7 @@ impl ProxyProvider {
     fn validate_auth_token(
         &self,
         request: &Request<Incoming>,
-    ) -> Result<(), Response<Full<Bytes>>> {
+    ) -> Result<ProxyClientInfo, Response<Full<Bytes>>> {
         // Get auth token
         let auth_token = match extract_bearer_token(&request) {
             Ok(token) => token,
@@ -103,12 +104,13 @@ impl ProxyProvider {
                     OrcaNetError::SessionTerminatedByProvider,
                 ))
             }
-            _ => Ok(()),
+            _ => Ok(client_info),
         }
     }
 
     async fn handle_standard_http_request(
         &self,
+        client_info: ProxyClientInfo,
         request: Request<Incoming>,
     ) -> Result<Response<Full<Bytes>>, hyper::Error> {
         let response = self.http_client.request(request).await.unwrap();
@@ -130,28 +132,16 @@ impl ProxyProvider {
 
     async fn handle_http_connect(
         &self,
+        client_info: ProxyClientInfo,
         mut req: Request<Incoming>,
     ) -> Result<Response<Full<Bytes>>, hyper::Error> {
         tracing::info!("Got HTTP CONNECT request");
+        let authority = req.uri().authority().unwrap().as_str();
 
-        let authority = match req.headers().get("orca-proxy-request-authority") {
-            Some(value) => Authority::from_str(value.to_str().unwrap())
-                .expect("orca-proxy-request-authority to be parsed"),
-            None => req.uri().authority().unwrap().clone(),
-        };
-
-        tracing::info!("HTTP CONNECT request authority: {:?}", authority);
-
-        let authority = req.uri().authority().unwrap().clone();
-
-        req.headers_mut()
-            .insert(CONNECTION, "keep-alive".parse().unwrap());
-        req.headers_mut()
-            .insert("proxy-connection", "keep-alive".parse().unwrap());
-
-        match TcpStream::connect(authority.as_str()).await {
+        match TcpStream::connect(authority).await {
             Ok(target_stream) => {
                 tracing::info!("Connected to authority");
+                let client_id = client_info.client_id.clone();
 
                 tokio::task::spawn(async move {
                     tracing::info!("Upgrading request {:?}", req);
@@ -159,9 +149,14 @@ impl ProxyProvider {
                     match hyper::upgrade::on(req).await {
                         Ok(upgraded) => {
                             tracing::info!("Upgraded connection");
-                            tunnel(upgraded, target_stream).await
+                            tunnel2(upgraded, target_stream, move |data_transferred| {
+                                println!("Data transferred for client: {client_id}");
+                            })
+                            .await;
                         }
-                        Err(e) => tracing::error!("Hyper upgrade error: {:?}", e),
+                        Err(e) => {
+                            tracing::error!("Hyper upgrade error: {:?}", e);
+                        }
                     }
                 });
 
@@ -178,23 +173,6 @@ impl ProxyProvider {
     }
 }
 
-async fn tunnel(client_stream: hyper::upgrade::Upgraded, mut target_stream: TcpStream) {
-    let mut client_stream = TokioIo::new(client_stream);
-
-    match tokio::io::copy_bidirectional(&mut client_stream, &mut target_stream).await {
-        Ok((from_client, from_target)) => {
-            tracing::info!(
-                "Client wrote {} bytes and target wrote {} bytes",
-                from_client,
-                from_target
-            );
-        }
-        Err(e) => {
-            tracing::error!("Error in tunnel: {}", e);
-        }
-    }
-}
-
 #[async_trait]
 impl RequestHandler for ProxyProvider {
     async fn handle_request(
@@ -204,28 +182,25 @@ impl RequestHandler for ProxyProvider {
         tracing::info!("Request headers: {:?}", request.headers());
         tracing::info!("Request body size {:?}", request.size_hint().exact());
 
-        // Validate auth token and error out if it fails
-        // if let Err(error_response) = self.validate_auth_token(&request) {
-        //     return Ok(error_response);
-        // }
+        match self.validate_auth_token(&request) {
+            Ok(client_info) => {
+                let path = request.uri().path();
+                tracing::info!("Request path: {path}");
 
-        // Send the request
-        let path = request.uri().path();
-        tracing::info!("Request path: {path}");
-
-        if request.method() == Method::CONNECT {
-            let resp = self.handle_http_connect(request).await;
-            tracing::info!("Connect response: {:?}", resp);
-            resp
-        } else {
-            self.handle_standard_http_request(request).await
+                if request.method() == Method::CONNECT {
+                    self.handle_http_connect(client_info, request).await
+                } else {
+                    self.handle_standard_http_request(client_info, request)
+                        .await
+                }
+            }
+            Err(error_response) => Ok(error_response),
         }
     }
 }
 
 pub struct ProxyClient {
     http_client: Client<ProxyConnector<HttpConnector>, Incoming>,
-    http_connect_client: Client<HttpConnector, Empty<Bytes>>,
     session_info: ProxySessionInfo, // We don't record any data here, but only use configuration values like client_id, auth_token etc
     payment_loop_cancellation_token: CancellationToken,
 }
@@ -240,22 +215,16 @@ impl ProxyClient {
         let proxy_uri = proxy_uri_str
             .parse()
             .expect("Proxy address to be valid proxy URI");
-        let mut proxy = Proxy::new(Intercept::All, proxy_uri);
-        // let authorization = Authorization::bearer(session_info.auth_token.as_str())
-        //     .expect("Authorization token to be valid");
-        // proxy.set_authorization(authorization);
+        let proxy = Proxy::new(Intercept::All, proxy_uri);
 
         // Create the http client
         let proxy_connector = ProxyConnector::from_proxy(HttpConnector::new(), proxy)
             .expect("Proxy connector creation failed");
         let http_client =
             Client::builder(hyper_util::rt::TokioExecutor::new()).build(proxy_connector.clone());
-        let http_connect_client =
-            Client::builder(hyper_util::rt::TokioExecutor::new()).build(HttpConnector::new());
 
         Self {
             http_client,
-            http_connect_client,
             session_info,
             payment_loop_cancellation_token,
         }
@@ -292,8 +261,8 @@ impl ProxyClient {
         let path = request.uri().path();
         tracing::info!("Request path: {path}");
 
-        // // Add Bearer token
-        // // TODO: For some reason set_authorization in proxy is not setting the header. Check later.
+        // Add Bearer token
+        // TODO: For some reason set_authorization in proxy is not setting the header. Check later.
         let token = format!("Bearer {}", self.session_info.auth_token.as_str());
         let token_hdr_value = HeaderValue::from_str(token.as_str())
             .expect("token value to be valid header value when parsed from string");
@@ -323,56 +292,37 @@ impl ProxyClient {
         Ok(Response::from_parts(parts, Full::new(bytes)))
     }
 
-    async fn handle_http_connect(
+    async fn connect_to_proxy(
         &self,
-        request: Request<Incoming>,
-    ) -> Result<Response<Full<Bytes>>, hyper::Error> {
-        // Create CONNECT request to proxy
-        let mut connect_req = Request::builder()
-            .method(Method::CONNECT)
-            .header(
-                PROXY_AUTHORIZATION,
-                format!("Bearer {}", self.session_info.auth_token),
-            )
-            .header(CONNECTION, "keep-alive")
-            .body(Empty::<Bytes>::new())
-            .unwrap();
+        target_uri: Uri,
+    ) -> Result<TcpStream, Box<dyn std::error::Error>> {
+        let bearer_token = format!("Bearer {}", self.session_info.auth_token);
+        let mut headers = HashMap::from([
+            (PROXY_AUTHORIZATION.as_str(), bearer_token.as_str()),
+            (CONNECTION.as_str(), "keep-alive"),
+            ("proxy-connection", "keep-alive"),
+        ]);
 
-        // Copy over relevant headers
-        for (name, value) in request.headers() {
-            if name != PROXY_AUTHORIZATION {
-                connect_req
-                    .headers_mut()
-                    .insert(name.clone(), value.clone());
-            }
-        }
-
-        let session_id = self.session_info.session_id.clone();
-
-        // Create TCP connection to proxy
-        let proxy_addr = self.session_info.proxy_address.clone();
-        let mut proxy_stream = TcpStream::connect("130.245.173.221:3000")
-            .await
-            .expect("TcpStream to be successfully opened to remote proxy");
-
-        // Send CONNECT request manually
-        let req_bytes = format!(
+        // Create TCP connection to the proxy and send CONNECT request
+        // If the proxy accepts, then the proxy should have created a TCP connection to the origin server
+        // And we will have this TCP connection to the proxy. So when the client starts the TLS handshake,
+        // it will be forwarded through the remote proxy to the origin server
+        // Using HTTP request and then trying to upgrade the response did not work, probably cuz responses were never meant to be upgraded ?
+        // So manual TCP connection is our best bet
+        let mut proxy_stream = TcpStream::connect(self.session_info.proxy_address.as_str()).await?;
+        let req_str = format!(
             "{} {} HTTP/1.1\r\n{}\r\n\r\n",
             Method::CONNECT,
-            request.uri().clone(),
-            connect_req
-                .headers()
+            target_uri,
+            headers
                 .iter()
-                .map(|(k, v)| format!("{}: {}", k, v.to_str().unwrap()))
+                .map(|(k, v)| format!("{}: {}", k, v))
                 .collect::<Vec<_>>()
                 .join("\r\n")
         );
-        proxy_stream
-            .write_all(req_bytes.as_bytes())
-            .await
-            .expect("Request to be written to TCP stream");
+        proxy_stream.write_all(req_str.as_bytes()).await?;
 
-        // Read response
+        // Read the response
         let mut response = Vec::new();
         let mut buffer = [0; 1024];
         loop {
@@ -387,31 +337,60 @@ impl ProxyClient {
         }
 
         if response.starts_with(b"HTTP/1.1 200") {
-            tokio::task::spawn(async move {
-                if let Ok(client_stream) = hyper::upgrade::on(request).await {
-                    tunnel2(session_id, client_stream, proxy_stream).await;
-                }
-            });
-
-            Ok(Response::builder()
-                .status(StatusCode::OK)
-                .body(Full::default())
-                .unwrap())
+            Ok(proxy_stream)
         } else {
-            Ok(Response::builder()
-                .status(StatusCode::BAD_GATEWAY)
-                .body(Full::default())
-                .unwrap())
+            Err("Failed to connect to proxy".into())
+        }
+    }
+
+    async fn handle_http_connect(
+        &self,
+        request: Request<Incoming>,
+    ) -> Result<Response<Full<Bytes>>, hyper::Error> {
+        match self.connect_to_proxy(request.uri().clone()).await {
+            Ok(proxy_stream) => {
+                let session_id = self.session_info.session_id.clone();
+
+                tokio::task::spawn(async move {
+                    match hyper::upgrade::on(request).await {
+                        Ok(client_stream) => {
+                            tracing::info!("Upgrade succeeded");
+                            tunnel2(client_stream, proxy_stream, move |data_transferred| {
+                                println!("Data transferred for session: {session_id}");
+                            })
+                            .await;
+                        }
+                        Err(e) => {
+                            tracing::error!("Upgrade failed: {:?}", e);
+                        }
+                    }
+                });
+
+                Ok(Response::builder()
+                    .status(StatusCode::OK)
+                    .body(Full::default())
+                    .unwrap())
+            }
+            Err(e) => {
+                tracing::error!("Error in HTTP CONNECT to proxy: {:?}", e);
+
+                Ok(Response::builder()
+                    .status(StatusCode::BAD_GATEWAY)
+                    .body(Full::default())
+                    .unwrap())
+            }
         }
     }
 }
 
-async fn tunnel2(
-    session_id: String,
+async fn tunnel2<F>(
     client_stream: hyper::upgrade::Upgraded,
     mut remote_stream: TcpStream,
-) {
-    println!("In tunnel 2 response");
+    on_close: F,
+) where
+    F: FnOnce(u64),
+{
+    println!("In tunnel response");
     let mut client_stream = TokioIo::new(client_stream);
 
     match tokio::io::copy_bidirectional(&mut client_stream, &mut remote_stream).await {
@@ -426,204 +405,11 @@ async fn tunnel2(
                 from_client,
                 from_remote
             );
+
+            on_close(from_client + from_remote);
         }
         Err(e) => {
             tracing::error!("Error in tunnel: {}", e);
-        }
-    }
-}
-
-pub struct ProxyPaymentLoop {
-    pub session_id: String,
-    pub network_client: NetworkClient,
-    pub proxy_sessions_table: ProxySessionsTable,
-    pub cancellation_token: CancellationToken,
-}
-
-impl ProxyPaymentLoop {
-    pub async fn start_loop(mut self) {
-        let mut interval = interval(Duration::from_secs(
-            OrcaNetConfig::PROXY_PAYMENT_INTERVAL_SECS,
-        ));
-
-        loop {
-            tokio::select! {
-                _ = self.cancellation_token.cancelled() => {
-                    tracing::info!("Received loop cancellation");
-                    // Settle up
-                    // Cancel payment loop
-                    return;
-                }
-
-                interval_event = interval.tick() => {
-                    tracing::info!("Attempting payment for HTTP proxy");
-
-                    match self.process_payment().await {
-                        Ok(payment_reference) => {
-                            if payment_reference.is_some() {
-                                 tracing::info!(
-                                "Payment attempt succeeded. Reference: {:?}",
-                                payment_reference
-                                );
-                            }
-                        }
-                        Err(e) => {
-                            tracing::error!("Payment attempt failed: {:?}", e);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    async fn process_payment(&mut self) -> Result<Option<String>, Box<dyn std::error::Error>> {
-        // Get session info
-        let mut proxy_sessions_table = ProxySessionsTable::new(None);
-        let session_info = proxy_sessions_table.get_session_info(self.session_id.as_str())?;
-
-        if session_info.get_fee_owed() == 0f64 {
-            tracing::info!("No pending amount. Payment not required.");
-            return Ok(None);
-        }
-
-        tracing::info!(
-            "Processing payment for {} Fee owed {}",
-            session_info.session_id,
-            session_info.get_fee_owed()
-        );
-
-        let provider_peer = session_info
-            .provider_peer_id
-            .parse()
-            .expect("Provider peer id to be valid");
-
-        // Send pre-payment request to make sure the server agrees and to get amount to be paid
-        let payment_request = self.pre_payment_step(provider_peer, &session_info).await?;
-
-        // Create a transaction for the requested amount
-        let rpc_wrapper = RPCWrapper::new(OrcaNetConfig::get_network_type());
-        let comment = format!(
-            "Payment for proxy. Reference: {:?}",
-            payment_request.payment_reference
-        );
-        let tx_id = rpc_wrapper.send_to_address(
-            payment_request.recipient_address.as_str(),
-            payment_request.amount_to_send,
-            None,
-        )?;
-
-        // Persist in database
-        let mut payments_table = PaymentsTable::new(None);
-        let payment_info = PaymentInfo {
-            payment_id: Utils::new_uuid(), // To make sure server doesn't mess up our payment by giving old/existing reference
-            tx_id: Some(tx_id.to_string()),
-            to_address: payment_request.recipient_address.clone(),
-            amount_btc: Some(payment_request.amount_to_send),
-            category: PaymentCategory::Send.to_string(),
-            status: PaymentStatus::TransactionPending.to_string(),
-            payment_reference: Some(payment_request.payment_reference.clone()),
-            from_peer: None,
-            to_peer: Some(session_info.provider_peer_id),
-            ..Default::default()
-        };
-        payments_table.insert_payment_info(&payment_info)?;
-
-        tracing::info!("Inserted payment record");
-
-        let mut sessions_table = ProxySessionsTable::new(None);
-        sessions_table.update_total_fee_sent_unconfirmed(
-            self.session_id.as_str(),
-            payment_request.amount_to_send,
-        )?;
-
-        tracing::info!("Updated session record");
-
-        // Send post payment notification to the server
-        let res = self
-            .network_client
-            .send_request(
-                provider_peer,
-                OrcaNetRequest::HTTPProxyPostPaymentNotification {
-                    client_id: session_info.client_id.clone(),
-                    auth_token: session_info.auth_token.clone(),
-                    payment_notification: PaymentNotification {
-                        sender_address: OrcaNetConfig::get_btc_address(),
-                        receiver_address: payment_request.recipient_address,
-                        amount_transferred: payment_request.amount_to_send,
-                        tx_id: tx_id.to_string(),
-                        payment_reference: payment_request.payment_reference.clone(),
-                    },
-                },
-            )
-            .await;
-
-        tracing::info!("Sent post payment notification");
-
-        Ok(Some(payment_request.payment_reference))
-    }
-
-    async fn pre_payment_step(
-        &mut self,
-        peer_id: PeerId,
-        session_info: &ProxySessionInfo,
-    ) -> Result<PaymentRequest, Box<dyn std::error::Error>> {
-        let resp = self
-            .network_client
-            .send_request(
-                peer_id,
-                OrcaNetRequest::HTTPProxyPrePaymentRequest {
-                    client_id: session_info.client_id.clone(),
-                    auth_token: session_info.auth_token.clone(),
-                    fee_owed: session_info.get_fee_owed(),
-                    data_transferred_kb: session_info.data_transferred_kb,
-                },
-            )
-            .await
-            .map_err(|e| e as Box<dyn std::error::Error>)?;
-
-        match resp {
-            OrcaNetResponse::HTTPProxyPrePaymentResponse {
-                fee_owed,
-                data_transferred_kb,
-                pre_payment_response,
-            } => {
-                tracing::info!(
-                    "Received pre payment response {:?}. Data transferred: {}, fee_owed: {}",
-                    pre_payment_response,
-                    data_transferred_kb,
-                    fee_owed
-                );
-
-                // Check if server's data differs too much
-                // if data_transferred_kb != session_info.data_transferred_kb {
-                //
-                // }
-
-                // If it does, send all remaining amount and terminate the connection
-                // TODO: Note down the incident so we can factor this into reputation calculation
-
-                // If not, proceed to handle the server's response
-                match pre_payment_response {
-                    PrePaymentResponse::Accepted(payment_req) => Ok(payment_req),
-                    PrePaymentResponse::RejectedDataTransferDiffers => {
-                        // Adjust to what the server says
-                        // At this point, we've decided that the server's values are not too different, so it's fine
-                        todo!()
-                    }
-                    PrePaymentResponse::RejectedFeeOwedDiffers => {
-                        // Adjust to what the server says
-                        todo!()
-                    }
-                    PrePaymentResponse::ServerTerminatingConnection(payment_req) => {
-                        todo!()
-                    }
-                }
-            }
-            OrcaNetResponse::Error(e) => {
-                Err(format!("Got error for pre payment request {:?}", e).into())
-            }
-            // Err(e) => Err(format!("Got error for pre payment request {:?}", e).into()),
-            _ => Err("Got invalid response for pre payment request".into()),
         }
     }
 }
