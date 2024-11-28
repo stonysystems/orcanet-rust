@@ -36,7 +36,7 @@ use std::hash::Hash;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::time::{interval, Duration};
 use tokio_util::sync::CancellationToken;
@@ -68,7 +68,7 @@ impl ProxyProvider {
         request: &Request<Incoming>,
     ) -> Result<ProxyClientInfo, Response<Full<Bytes>>> {
         // Get auth token
-        let auth_token = match extract_bearer_token(&request) {
+        let auth_token = match extract_proxy_authtoken(&request) {
             Ok(token) => token,
             Err(e) => {
                 return Err(bad_request_with_err(OrcaNetError::AuthorizationFailed(e)));
@@ -154,6 +154,7 @@ impl ProxyProvider {
                         Ok(upgraded) => {
                             tracing::info!("Upgraded connection");
                             tunnel_streams(upgraded, target_stream, move |data_transferred| {
+                                // Update usage in DB
                                 let data_kb = data_transferred as f64 / 1000f64;
                                 tracing::info!(
                                     "Data transferred kb {data_kb} for client: {client_id}"
@@ -360,6 +361,7 @@ impl ProxyClient {
                         Ok(client_stream) => {
                             tracing::info!("Upgrade succeeded");
                             tunnel_streams(client_stream, proxy_stream, move |data_transferred| {
+                                // Update usage in DB
                                 let data_kb = data_transferred as f64 / 1000f64;
                                 println!("Data transferred kb {data_kb} for session: {session_id}");
 
@@ -403,7 +405,7 @@ async fn tunnel_streams<F>(
     println!("In tunnel start");
     let mut client_stream = TokioIo::new(client_stream);
 
-    match tokio::io::copy_bidirectional(&mut client_stream, &mut remote_stream).await {
+    match custom_copy_bidirectional(&mut client_stream, &mut remote_stream).await {
         Ok((from_client, from_remote)) => {
             tracing::info!(
                 "Client wrote {} bytes and target wrote {} bytes",
@@ -419,6 +421,53 @@ async fn tunnel_streams<F>(
     }
 }
 
+/*
+tokio::io::copy_bidirectional only reports values after the TCP connection is closed
+We need in sooner intervals than that so as to keep the recorded values from drifting too much when something fails
+*/
+pub async fn custom_copy_bidirectional<A, B>(
+    a: &mut A,
+    b: &mut B,
+) -> Result<(u64, u64), Box<dyn std::error::Error>>
+where
+    A: AsyncReadExt + AsyncWriteExt + Unpin,
+    B: AsyncReadExt + AsyncWriteExt + Unpin,
+{
+    let mut buf_a = [0u8; 1024];
+    let mut buf_b = [0u8; 1024];
+    let mut a_to_b = 0;
+    let mut b_to_a = 0;
+
+    loop {
+        tokio::select! {
+            result = a.read(&mut buf_a) => {
+                let n = result?;
+                if n == 0 {
+                    let  _ = b.poll_shutdown();
+                    break;
+                }
+                // TODO: Add persistence to DB, may be with timer ?
+                b.write_all(&buf_a[..n]).await?;
+                a_to_b += n as u64;
+            }
+            result = b.read(&mut buf_b) => {
+                let n = result?;
+                if n == 0 {
+                    let  _ = a.poll_shutdown();
+                    break;
+                }
+                // TODO: Add persistence to DB, may be with timer ?
+                a.write_all(&buf_b[..n]).await?;
+                b_to_a += n as u64;
+            }
+        }
+
+        println!("Data transferred: a -> b: {}, b -> a: {}", a_to_b, b_to_a);
+    }
+
+    Ok((a_to_b, b_to_a))
+}
+
 fn bad_request_with_err(err: OrcaNetError) -> Response<Full<Bytes>> {
     let json_resp = json!({
         "error": err,
@@ -431,7 +480,7 @@ fn bad_request_with_err(err: OrcaNetError) -> Response<Full<Bytes>> {
         .expect("Couldn't build body")
 }
 
-fn extract_bearer_token(req: &Request<Incoming>) -> Result<String, String> {
+fn extract_proxy_authtoken(req: &Request<Incoming>) -> Result<String, String> {
     // Get the Authorization header
     let auth_header = req
         .headers()
