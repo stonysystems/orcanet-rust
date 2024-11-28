@@ -55,6 +55,55 @@ pub struct ProxyProvider {
     http_client: Client<HttpsConnector<HttpConnector>, Incoming>,
 }
 
+pub struct ProxyClient {
+    http_client: Client<ProxyConnector<HttpConnector>, Incoming>,
+    session_info: ProxySessionInfo, // We don't record any data here, but only use configuration values like client_id, auth_token etc
+    payment_loop_cancellation_token: CancellationToken,
+}
+
+#[async_trait]
+impl RequestHandler for ProxyProvider {
+    async fn handle_request(
+        &self,
+        request: Request<Incoming>,
+    ) -> Result<Response<Full<Bytes>>, hyper::Error> {
+        tracing::info!("New Request: {:?}", request);
+
+        match self.validate_auth_token(&request) {
+            Ok(client_info) => {
+                if request.method() == Method::CONNECT {
+                    self.handle_http_connect_request(client_info, request).await
+                } else {
+                    self.handle_standard_http_request(client_info, request)
+                        .await
+                }
+            }
+            Err(error_response) => Ok(error_response),
+        }
+    }
+}
+
+#[async_trait]
+impl RequestHandler for ProxyClient {
+    async fn handle_request(
+        &self,
+        mut request: Request<Incoming>,
+    ) -> Result<Response<Full<Bytes>>, Error> {
+        tracing::info!("New request {:?}", request);
+
+        if request.method() == Method::CONNECT {
+            self.handle_http_connect_request(request).await
+        } else {
+            self.handle_standard_http_request(request).await
+        }
+    }
+
+    async fn clean_up(&self) {
+        tracing::info!("Sending loop cancellation");
+        self.payment_loop_cancellation_token.cancelled().await;
+    }
+}
+
 impl ProxyProvider {
     pub fn new() -> Self {
         Self {
@@ -136,86 +185,57 @@ impl ProxyProvider {
         mut request: Request<Incoming>,
     ) -> Result<Response<Full<Bytes>>, hyper::Error> {
         tracing::info!("Got HTTP CONNECT request");
+        // Create a TCP connection to the destination server
+        // This needs to work, so error out if it fails
         let authority = request.uri().authority().unwrap().as_str();
+        let tcp_stream = match TcpStream::connect(authority).await {
+            Ok(tcp_stream) => tcp_stream,
+            Err(e) => {
+                tracing::error!("Error creating stream: {:?}", e);
 
-        match TcpStream::connect(authority).await {
-            Ok(target_stream) => {
-                tracing::info!("Connected to authority");
-                let client_id = client_info.client_id.clone();
-
-                // Wait for the request upgrade to succeed and start writing bidirectionally
-                // We need to do this waiting in a new thread because we have to respond OK to the client
-                // so that the client will initiate TLS handshake with the destination server
-                // We can't block here
-                tokio::task::spawn(async move {
-                    tracing::info!("Upgrading request {:?}", request);
-
-                    match hyper::upgrade::on(request).await {
-                        Ok(upgraded) => {
-                            tracing::info!("Upgraded connection");
-                            tunnel_streams(upgraded, target_stream, move |data_transferred| {
-                                // Update usage in DB
-                                let data_kb = data_transferred as f64 / 1000f64;
-                                tracing::info!(
-                                    "Data transferred kb {data_kb} for client: {client_id}"
-                                );
-
-                                let mut proxy_clients_table = ProxyClientsTable::new(None);
-                                proxy_clients_table
-                                    .update_data_transfer_info(client_id.as_str(), data_kb)
-                                    .expect("Data transfer info to be updated in DB");
-                            })
-                            .await;
-                        }
-                        Err(e) => {
-                            tracing::error!("Hyper upgrade error: {:?}", e);
-                        }
-                    }
-                });
-
-                Ok(Response::builder()
-                    .status(StatusCode::OK)
+                return Ok(Response::builder()
+                    .status(StatusCode::BAD_GATEWAY)
                     .body(Full::default())
-                    .expect("Response creation failed"))
+                    .expect("Response creation failed"));
             }
-            Err(_) => Ok(Response::builder()
-                .status(StatusCode::BAD_GATEWAY)
-                .body(Full::default())
-                .expect("Response creation failed")),
-        }
-    }
-}
+        };
 
-#[async_trait]
-impl RequestHandler for ProxyProvider {
-    async fn handle_request(
-        &self,
-        request: Request<Incoming>,
-    ) -> Result<Response<Full<Bytes>>, hyper::Error> {
-        tracing::info!("Request headers: {:?}", request.headers());
-        tracing::info!("Request body size {:?}", request.size_hint().exact());
+        tracing::info!("Connected to authority");
+        let client_id = client_info.client_id.clone();
 
-        match self.validate_auth_token(&request) {
-            Ok(client_info) => {
-                let path = request.uri().path();
-                tracing::info!("Request path: {path}");
+        // Wait for the request upgrade to succeed and start writing bidirectionally
+        // We need to do this waiting in a new thread because we have to respond OK to the client
+        // so that the client will initiate TLS handshake with the destination server
+        // We can't block here
+        tokio::task::spawn(async move {
+            tracing::info!("Upgrading request {:?}", request);
 
-                if request.method() == Method::CONNECT {
-                    self.handle_http_connect_request(client_info, request).await
-                } else {
-                    self.handle_standard_http_request(client_info, request)
-                        .await
+            match hyper::upgrade::on(request).await {
+                Ok(upgraded) => {
+                    tracing::info!("Upgraded connection");
+                    tunnel_streams(upgraded, tcp_stream, move |data_transferred| {
+                        // Update usage in DB
+                        let data_kb = data_transferred as f64 / 1000f64;
+                        tracing::info!("Data transferred kb {data_kb} for client: {client_id}");
+
+                        let mut proxy_clients_table = ProxyClientsTable::new(None);
+                        proxy_clients_table
+                            .update_data_transfer_info(client_id.as_str(), data_kb)
+                            .expect("Data transfer info to be updated in DB");
+                    })
+                    .await;
+                }
+                Err(e) => {
+                    tracing::error!("Hyper upgrade error: {:?}", e);
                 }
             }
-            Err(error_response) => Ok(error_response),
-        }
-    }
-}
+        });
 
-pub struct ProxyClient {
-    http_client: Client<ProxyConnector<HttpConnector>, Incoming>,
-    session_info: ProxySessionInfo, // We don't record any data here, but only use configuration values like client_id, auth_token etc
-    payment_loop_cancellation_token: CancellationToken,
+        Ok(Response::builder()
+            .status(StatusCode::OK) // Say OK so the client can proceed with the request
+            .body(Full::default())
+            .expect("Response creation failed"))
+    }
 }
 
 impl ProxyClient {
@@ -242,29 +262,7 @@ impl ProxyClient {
             payment_loop_cancellation_token,
         }
     }
-}
 
-#[async_trait]
-impl RequestHandler for ProxyClient {
-    async fn handle_request(
-        &self,
-        mut request: Request<Incoming>,
-    ) -> Result<Response<Full<Bytes>>, Error> {
-        tracing::info!("Got request {:?}", request);
-        if request.method() == Method::CONNECT {
-            self.handle_http_connect_request(request).await
-        } else {
-            self.handle_standard_http_request(request).await
-        }
-    }
-
-    async fn clean_up(&self) {
-        tracing::info!("Sending loop cancellation");
-        self.payment_loop_cancellation_token.cancelled().await;
-    }
-}
-
-impl ProxyClient {
     async fn handle_standard_http_request(
         &self,
         mut request: Request<Incoming>,
@@ -322,7 +320,7 @@ impl ProxyClient {
         // If the proxy accepts, then the proxy should have created a TCP connection to the origin server
         // And we will have this TCP connection to the proxy. So when the client starts the TLS handshake,
         // it will be forwarded through the remote proxy to the origin server
-        // Using HTTP request and then trying to upgrade the response did not work, probably cuz responses were never meant to be upgraded ?
+        // Using HTTP request and then trying to upgrade the response did not work
         // So manual TCP connection is our best bet
         let mut proxy_stream = TcpStream::connect(self.session_info.proxy_address.as_str()).await?;
         let req_str = format!(
@@ -351,47 +349,48 @@ impl ProxyClient {
         &self,
         request: Request<Incoming>,
     ) -> Result<Response<Full<Bytes>>, hyper::Error> {
-        match self.connect_to_proxy(request.uri().clone()).await {
-            Ok(proxy_stream) => {
-                let session_id = self.session_info.session_id.clone();
-
-                // Upgrade the request and set up bidirectional copying between request stream and proxy_stream
-                tokio::task::spawn(async move {
-                    match hyper::upgrade::on(request).await {
-                        Ok(client_stream) => {
-                            tracing::info!("Upgrade succeeded");
-                            tunnel_streams(client_stream, proxy_stream, move |data_transferred| {
-                                // Update usage in DB
-                                let data_kb = data_transferred as f64 / 1000f64;
-                                println!("Data transferred kb {data_kb} for session: {session_id}");
-
-                                let mut proxy_sessions_table = ProxySessionsTable::new(None);
-                                proxy_sessions_table
-                                    .update_data_transfer_info(session_id.as_str(), data_kb)
-                                    .expect("Data transfer info to be updated in DB");
-                            })
-                            .await;
-                        }
-                        Err(e) => {
-                            tracing::error!("Upgrade failed: {:?}", e);
-                        }
-                    }
-                });
-
-                Ok(Response::builder()
-                    .status(StatusCode::OK)
-                    .body(Full::default())
-                    .unwrap())
-            }
+        // Create a TCP connection to the proxy, ask proxy to create a connection to destination server
+        let proxy_stream = match self.connect_to_proxy(request.uri().clone()).await {
+            Ok(proxy_stream) => proxy_stream,
             Err(e) => {
                 tracing::error!("Error in HTTP CONNECT to proxy: {:?}", e);
 
-                Ok(Response::builder()
+                return Ok(Response::builder()
                     .status(StatusCode::BAD_GATEWAY)
                     .body(Full::default())
-                    .unwrap())
+                    .unwrap());
             }
-        }
+        };
+
+        let session_id = self.session_info.session_id.clone();
+
+        // Upgrade the request and set up bidirectional copying between request stream and proxy_stream
+        tokio::task::spawn(async move {
+            match hyper::upgrade::on(request).await {
+                Ok(client_stream) => {
+                    tracing::info!("Upgrade succeeded");
+                    tunnel_streams(client_stream, proxy_stream, move |data_transferred| {
+                        // Update usage in DB
+                        let data_kb = data_transferred as f64 / 1000f64;
+                        println!("Data transferred kb {data_kb} for session: {session_id}");
+
+                        let mut proxy_sessions_table = ProxySessionsTable::new(None);
+                        proxy_sessions_table
+                            .update_data_transfer_info(session_id.as_str(), data_kb)
+                            .expect("Data transfer info to be updated in DB");
+                    })
+                    .await;
+                }
+                Err(e) => {
+                    tracing::error!("Upgrade failed: {:?}", e);
+                }
+            }
+        });
+
+        Ok(Response::builder()
+            .status(StatusCode::OK) // Say OK so the client can proceed with the request
+            .body(Full::default())
+            .unwrap())
     }
 }
 
@@ -443,7 +442,7 @@ where
             result = a.read(&mut buf_a) => {
                 let n = result?;
                 if n == 0 {
-                    let  _ = b.poll_shutdown();
+                    let  _ = b.shutdown();
                     break;
                 }
                 // TODO: Add persistence to DB, may be with timer ?
@@ -453,7 +452,7 @@ where
             result = b.read(&mut buf_b) => {
                 let n = result?;
                 if n == 0 {
-                    let  _ = a.poll_shutdown();
+                    let  _ = a.shutdown();
                     break;
                 }
                 // TODO: Add persistence to DB, may be with timer ?
@@ -462,7 +461,7 @@ where
             }
         }
 
-        println!("Data transferred: a -> b: {}, b -> a: {}", a_to_b, b_to_a);
+        // println!("Data transferred: a -> b: {}, b -> a: {}", a_to_b, b_to_a);
     }
 
     Ok((a_to_b, b_to_a))
