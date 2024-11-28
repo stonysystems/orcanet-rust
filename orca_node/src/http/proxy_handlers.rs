@@ -130,27 +130,39 @@ impl ProxyProvider {
         Ok(Response::from_parts(parts, Full::new(bytes)))
     }
 
-    async fn handle_http_connect(
+    async fn handle_http_connect_request(
         &self,
         client_info: ProxyClientInfo,
-        mut req: Request<Incoming>,
+        mut request: Request<Incoming>,
     ) -> Result<Response<Full<Bytes>>, hyper::Error> {
         tracing::info!("Got HTTP CONNECT request");
-        let authority = req.uri().authority().unwrap().as_str();
+        let authority = request.uri().authority().unwrap().as_str();
 
         match TcpStream::connect(authority).await {
             Ok(target_stream) => {
                 tracing::info!("Connected to authority");
                 let client_id = client_info.client_id.clone();
 
+                // Wait for the request upgrade to succeed and start writing bidirectionally
+                // We need to do this waiting in a new thread because we have to respond OK to the client
+                // so that the client will initiate TLS handshake with the destination server
+                // We can't block here
                 tokio::task::spawn(async move {
-                    tracing::info!("Upgrading request {:?}", req);
+                    tracing::info!("Upgrading request {:?}", request);
 
-                    match hyper::upgrade::on(req).await {
+                    match hyper::upgrade::on(request).await {
                         Ok(upgraded) => {
                             tracing::info!("Upgraded connection");
-                            tunnel2(upgraded, target_stream, move |data_transferred| {
-                                println!("Data transferred for client: {client_id}");
+                            tunnel_streams(upgraded, target_stream, move |data_transferred| {
+                                let data_kb = data_transferred as f64 / 1000f64;
+                                tracing::info!(
+                                    "Data transferred kb {data_kb} for client: {client_id}"
+                                );
+
+                                let mut proxy_clients_table = ProxyClientsTable::new(None);
+                                proxy_clients_table
+                                    .update_data_transfer_info(client_id.as_str(), data_kb)
+                                    .expect("Data transfer info to be updated in DB");
                             })
                             .await;
                         }
@@ -188,7 +200,7 @@ impl RequestHandler for ProxyProvider {
                 tracing::info!("Request path: {path}");
 
                 if request.method() == Method::CONNECT {
-                    self.handle_http_connect(client_info, request).await
+                    self.handle_http_connect_request(client_info, request).await
                 } else {
                     self.handle_standard_http_request(client_info, request)
                         .await
@@ -239,7 +251,7 @@ impl RequestHandler for ProxyClient {
     ) -> Result<Response<Full<Bytes>>, Error> {
         tracing::info!("Got request {:?}", request);
         if request.method() == Method::CONNECT {
-            self.handle_http_connect(request).await
+            self.handle_http_connect_request(request).await
         } else {
             self.handle_standard_http_request(request).await
         }
@@ -262,10 +274,10 @@ impl ProxyClient {
         tracing::info!("Request path: {path}");
 
         // Add Bearer token
-        // TODO: For some reason set_authorization in proxy is not setting the header. Check later.
-        let token = format!("Bearer {}", self.session_info.auth_token.as_str());
-        let token_hdr_value = HeaderValue::from_str(token.as_str())
-            .expect("token value to be valid header value when parsed from string");
+        let token_hdr_value =
+            HeaderValue::from_str(format!("Bearer {}", self.session_info.auth_token).as_str())
+                .expect("Token value to be valid header value when parsed from string");
+
         request
             .headers_mut()
             .insert(PROXY_AUTHORIZATION, token_hdr_value);
@@ -292,6 +304,8 @@ impl ProxyClient {
         Ok(Response::from_parts(parts, Full::new(bytes)))
     }
 
+    /// Create a connection to the proxy and ask the proxy to create a TCP connection to the destination.
+    /// Returns a TcpStream to the remote proxy if successful
     async fn connect_to_proxy(
         &self,
         target_uri: Uri,
@@ -322,19 +336,8 @@ impl ProxyClient {
         );
         proxy_stream.write_all(req_str.as_bytes()).await?;
 
-        // Read the response
-        let mut response = Vec::new();
-        let mut buffer = [0; 1024];
-        loop {
-            let n = proxy_stream
-                .read(&mut buffer)
-                .await
-                .expect("Response to be read from TCP stream");
-            response.extend_from_slice(&buffer[..n]);
-            if response.windows(4).any(|w| w == b"\r\n\r\n") {
-                break;
-            }
-        }
+        // Handle the response. We need the proxy to say 200 OK to proceed as stated above.
+        let response = Utils::read_stream_to_end(&mut proxy_stream).await;
 
         if response.starts_with(b"HTTP/1.1 200") {
             Ok(proxy_stream)
@@ -343,7 +346,7 @@ impl ProxyClient {
         }
     }
 
-    async fn handle_http_connect(
+    async fn handle_http_connect_request(
         &self,
         request: Request<Incoming>,
     ) -> Result<Response<Full<Bytes>>, hyper::Error> {
@@ -351,12 +354,19 @@ impl ProxyClient {
             Ok(proxy_stream) => {
                 let session_id = self.session_info.session_id.clone();
 
+                // Upgrade the request and set up bidirectional copying between request stream and proxy_stream
                 tokio::task::spawn(async move {
                     match hyper::upgrade::on(request).await {
                         Ok(client_stream) => {
                             tracing::info!("Upgrade succeeded");
-                            tunnel2(client_stream, proxy_stream, move |data_transferred| {
-                                println!("Data transferred for session: {session_id}");
+                            tunnel_streams(client_stream, proxy_stream, move |data_transferred| {
+                                let data_kb = data_transferred as f64 / 1000f64;
+                                println!("Data transferred kb {data_kb} for session: {session_id}");
+
+                                let mut proxy_sessions_table = ProxySessionsTable::new(None);
+                                proxy_sessions_table
+                                    .update_data_transfer_info(session_id.as_str(), data_kb)
+                                    .expect("Data transfer info to be updated in DB");
                             })
                             .await;
                         }
@@ -383,23 +393,18 @@ impl ProxyClient {
     }
 }
 
-async fn tunnel2<F>(
+async fn tunnel_streams<F>(
     client_stream: hyper::upgrade::Upgraded,
     mut remote_stream: TcpStream,
     on_close: F,
 ) where
     F: FnOnce(u64),
 {
-    println!("In tunnel response");
+    println!("In tunnel start");
     let mut client_stream = TokioIo::new(client_stream);
 
     match tokio::io::copy_bidirectional(&mut client_stream, &mut remote_stream).await {
         Ok((from_client, from_remote)) => {
-            // let total_kb = (from_client + from_remote) as f64 / 1000f64;
-            // let mut proxy_sessions_table = ProxySessionsTable::new(None);
-            // proxy_sessions_table
-            //     .update_data_transfer_info(session_id, total_kb)
-            //     .expect("Data transfer info to be updated in DB");
             tracing::info!(
                 "Client wrote {} bytes and target wrote {} bytes",
                 from_client,

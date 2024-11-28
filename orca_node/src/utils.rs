@@ -6,12 +6,14 @@ use std::str::FromStr;
 use libp2p::multiaddr::Protocol;
 use libp2p::{identity, Multiaddr, PeerId};
 use ring::digest::{Context, SHA256};
+use tokio::net::TcpStream;
 use uuid::Uuid;
 
 use crate::btc_rpc::{BTCNetwork, RPCWrapper};
 use crate::common::{ConfigKey, OrcaNetConfig, OrcaNetRequest, OrcaNetResponse};
 use crate::db::{DownloadedFileInfo, DownloadedFilesTable};
 use crate::network_client::NetworkClient;
+use tokio::io::AsyncReadExt;
 
 pub struct Utils;
 
@@ -135,26 +137,29 @@ impl Utils {
         difference
     }
 
-    pub(crate) fn round(x: f64, decimals: u32) -> f64 {
+    pub fn round(x: f64, decimals: u32) -> f64 {
         // May not be fully accurate for long number but good enough for our case
         let y = 10i32.pow(decimals) as f64;
         (x * y).round() / y
     }
 
-    // pub fn get_file_metadata(file_id: String, db_client: &mut DBClient) -> Option<(FileInfo, FileMetadata)> {
-    //     match db_client.get_provided_file_info(file_id.as_str()) {
-    //         Ok(file_info) => {
-    //             let file_name = file_info.file_name.clone();
-    //             Some((file_info, FileMetadata {
-    //                 file_id,
-    //                 file_name,
-    //                 fee_rate_per_kb: OrcaNetConfig::get_fee_rate(),
-    //                 recipient_address: OrcaNetConfig::get_str_from_config(ConfigKey::BTCAddress),
-    //             }))
-    //         }
-    //         Err(_) => None
-    //     }
-    // }
+    pub async fn read_stream_to_end(stream: &mut TcpStream) -> Vec<u8> {
+        let mut data = Vec::new();
+        let mut buffer = [0; 1024];
+
+        loop {
+            let n = stream
+                .read(&mut buffer)
+                .await
+                .expect("Response to be read from TCP stream");
+            data.extend_from_slice(&buffer[..n]);
+            if data.windows(4).any(|w| w == b"\r\n\r\n") {
+                break;
+            }
+        }
+
+        data
+    }
 
     //TODO: Move to a better struct
     //TODO: Return saved file path?
