@@ -64,7 +64,7 @@ enum OrcaCLICommand {
     },
 }
 
-// #[rocket::main]
+// TODO: Create a new crate for CLI, move this there
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
