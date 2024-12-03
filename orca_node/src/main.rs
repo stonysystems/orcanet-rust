@@ -79,7 +79,7 @@ async fn main() {
         OrcaCLICommand::StartNode { seed } => {
             // This will block
             // TODO: Daemonize later and add a stop node command to stop the daemon
-            let _ = start_orca_node(seed).await;
+            start_orca_node(seed).await.expect("Start node failed");
         }
     }
 }

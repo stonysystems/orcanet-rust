@@ -13,7 +13,7 @@ This document outlines the different protocols used to achieve the above feature
 
 ## File transfer (Download)
 
-![alt File Transfer](/diagrams/images/file_transfer.png)
+![alt File Transfer](/assets/images/file_transfer.png)
 
 File transfer involves a 2-step protocol, one for fetching metadata and the other for the actual download. 
 Note that the 2nd step is only performed when you want to actually download a file. The protocol is detailed below:
@@ -47,7 +47,7 @@ The client node creates a transaction with the price of the file and then report
 
 ## HTTP proxy
 
-![alt File Transfer](/diagrams/images/proxy_connection.png)
+![alt File Transfer](/assets/images/proxy_connection.png)
 
 Proxy connection also uses a 2-step protocol, one for requesting metadata and one for the actual connection. 
 Just like file metadata, the 2nd step is only performed when an actual connection is required.

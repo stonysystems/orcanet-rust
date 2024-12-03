@@ -1,0 +1,11 @@
+title HTTP Connect with 2 hops
+
+Browser->LocalhostProxy: HTTP CONNECT
+LocalhostProxy<->RemoteProxy: Create TCP connection
+LocalhostProxy->RemoteProxy: HTTP CONNECT
+RemoteProxy<->DestinationServer: Create TCP Connection
+note over RemoteProxy: Upgrade the request async
+RemoteProxy->LocalhostProxy: 200 OK
+note over LocalhostProxy: Upgrade the request async
+LocalhostProxy->Browser: 200 OK
+Browser<-->DestinationServer: Communicate through tunnel
