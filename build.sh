@@ -12,7 +12,7 @@ echo "${YELLOW}=> Check for SQLite:${RESET}"
 if [[ "$OSTYPE" == "darwin"* ]]; then  # MacOS
     if ! command -v sqlite3 &> /dev/null; then
         echo "${YELLOW}Installing  SQLite...${RESET}"
-        brew install sqlite3
+        brew install sqlite3 libsqlite3-dev
     else
         echo "${GREEN}SQLite already installed. Skipped.${GREEN}"
     fi
@@ -32,7 +32,7 @@ echo "\\n${YELLOW}=> Check for Rust:${RESET}"
 if ! command -v rustc &> /dev/null || ! command -v cargo &> /dev/null; then
     echo "${YELLOW}Installing  Rust...${RESET}"
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-    source "$HOME/.cargo/env"
+    . "$HOME/.cargo/env"
 else
     echo "${GREEN}Rust already installed. Skipped.${GREEN}"
 fi
@@ -44,11 +44,12 @@ rustc --version
 cargo --version
 
 # Switch to nightly rust
+apt install libssl-dev
 echo "\\n${YELLOW}=> Switch to nightly rust"
 rustup default nightly >> /dev/null
 echo "${GREEN}Switched to nightly rust${RESET}"
 
 # Build the code
 echo "\\n${YELLOW}=> Build:"
-cd orca_node && RUSTFLAGS="-Awarnings" RUST_LOG=info cargo build --release
+RUSTFLAGS="-Awarnings" RUST_LOG=info cargo build --release
 echo "${GREEN}Build complete${RESET}. The binary should be in ${YELLOW}$(pwd)/../target/release${RESET}"

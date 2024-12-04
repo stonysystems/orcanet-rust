@@ -12,7 +12,7 @@ case "$os_type" in
         ;;
     "Linux")
         echo "${YELLOW}=> Installing dependencies for Linux...${RESET}"
-        sudo apt install -y build-essential libtool autotools-dev automake pkg-config bsdmainutils curl git libboost-all-dev sqlite3
+        sudo apt install -y build-essential libtool autotools-dev automake pkg-config bsdmainutils curl git libboost-all-dev sqlite3 libsqlite3-dev
         ;;
     *)
         echo "${RED}Unsupported OS: $os_type ${RESET}"
