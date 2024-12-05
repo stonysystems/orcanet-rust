@@ -1,11 +1,13 @@
-use std::fs::File;
-use std::io::{BufReader, Read};
-use std::path::Path;
-use std::str::FromStr;
-
+use bitcoincore_rpc::RpcApi;
 use libp2p::multiaddr::Protocol;
 use libp2p::{identity, Multiaddr, PeerId};
 use ring::digest::{Context, SHA256};
+use serde::de::Error;
+use std::fs::File;
+use std::io::{BufReader, Read};
+use std::path::Path;
+use std::process::Command;
+use std::str::FromStr;
 use tokio::net::TcpStream;
 use uuid::Uuid;
 
@@ -252,5 +254,51 @@ impl Utils {
                 tracing::error!("Expected file content response but got {:?}", e)
             }
         }
+    }
+}
+
+pub struct BitcoindUtil {}
+
+impl BitcoindUtil {
+    fn get_bitcoind_command() -> Command {
+        let mut cmd = Command::new("bitcoind");
+        match OrcaNetConfig::get_network_type() {
+            BTCNetwork::MainNet => {}
+            BTCNetwork::TestNet => {
+                cmd.arg("--testnet");
+            }
+            BTCNetwork::RegTest => {
+                cmd.arg("--regtest");
+            }
+        }
+
+        cmd
+    }
+
+    pub fn start_bitcoin_daemon() -> Result<(), Box<dyn std::error::Error>> {
+        let mut cmd = Self::get_bitcoind_command();
+        cmd.args(["-server", "-fallbackfee=0.0002", "-txindex", "-daemon"]);
+
+        tracing::info!("Executing bitcoind start command: {:?}", cmd);
+        let out = cmd.output()?;
+
+        if out.status.success() {
+            tracing::info!("Started bitcoin daemon");
+            Ok(())
+        } else if String::from_utf8(out.stderr)
+            .expect("stderr to be utf-8 text")
+            .contains("already running")
+        {
+            tracing::info!("Bitcoind already running");
+            Ok(())
+        } else {
+            tracing::error!("Failed to start bitcoind");
+            Err("Failed to start bitcoind".into())
+        }
+    }
+
+    pub fn stop_bitcoin_daemon() -> bitcoincore_rpc::Result<String> {
+        let rpc_wrapper = RPCWrapper::new(OrcaNetConfig::get_network_type());
+        rpc_wrapper.get_client().stop()
     }
 }

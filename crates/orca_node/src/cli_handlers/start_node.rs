@@ -1,21 +1,24 @@
 use crate::common::types::{OrcaNetEvent, ProxyMode};
-use crate::common::Utils;
+use crate::common::{BitcoindUtil, Utils};
 use crate::http_server::start_http_server;
 use crate::network::{setup_network_event_loop, NetworkClient};
 use crate::request_handler::RequestHandlerLoop;
 
 use crate::common::btc_rpc::RPCWrapper;
 use crate::common::config::{ConfigKey, OrcaNetConfig};
-use crate::{expect_input, network};
+use crate::expect_input;
 use async_std::task::block_on;
 use futures::channel::mpsc;
 use futures::{SinkExt, StreamExt};
 use std::error::Error;
 use std::path::Path;
 use std::process::exit;
+use std::time::Duration;
 use tokio::io::AsyncBufReadExt;
 use tokio::{io, select};
 use tracing_subscriber::EnvFilter;
+
+const BITCOIND_START_WAIT_SECS: u64 = 5;
 
 pub async fn start_orca_node(seed: Option<u64>) -> Result<(), Box<dyn Error>> {
     let _ = tracing_subscriber::fmt()
@@ -51,12 +54,20 @@ pub async fn start_orca_node(seed: Option<u64>) -> Result<(), Box<dyn Error>> {
             .expect("Proxy start event to be sent");
     }
 
-    // Load the BTC wallet
-    let wallet_name = OrcaNetConfig::get_str_from_config(ConfigKey::BTCWalletName);
-    let rpc_wrapper = RPCWrapper::new(OrcaNetConfig::get_network_type());
-    // We don't handle error at the moment as the likely cause is that the wallet is already loaded
-    // TODO: Assert that the wallet is loaded
-    rpc_wrapper.load_wallet(wallet_name.as_str());
+    // Start bitcoin daemon
+    BitcoindUtil::start_bitcoin_daemon()
+        .expect("Failed to start bitcoind. Cannot proceed with node start");
+
+    // Wait for the bitcoin daemon to start and load the wallet
+    tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_secs(BITCOIND_START_WAIT_SECS)).await;
+
+        let wallet_name = OrcaNetConfig::get_str_from_config(ConfigKey::BTCWalletName);
+        let rpc_wrapper = RPCWrapper::new(OrcaNetConfig::get_network_type());
+        // We don't handle error at the moment as the likely cause is that the wallet is already loaded
+        // TODO: Assert that the wallet is loaded
+        rpc_wrapper.load_wallet(wallet_name.as_str());
+    });
 
     // Listen for input from stdin (TODO: for testing only - comment out later)
     let mut stdin = io::BufReader::new(io::stdin()).lines();
@@ -168,6 +179,13 @@ async fn handle_input_line(
             let _ = event_sender.send(OrcaNetEvent::StopProxy).await;
         }
         Some("exit") => {
+            tracing::info!("Node shutdown initiated");
+
+            match BitcoindUtil::stop_bitcoin_daemon() {
+                Ok(_) => tracing::info!("Bitcoind stopped"),
+                Err(e) => tracing::error!("Failed to stop bitcoind: {:?}", e),
+            }
+
             exit(0);
         }
         _ => {

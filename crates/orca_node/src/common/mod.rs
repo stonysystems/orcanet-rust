@@ -4,4 +4,4 @@ mod macros;
 pub mod types;
 mod utils;
 
-pub use utils::Utils;
+pub use utils::{BitcoindUtil, Utils};

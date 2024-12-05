@@ -90,6 +90,8 @@ Use the `start-node` command to start the node.
 ./orca_node start-node
 ```
 
+To stop the node, type `exit` in the terminal where the node is running.
+
 ## Doc links
 1. [Backend design HLD](/docs/BackendHLD.md)
 2. [Bitcoin core manual setup](/docs/BitcoinCoreSetup.md)
