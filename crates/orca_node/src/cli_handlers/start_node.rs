@@ -1,7 +1,7 @@
 use crate::common::types::{OrcaNetEvent, ProxyMode};
 use crate::common::Utils;
 use crate::http_server::start_http_server;
-use crate::network::{setup_network, NetworkClient};
+use crate::network::{setup_network_event_loop, NetworkClient};
 use crate::request_handler::RequestHandlerLoop;
 
 use crate::common::btc_rpc::RPCWrapper;
@@ -26,7 +26,7 @@ pub async fn start_orca_node(seed: Option<u64>) -> Result<(), Box<dyn Error>> {
 
     let (mut event_sender, event_receiver) = mpsc::channel::<OrcaNetEvent>(0);
     let (mut network_client, network_event_loop) =
-        setup_network(seed, event_sender.clone()).await?;
+        setup_network_event_loop(seed, event_sender.clone()).await?;
     let mut request_handler_loop = RequestHandlerLoop::new(network_client.clone(), event_receiver);
 
     // Network event loop

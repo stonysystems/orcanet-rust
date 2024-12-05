@@ -1,5 +1,5 @@
-pub mod core;
+pub mod event_loop;
 pub mod network_client;
 
-pub use core::setup_network;
+pub use event_loop::setup_network_event_loop;
 pub use network_client::NetworkClient;

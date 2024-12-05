@@ -23,7 +23,8 @@ use tracing_subscriber::EnvFilter;
 const RELAY_ADDRESS: &str =
     "/ip4/130.245.173.221/tcp/4001/p2p/12D3KooWDpJ7As7BWAwRMfu1VU2WCqNjvq387JEYKDBj4kx6nXTN";
 
-fn main() -> Result<(), Box<dyn Error>> {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error>> {
     // Create the swarm to manage the network
     let opts = Opts::parse();
     let keypair = generate_ed25519(opts.secret_key_seed);
@@ -89,6 +90,14 @@ fn main() -> Result<(), Box<dyn Error>> {
                     ..
                 })) => {
                     swarm.add_external_address(observed_addr.clone());
+                }
+                SwarmEvent::Behaviour(BehaviourEvent::RelayClient(
+                                          relay::client::Event::ReservationReqAccepted { .. },
+                                      )) => {
+                    tracing::info!("Relay accepted our reservation request");
+                }
+                SwarmEvent::Behaviour(BehaviourEvent::RelayClient(event)) => {
+                    tracing::info!(?event)
                 }
                 SwarmEvent::ConnectionEstablished {
                     peer_id, endpoint, ..

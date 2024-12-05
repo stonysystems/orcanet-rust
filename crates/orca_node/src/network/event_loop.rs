@@ -38,10 +38,10 @@ struct Behaviour {
     request_response: request_response::cbor::Behaviour<OrcaNetRequest, OrcaNetResponse>,
 }
 
-pub async fn setup_network(
+pub async fn setup_network_event_loop(
     secret_key_seed: u64,
     event_sender: mpsc::Sender<OrcaNetEvent>,
-) -> Result<(NetworkClient, EventLoop), Box<dyn Error>> {
+) -> Result<(NetworkClient, NetworkEventLoop), Box<dyn Error>> {
     // Create the swarm to manage the network
     let keypair = Utils::generate_ed25519(secret_key_seed);
     let relay_address = OrcaNetConfig::get_relay_address();
@@ -107,6 +107,7 @@ pub async fn setup_network(
         .behaviour_mut()
         .kademlia
         .set_mode(Some(kad::Mode::Server));
+
     // swarm
     //     .behaviour_mut()
     //     .kademlia
@@ -121,11 +122,11 @@ pub async fn setup_network(
         NetworkClient {
             sender: command_sender,
         },
-        EventLoop::new(swarm, command_receiver, event_sender),
+        NetworkEventLoop::new(swarm, command_receiver, event_sender),
     ))
 }
 
-pub struct EventLoop {
+pub struct NetworkEventLoop {
     swarm: Swarm<Behaviour>,
     command_receiver: mpsc::Receiver<NetworkCommand>,
     event_sender: mpsc::Sender<OrcaNetEvent>,
@@ -141,7 +142,7 @@ pub struct EventLoop {
         HashMap<String, oneshot::Sender<Result<OrcaNetResponse, Box<dyn Error + Send>>>>,
 }
 
-impl EventLoop {
+impl NetworkEventLoop {
     fn new(
         swarm: Swarm<Behaviour>,
         command_receiver: mpsc::Receiver<NetworkCommand>,
