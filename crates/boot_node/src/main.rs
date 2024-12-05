@@ -25,6 +25,10 @@ const RELAY_ADDRESS: &str =
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::from_default_env())
+        .try_init();
+
     // Create the swarm to manage the network
     let opts = Opts::parse();
     let keypair = generate_ed25519(opts.secret_key_seed);
@@ -92,8 +96,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     swarm.add_external_address(observed_addr.clone());
                 }
                 SwarmEvent::Behaviour(BehaviourEvent::RelayClient(
-                                          relay::client::Event::ReservationReqAccepted { .. },
-                                      )) => {
+                    relay::client::Event::ReservationReqAccepted { .. },
+                )) => {
                     tracing::info!("Relay accepted our reservation request");
                 }
                 SwarmEvent::Behaviour(BehaviourEvent::RelayClient(event)) => {
