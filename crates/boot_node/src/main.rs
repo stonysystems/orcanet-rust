@@ -23,6 +23,7 @@ use tracing_subscriber::EnvFilter;
 const RELAY_ADDRESS: &str =
     "/ip4/130.245.173.221/tcp/4001/p2p/12D3KooWDpJ7As7BWAwRMfu1VU2WCqNjvq387JEYKDBj4kx6nXTN";
 const DEFAULT_SECRET_KEY_SEED: u64 = 123456789;
+const DEFAULT_PORT: u16 = 6001;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -33,6 +34,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // Create the swarm to manage the network
     let opts = Opts::parse();
     let secret_key_seed = opts.secret_key_seed.unwrap_or(DEFAULT_SECRET_KEY_SEED);
+    let listen_on_port = opts.port.unwrap_or(DEFAULT_PORT);
     let keypair = generate_ed25519(secret_key_seed);
     let relay_address: Multiaddr = RELAY_ADDRESS.parse().unwrap();
 
@@ -70,17 +72,25 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .build();
 
     // Set up listening on all interfaces
+    let listen_addr_tcp = Multiaddr::empty()
+        .with(Protocol::from(Ipv4Addr::UNSPECIFIED))
+        .with(Protocol::Tcp(listen_on_port));
     swarm
-        .listen_on("/ip4/0.0.0.0/udp/0/quic-v1".parse().unwrap())
-        .unwrap();
+        .listen_on(listen_addr_tcp)
+        .expect("Listening for TCP failed");
+
+    let listen_addr_quic = Multiaddr::empty()
+        .with(Protocol::from(Ipv4Addr::UNSPECIFIED))
+        .with(Protocol::Udp(listen_on_port))
+        .with(Protocol::QuicV1);
     swarm
-        .listen_on("/ip4/0.0.0.0/tcp/0".parse().unwrap())
-        .unwrap();
+        .listen_on(listen_addr_quic)
+        .expect("Listening for QuicV1 failed");
 
     // Make a reservation with relay
     swarm
         .listen_on(relay_address.clone().with(Protocol::P2pCircuit))
-        .unwrap();
+        .expect("Reservation attempt failed");
 
     // Set up kademlia props
     swarm
@@ -137,7 +147,9 @@ struct Behaviour {
 #[derive(Debug, Parser)]
 #[clap(name = "Bootstrap node")]
 struct Opts {
-    /// Fixed value to generate deterministic peer id
     #[clap(long)]
     secret_key_seed: Option<u64>,
+
+    #[clap(long)]
+    port: Option<u16>,
 }

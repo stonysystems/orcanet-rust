@@ -91,16 +91,16 @@ pub async fn setup_network_event_loop(
 
     // Set up listening on all interfaces
     swarm
-        .listen_on("/ip4/0.0.0.0/udp/0/quic-v1".parse().unwrap())
-        .unwrap();
-    swarm
         .listen_on("/ip4/0.0.0.0/tcp/0".parse().unwrap())
-        .unwrap();
+        .expect("Listening for TCP failed");
+    swarm
+        .listen_on("/ip4/0.0.0.0/udp/0/quic-v1".parse().unwrap())
+        .expect("Listening for QuickV1 failed");
 
     // Make a reservation with relay
     swarm
         .listen_on(relay_address.clone().with(Protocol::P2pCircuit))
-        .unwrap();
+        .expect("Reservation attempt failed");
 
     // Set up kademlia props
     swarm

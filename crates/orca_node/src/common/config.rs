@@ -46,7 +46,7 @@ impl OrcaNetConfig {
     pub const PROXY_TERMINATION_PD_THRESHOLD: f64 = 300.0; // Beyond this, terminate the connection
 
     pub fn get_bootstrap_peer_id() -> PeerId {
-        "12D3KooWQd1K1k8XA9xVEzSAu7HUCodC7LJB6uW5Kw4VwkRdstPE"
+        "12D3KooWE1xpVccUXZJWZLVWPxXzUJQ7kMqN8UQ2WLn9uQVytmdA"
             .parse()
             .unwrap()
     }
