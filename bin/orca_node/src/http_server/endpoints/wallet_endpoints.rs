@@ -53,7 +53,7 @@ fn load_wallet(wallet_name: String) -> Json<AppResponse> {
     tracing::info!("Load wallet request for {}", wallet_name);
     let rpc_wrapper = RPCWrapper::new(OrcaNetConfig::get_network_type());
 
-    match rpc_wrapper.get_client().load_wallet(wallet_name.as_str()) {
+    match rpc_wrapper.load_wallet(wallet_name.as_str()) {
         Ok(_) => AppResponse::success(json!("Wallet loaded")),
         Err(e) => AppResponse::error(format!("Error loading wallet {:?}", e)),
     }

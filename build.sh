@@ -44,7 +44,6 @@ rustc --version
 cargo --version
 
 # Switch to nightly rust
-apt install libssl-dev
 echo "\\n${YELLOW}=> Switch to nightly rust"
 rustup default nightly >> /dev/null
 echo "${GREEN}Switched to nightly rust${RESET}"

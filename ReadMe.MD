@@ -87,7 +87,7 @@ You can modify these as per your needs.
 
 Use the `start-node` command to start the node.
 ```bash
-./orca_node start-node
+RUST_LOG=info ./orca_node start-node
 ```
 
 To stop the node, type `exit` in the terminal where the node is running.

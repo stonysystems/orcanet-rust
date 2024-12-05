@@ -4,7 +4,7 @@ use std::str::FromStr;
 
 use bitcoin::{Address, Amount, BlockHash, Txid};
 use bitcoincore_rpc::json::ListTransactionResult;
-use bitcoincore_rpc::{Auth, Client, RpcApi};
+use bitcoincore_rpc::{Auth, Client, Error as BtcError, RpcApi};
 use serde::{Deserialize, Serialize};
 
 use crate::impl_str_serde;
@@ -71,11 +71,22 @@ impl RPCWrapper {
             .map_err(|e| Box::from(e))
     }
 
-    pub fn load_wallet(&self, wallet: &str) {
+    /// Loads wallet. Returns true if load was successful or if the wallet is already loaded, false otherwise
+    pub fn load_wallet(&self, wallet: &str) -> Result<(), BtcError> {
         match self.rpc_client.load_wallet(wallet) {
-            Ok(v) => tracing::info!("Loaded wallet {}", v.name),
-            Err(e) => {
-                tracing::error!("Failed to load wallet {:?}", e);
+            Ok(v) => {
+                tracing::info!("Loaded wallet {}", v.name);
+                Ok(())
+            }
+            Err(err) => {
+                if err.to_string().contains("already loaded") {
+                    // It's fine if it's already loaded
+                    tracing::info!("Wallet already loaded");
+                    Ok(())
+                } else {
+                    tracing::error!("Failed to load wallet {:?}", err);
+                    Err(err)
+                }
             }
         }
     }
@@ -107,6 +118,6 @@ impl RPCWrapper {
     }
 
     pub fn get_client(&self) -> &Client {
-        return &self.rpc_client;
+        &self.rpc_client
     }
 }

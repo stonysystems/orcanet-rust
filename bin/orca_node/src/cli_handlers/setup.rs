@@ -11,7 +11,7 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 
-const ASSETS_PATH: &'static str = "../../crates/orca_node/src/assets";
+const ASSETS_PATH: &'static str = "../../bin/orca_node/src/assets";
 const DB_COMMANDS_FILE_NAME: &'static str = "db_commands.yaml";
 const DEFAULT_CONFIG_FILE_NAME: &'static str = "default_config.json";
 const BTC_CORE_SETUP_SCRIPT_NAME: &'static str = "btc_core_setup.sh";

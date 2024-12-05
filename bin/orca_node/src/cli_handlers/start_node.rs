@@ -18,7 +18,7 @@ use tokio::io::AsyncBufReadExt;
 use tokio::{io, select};
 use tracing_subscriber::EnvFilter;
 
-const BITCOIND_START_WAIT_SECS: u64 = 5;
+const BITCOIND_START_WAIT_SECS: u64 = 3;
 
 pub async fn start_orca_node(seed: Option<u64>) -> Result<(), Box<dyn Error>> {
     let _ = tracing_subscriber::fmt()
@@ -59,15 +59,17 @@ pub async fn start_orca_node(seed: Option<u64>) -> Result<(), Box<dyn Error>> {
         .expect("Failed to start bitcoind. Cannot proceed with node start");
 
     // Wait for the bitcoin daemon to start and load the wallet
-    tokio::spawn(async move {
-        tokio::time::sleep(Duration::from_secs(BITCOIND_START_WAIT_SECS)).await;
+    tracing::info!(
+        "Waiting for {} secs for bitcoind to start...",
+        BITCOIND_START_WAIT_SECS
+    );
+    tokio::time::sleep(Duration::from_secs(BITCOIND_START_WAIT_SECS)).await;
 
-        let wallet_name = OrcaNetConfig::get_str_from_config(ConfigKey::BTCWalletName);
-        let rpc_wrapper = RPCWrapper::new(OrcaNetConfig::get_network_type());
-        // We don't handle error at the moment as the likely cause is that the wallet is already loaded
-        // TODO: Assert that the wallet is loaded
-        rpc_wrapper.load_wallet(wallet_name.as_str());
-    });
+    let wallet_name = OrcaNetConfig::get_str_from_config(ConfigKey::BTCWalletName);
+    let rpc_wrapper = RPCWrapper::new(OrcaNetConfig::get_network_type());
+    rpc_wrapper
+        .load_wallet(wallet_name.as_str())
+        .expect(format!("Failed to load wallet {wallet_name}.").as_str());
 
     // Listen for input from stdin (TODO: for testing only - comment out later)
     let mut stdin = io::BufReader::new(io::stdin()).lines();
