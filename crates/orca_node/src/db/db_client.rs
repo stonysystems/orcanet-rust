@@ -7,7 +7,7 @@ use diesel::{
 };
 use serde::Serialize;
 
-use crate::common::{ConfigKey, OrcaNetConfig};
+use crate::common::config::{ConfigKey, OrcaNetConfig};
 use crate::db::{
     table_schema, DownloadedFileInfo, PaymentInfo, ProvidedFileInfo, ProxyClientInfo,
     ProxySessionInfo,

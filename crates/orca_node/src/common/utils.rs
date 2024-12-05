@@ -9,10 +9,11 @@ use ring::digest::{Context, SHA256};
 use tokio::net::TcpStream;
 use uuid::Uuid;
 
-use crate::btc_rpc::{BTCNetwork, RPCWrapper};
-use crate::common::{ConfigKey, OrcaNetConfig, OrcaNetRequest, OrcaNetResponse};
+use crate::common::btc_rpc::{BTCNetwork, RPCWrapper};
+use crate::common::config::{ConfigKey, OrcaNetConfig};
+use crate::common::types::{OrcaNetRequest, OrcaNetResponse};
 use crate::db::{DownloadedFileInfo, DownloadedFilesTable};
-use crate::network_client::NetworkClient;
+use crate::network::NetworkClient;
 use tokio::io::AsyncReadExt;
 
 pub struct Utils;

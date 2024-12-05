@@ -1,7 +1,7 @@
-use crate::btc_rpc::RPCWrapper;
-use crate::common::OrcaNetConfig;
-use crate::http::endpoints::AppResponse;
-use crate::utils::Utils;
+use crate::common::btc_rpc::RPCWrapper;
+use crate::common::config::OrcaNetConfig;
+use crate::common::Utils;
+use crate::http_server::endpoints::AppResponse;
 use bitcoin::Txid;
 use bitcoincore_rpc::RpcApi;
 use rocket::serde::json::Json;

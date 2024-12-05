@@ -21,12 +21,12 @@ use libp2p::{
 use libp2p_swarm::Stream;
 use serde::{Deserialize, Serialize};
 
-use crate::common::{
-    ConfigKey, NetworkCommand, OrcaNetConfig, OrcaNetEvent, OrcaNetRequest, OrcaNetResponse,
-    StreamData, StreamReq,
+use crate::common::config::{ConfigKey, OrcaNetConfig};
+use crate::common::types::{
+    NetworkCommand, OrcaNetEvent, OrcaNetRequest, OrcaNetResponse, StreamData, StreamReq,
 };
-use crate::network_client::NetworkClient;
-use crate::utils::Utils;
+use crate::common::Utils;
+use crate::network::NetworkClient;
 
 #[derive(NetworkBehaviour)]
 struct Behaviour {

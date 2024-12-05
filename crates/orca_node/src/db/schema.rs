@@ -1,6 +1,7 @@
-use crate::common::{HTTPProxyMetadata, OrcaNetConfig};
+use crate::common::config::OrcaNetConfig;
+use crate::common::types::HTTPProxyMetadata;
+use crate::common::Utils;
 use crate::impl_str_serde;
-use crate::utils::Utils;
 use diesel::{AsChangeset, Insertable, Queryable, Selectable};
 use serde::{Deserialize, Serialize};
 

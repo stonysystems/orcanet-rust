@@ -1,14 +1,14 @@
-use crate::btc_rpc::RPCWrapper;
-use crate::common::{
-    OrcaNetConfig, OrcaNetRequest, OrcaNetResponse, PaymentNotification, PaymentRequest,
-    PrePaymentResponse,
+use crate::common::btc_rpc::RPCWrapper;
+use crate::common::config::OrcaNetConfig;
+use crate::common::types::{
+    OrcaNetRequest, OrcaNetResponse, PaymentNotification, PaymentRequest, PrePaymentResponse,
 };
+use crate::common::Utils;
 use crate::db::{
     PaymentCategory, PaymentInfo, PaymentStatus, PaymentsTable, ProxySessionInfo,
     ProxySessionsTable,
 };
-use crate::network_client::NetworkClient;
-use crate::utils::Utils;
+use crate::network::NetworkClient;
 use libp2p::PeerId;
 use std::time::Duration;
 use tokio::time::interval;

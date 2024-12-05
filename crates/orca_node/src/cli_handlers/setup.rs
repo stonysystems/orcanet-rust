@@ -1,4 +1,4 @@
-use crate::common::{ConfigKey, OrcaNetConfig};
+use crate::common::config::{ConfigKey, OrcaNetConfig};
 use crate::db::create_sqlite_connection;
 use crate::SetupArgs;
 use diesel::RunQueryDsl;

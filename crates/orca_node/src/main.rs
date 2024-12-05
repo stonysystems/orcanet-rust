@@ -11,16 +11,13 @@ use std::error::Error;
 use std::str::FromStr;
 use tokio::io::AsyncBufReadExt;
 
-mod btc_rpc;
 mod cli_handlers;
 mod common;
 mod db;
-mod http;
-mod macros;
-mod network;
-mod network_client;
+mod http_server;
+pub mod network;
+mod proxy;
 mod request_handler;
-mod utils;
 
 #[derive(Parser)]
 struct Args {

@@ -1,14 +1,15 @@
-use crate::btc_rpc::RPCWrapper;
-use crate::common::{
-    ConfigKey, OrcaNetConfig, OrcaNetError, OrcaNetRequest, OrcaNetResponse, PaymentNotification,
-    PaymentRequest, PrePaymentResponse, ProxyClientConfig,
+use crate::common::btc_rpc::RPCWrapper;
+use crate::common::config::{ConfigKey, OrcaNetConfig};
+use crate::common::types::{
+    OrcaNetError, OrcaNetRequest, OrcaNetResponse, PaymentNotification, PaymentRequest,
+    PrePaymentResponse, ProxyClientConfig,
 };
+use crate::common::Utils;
 use crate::db::{
     PaymentCategory, PaymentInfo, PaymentStatus, PaymentsTable, ProxyClientInfo, ProxyClientsTable,
     ProxySessionInfo, ProxySessionStatus, ProxySessionsTable,
 };
-use crate::network_client::NetworkClient;
-use crate::utils::Utils;
+use crate::network::NetworkClient;
 use bitcoin::Txid;
 use bytes::Bytes;
 use clap::builder::styling::Reset;
@@ -250,7 +251,7 @@ impl ProxyClient {
             .expect("Proxy address to be valid proxy URI");
         let proxy = Proxy::new(Intercept::All, proxy_uri);
 
-        // Create the http client
+        // Create the http_server client
         let proxy_connector = ProxyConnector::from_proxy(HttpConnector::new(), proxy)
             .expect("Proxy connector creation failed");
         let http_client =

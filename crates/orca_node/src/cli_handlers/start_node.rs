@@ -1,10 +1,11 @@
-use crate::common::{ConfigKey, OrcaNetConfig, OrcaNetEvent, ProxyMode};
-use crate::http::start_http_server;
-use crate::network_client::NetworkClient;
+use crate::common::types::{OrcaNetEvent, ProxyMode};
+use crate::common::Utils;
+use crate::http_server::start_http_server;
+use crate::network::{setup_network, NetworkClient};
 use crate::request_handler::RequestHandlerLoop;
-use crate::utils::Utils;
 
-use crate::btc_rpc::RPCWrapper;
+use crate::common::btc_rpc::RPCWrapper;
+use crate::common::config::{ConfigKey, OrcaNetConfig};
 use crate::{expect_input, network};
 use async_std::task::block_on;
 use futures::channel::mpsc;
@@ -25,7 +26,7 @@ pub async fn start_orca_node(seed: Option<u64>) -> Result<(), Box<dyn Error>> {
 
     let (mut event_sender, event_receiver) = mpsc::channel::<OrcaNetEvent>(0);
     let (mut network_client, network_event_loop) =
-        network::setup_network(seed, event_sender.clone()).await?;
+        setup_network(seed, event_sender.clone()).await?;
     let mut request_handler_loop = RequestHandlerLoop::new(network_client.clone(), event_receiver);
 
     // Network event loop

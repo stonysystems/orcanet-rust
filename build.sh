@@ -52,4 +52,4 @@ echo "${GREEN}Switched to nightly rust${RESET}"
 # Build the code
 echo "\\n${YELLOW}=> Build:"
 RUSTFLAGS="-Awarnings" RUST_LOG=info cargo build --release
-echo "${GREEN}Build complete${RESET}. The binary should be in ${YELLOW}$(pwd)/../target/release${RESET}"
+echo "${GREEN}Build complete${RESET}. The binary should be in ${YELLOW}$(pwd)/target/release${RESET}"

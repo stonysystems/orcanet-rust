@@ -14,11 +14,11 @@ use tokio::select;
 use tokio_util::sync::CancellationToken;
 use tracing_subscriber::fmt::format;
 
-use crate::common::{OrcaNetEvent, ProxyMode};
+use crate::common::types::{OrcaNetEvent, ProxyMode};
 use crate::db::{ProxySessionStatus, ProxySessionsTable};
-use crate::http::proxy_handlers::*;
-use crate::http::proxy_payment::ProxyPaymentLoop;
-use crate::network_client::NetworkClient;
+use crate::network::NetworkClient;
+use crate::proxy::proxy_handlers::*;
+use crate::proxy::proxy_payment::ProxyPaymentLoop;
 
 const ORCA_NET_CLIENT_ID_HEADER: &str = "orca-net-client-id";
 const ORCA_NET_AUTH_KEY_HEADER: &str = "orca-net-token";
@@ -75,7 +75,7 @@ pub async fn start_http_proxy(
         .await
         .expect(format!("Tcp listener to be bound to {:?}", addr).as_str());
 
-    tracing::info!("Proxy server listening on http://{}", addr);
+    tracing::info!("Proxy server listening on http_server://{}", addr);
 
     loop {
         select! {

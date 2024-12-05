@@ -8,17 +8,18 @@ use serde_json::json;
 use tokio::select;
 use tracing_subscriber::filter::FilterExt;
 
-use crate::common::{
-    ConfigKey, FileMetadata, HTTPProxyMetadata, OrcaNetConfig, OrcaNetError, OrcaNetEvent,
-    OrcaNetRequest, OrcaNetResponse, PaymentRequest, PrePaymentResponse, ProxyMode,
+use crate::common::config::{ConfigKey, OrcaNetConfig};
+use crate::common::types::{
+    FileMetadata, HTTPProxyMetadata, OrcaNetError, OrcaNetEvent, OrcaNetRequest, OrcaNetResponse,
+    PaymentRequest, PrePaymentResponse, ProxyMode,
 };
+use crate::common::Utils;
 use crate::db::{
     PaymentCategory, PaymentInfo, PaymentStatus, PaymentsTable, ProvidedFileInfo,
     ProvidedFilesTable, ProxyClientInfo, ProxyClientsTable,
 };
-use crate::http::start_http_proxy;
-use crate::network_client::NetworkClient;
-use crate::utils::Utils;
+use crate::network::NetworkClient;
+use crate::proxy::start_http_proxy;
 
 pub struct RequestHandlerLoop {
     network_client: NetworkClient,

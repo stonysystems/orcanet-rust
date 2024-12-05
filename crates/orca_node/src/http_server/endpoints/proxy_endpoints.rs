@@ -1,10 +1,11 @@
-use crate::common::{
-    OrcaNetConfig, OrcaNetEvent, OrcaNetRequest, OrcaNetResponse, ProxyClientConfig, ProxyMode,
+use crate::common::types::{
+    OrcaNetEvent, OrcaNetRequest, OrcaNetResponse, ProxyClientConfig, ProxyMode,
 };
+use crate::common::Utils;
 use crate::db::{ProxySessionInfo, ProxySessionsTable};
-use crate::http::endpoints::{AppResponse, AppState};
-use crate::utils::Utils;
+use crate::http_server::endpoints::{AppResponse, AppState};
 
+use crate::common::config::OrcaNetConfig;
 use futures::SinkExt;
 use libp2p::PeerId;
 use rocket::serde::json::Json;

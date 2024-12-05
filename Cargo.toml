@@ -7,6 +7,8 @@ members = [
     "crates/relay_server"
 ]
 
+workspace.resolver = "1"
+
 #[workspace.dependencies]
 #tokio = { version = "1.40.0", features = ["full"] }
 #async-std = { version = "1.13.0", features = ["attributes"] }

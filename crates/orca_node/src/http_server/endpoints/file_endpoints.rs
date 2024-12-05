@@ -1,7 +1,8 @@
-use crate::common::{OrcaNetConfig, OrcaNetEvent, OrcaNetRequest, OrcaNetResponse};
+use crate::common::config::OrcaNetConfig;
+use crate::common::types::{OrcaNetEvent, OrcaNetRequest, OrcaNetResponse};
+use crate::common::Utils;
 use crate::db::{DownloadedFilesTable, ProvidedFilesTable};
-use crate::http::endpoints::{AppResponse, AppState};
-use crate::utils::Utils;
+use crate::http_server::endpoints::{AppResponse, AppState};
 use futures::SinkExt;
 use rocket::serde::json::Json;
 use rocket::serde::{Deserialize, Serialize};

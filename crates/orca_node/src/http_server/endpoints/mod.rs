@@ -1,5 +1,5 @@
-use crate::common::OrcaNetEvent;
-use crate::network_client::NetworkClient;
+use crate::common::types::OrcaNetEvent;
+use crate::network::NetworkClient;
 use async_std::stream::Extend;
 pub use file_endpoints::get_file_endpoints;
 use futures::channel::mpsc;
