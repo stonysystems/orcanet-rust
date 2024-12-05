@@ -1,0 +1,16 @@
+title File Transfer
+
+actor Client
+
+par Metadata Requests
+    Client<-->Peer1: File metadata request/response
+    Client<-->Peer2: File metadata request/response
+    Client<-->Peer3: File metadata request/response
+end
+
+note over Client: Client decides to use Peer 2 to download the file
+Client->Peer2: File metadata request
+Peer2-->Client: File content bytes, recipient BTC address
+note over Client: Client creates a transaction on the blockchain
+Client->Peer2: Payment notification (transaction id)
+Peer2-->Client: Ack

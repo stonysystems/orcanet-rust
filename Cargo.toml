@@ -1,23 +1,18 @@
-[package]
-name = "P2PComm"
-version = "0.1.0"
+[workspace.package]
 edition = "2021"
 
 [workspace]
-members = [
-    "file_transfer",
-    "relay_server"
+members = [ "crates/boot_node",
+    "crates/orca_node",
+    "crates/relay_server"
 ]
 
-[dependencies]
-libp2p = { version = "0.54.1", features = ["dns", "dcutr", "identify", "macros", "noise", "ping", "quic", "relay", "rendezvous", "tcp", "tokio", "yamux", "gossipsub"] }
-bitcoin = "0.32.2"
-tokio = { version = "1.40.0", features = ["full"] }
-rand = "0.8.5"
-hex = "0.4.3"
-bitcoincore-rpc = "0.19.0"
-tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
-futures-timer = "3.0.3"
-clap = { version = "4.5.17", features = ["derive"] }
-tracing = "0.1.40"
-futures = "0.3.30"
+workspace.resolver = "1"
+
+#[workspace.dependencies]
+#tokio = { version = "1.40.0", features = ["full"] }
+#async-std = { version = "1.13.0", features = ["attributes"] }
+#clap = { version = "4.5.17", features = ["derive"] }
+#tracing = { version = "0.1.40" }
+#futures = { version = "0.3.31" }
+#tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
