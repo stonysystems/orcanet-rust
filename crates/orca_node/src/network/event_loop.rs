@@ -108,13 +108,14 @@ pub async fn setup_network_event_loop(
         .kademlia
         .set_mode(Some(kad::Mode::Server));
 
-    // swarm
-    //     .behaviour_mut()
-    //     .kademlia
-    //     .add_address(&bootstrap_peer_id, boostrap_addr.clone());
-    //
-    // // Dial the bootstrap node
-    // swarm.dial(boostrap_addr.clone()).unwrap();
+    // Connect to the bootstrap node
+    swarm
+        .behaviour_mut()
+        .kademlia
+        .add_address(&bootstrap_peer_id, boostrap_addr.clone());
+    swarm
+        .dial(boostrap_addr.clone())
+        .expect("Failed to connect to bootstrap node");
 
     let (command_sender, command_receiver) = mpsc::channel(0);
 

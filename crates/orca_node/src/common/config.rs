@@ -52,7 +52,7 @@ impl OrcaNetConfig {
     }
 
     pub fn get_bootstrap_address() -> Multiaddr {
-        "/ip4/130.245.173.222/tcp/61000/p2p/12D3KooWQd1K1k8XA9xVEzSAu7HUCodC7LJB6uW5Kw4VwkRdstPE"
+        "/ip4/130.245.173.221/tcp/6001/p2p/12D3KooWE1xpVccUXZJWZLVWPxXzUJQ7kMqN8UQ2WLn9uQVytmdA"
             .parse()
             .unwrap()
     }
