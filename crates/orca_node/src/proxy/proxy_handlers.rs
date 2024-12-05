@@ -219,10 +219,12 @@ impl ProxyProvider {
                         let data_kb = data_transferred as f64 / 1000f64;
                         tracing::info!("Data transferred kb {data_kb} for client: {client_id}");
 
-                        let mut proxy_clients_table = ProxyClientsTable::new(None);
-                        proxy_clients_table
-                            .update_data_transfer_info(client_id.as_str(), data_kb)
-                            .expect("Data transfer info to be updated in DB");
+                        // TODO: Batch update
+
+                        // let mut proxy_clients_table = ProxyClientsTable::new(None);
+                        // proxy_clients_table
+                        //     .update_data_transfer_info(client_id.as_str(), data_kb)
+                        //     .expect("Data transfer info to be updated in DB");
                     })
                     .await;
                 }
@@ -375,10 +377,12 @@ impl ProxyClient {
                         let data_kb = data_transferred as f64 / 1000f64;
                         println!("Data transferred kb {data_kb} for session: {session_id}");
 
-                        let mut proxy_sessions_table = ProxySessionsTable::new(None);
-                        proxy_sessions_table
-                            .update_data_transfer_info(session_id.as_str(), data_kb)
-                            .expect("Data transfer info to be updated in DB");
+                        // TODO: Batch update
+
+                        // let mut proxy_sessions_table = ProxySessionsTable::new(None);
+                        // proxy_sessions_table
+                        //     .update_data_transfer_info(session_id.as_str(), data_kb)
+                        //     .expect("Data transfer info to be updated in DB");
                     })
                     .await;
                 }
@@ -446,7 +450,7 @@ where
                     let  _ = b.shutdown();
                     break;
                 }
-                // TODO: Add persistence to DB, may be with timer ?
+
                 b.write_all(&buf_a[..n]).await?;
                 a_to_b += n as u64;
             }
@@ -456,7 +460,7 @@ where
                     let  _ = a.shutdown();
                     break;
                 }
-                // TODO: Add persistence to DB, may be with timer ?
+
                 a.write_all(&buf_b[..n]).await?;
                 b_to_a += n as u64;
             }

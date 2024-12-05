@@ -2,7 +2,7 @@
 edition = "2021"
 
 [workspace]
-members = [
+members = [ "crates/boot_node",
     "crates/orca_node",
     "crates/relay_server"
 ]
