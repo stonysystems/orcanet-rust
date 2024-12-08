@@ -6,6 +6,7 @@ use crate::request_handler::RequestHandlerLoop;
 
 use crate::common::btc_rpc::RPCWrapper;
 use crate::common::config::{ConfigKey, OrcaNetConfig};
+use crate::db::ProvidedFilesTable;
 use crate::expect_input;
 use async_std::task::block_on;
 use futures::channel::mpsc;
@@ -71,6 +72,9 @@ pub async fn start_orca_node(seed: Option<u64>) -> Result<(), Box<dyn Error>> {
         .load_wallet(wallet_name.as_str())
         .expect(format!("Failed to load wallet {wallet_name}.").as_str());
 
+    // Advertise all provided keys to the network
+    advertise(&mut network_client).await;
+
     // Listen for input from stdin (TODO: for testing only - comment out later)
     let mut stdin = io::BufReader::new(io::stdin()).lines();
 
@@ -87,8 +91,35 @@ pub async fn start_orca_node(seed: Option<u64>) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+/// Advertise all keys to the network. This does not fail on error.
+async fn advertise(network_client: &mut NetworkClient) {
+    // Advertise all provided files to the network
+    let mut provided_files_table = ProvidedFilesTable::new(None);
+
+    match provided_files_table.get_provided_files() {
+        Ok(provided_files) => {
+            for file_info in provided_files {
+                if file_info.status == 1 {
+                    // TODO: Change in DB query instead
+                    network_client.start_providing(file_info.file_id).await;
+                }
+            }
+        }
+        Err(e) => {
+            tracing::error!("Error getting provided files {:?}", e);
+        }
+    }
+
+    // Advertise proxy provider key if required
+    if let Some(ProxyMode::ProxyProvider) = OrcaNetConfig::get_proxy_config() {
+        let _ = network_client
+            .start_providing(OrcaNetConfig::PROXY_PROVIDER_KEY_DHT.to_string())
+            .await;
+    }
+}
+
 async fn handle_input_line(
-    client: &mut NetworkClient,
+    network_client: &mut NetworkClient,
     event_sender: &mut mpsc::Sender<OrcaNetEvent>,
     line: String,
 ) {
@@ -108,12 +139,12 @@ async fn handle_input_line(
                 .as_bytes()
                 .to_vec());
 
-            let _ = client.put_kv_pair(key, value).await;
+            let _ = network_client.put_kv_pair(key, value).await;
         }
         Some("get") => {
             let key = expect_input!(args.next(), "key", String::from);
 
-            match client.get_value(key).await {
+            match network_client.get_value(key).await {
                 Ok(v) => {
                     println!("Got value {}", String::from_utf8(v).unwrap());
                 }
@@ -124,7 +155,7 @@ async fn handle_input_line(
             let peer_id = expect_input!(args.next(), "peer_id", Utils::get_peer_id_from_input);
             let peer_addr = Utils::get_address_through_relay(&peer_id, None);
 
-            match client.dial(peer_id, peer_addr).await {
+            match network_client.dial(peer_id, peer_addr).await {
                 Ok(_) => {
                     println!("Dialled successfully");
                 }
@@ -136,18 +167,18 @@ async fn handle_input_line(
         Some("startproviding") => {
             let key = expect_input!(args.next(), "key", String::from);
 
-            let _ = client.start_providing(key).await;
+            let _ = network_client.start_providing(key).await;
         }
         Some("getproviders") => {
             let key = expect_input!(args.next(), "key", String::from);
 
-            let providers = client.get_providers(key.clone()).await;
+            let providers = network_client.get_providers(key.clone()).await;
             println!("Got providers for {} {:?}", key, providers);
         }
         Some("getfile") => {
             let file_id = expect_input!(args.next(), "file_id", String::from);
 
-            if let Err(e) = client.download_file(file_id, None).await {
+            if let Err(e) = network_client.download_file(file_id, None).await {
                 eprintln!("Error getting file: {:?}", e);
             } else {
                 println!("Got file");
@@ -168,12 +199,7 @@ async fn handle_input_line(
             }
         }
         Some("advertise") => {
-            let _ = client.advertise_provided_files().await;
-            if let Some(ProxyMode::ProxyProvider) = OrcaNetConfig::get_proxy_config() {
-                let _ = client
-                    .start_providing(OrcaNetConfig::PROXY_PROVIDER_KEY_DHT.to_string())
-                    .await;
-            }
+            advertise(network_client).await;
         }
         Some("startproxyprovider") => {
             let _ = event_sender

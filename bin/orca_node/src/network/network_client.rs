@@ -202,25 +202,6 @@ impl NetworkClient {
             .expect("Command receiver not to be dropped.");
     }
 
-    /// Advertise all provided files to the network
-    pub async fn advertise_provided_files(&mut self) {
-        let mut provided_files_table = ProvidedFilesTable::new(None);
-
-        match provided_files_table.get_provided_files() {
-            Ok(provided_files) => {
-                for file_info in provided_files {
-                    if file_info.status == 1 {
-                        // TODO: Change in DB query instead
-                        self.start_providing(file_info.file_id).await;
-                    }
-                }
-            }
-            Err(e) => {
-                tracing::error!("Error getting provided files {:?}", e);
-            }
-        }
-    }
-
     /// Send stream req command
     pub async fn send_in_stream(
         &mut self,
