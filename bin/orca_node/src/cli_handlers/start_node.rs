@@ -18,7 +18,7 @@ use tokio::io::AsyncBufReadExt;
 use tokio::{io, select};
 use tracing_subscriber::EnvFilter;
 
-const BITCOIND_START_WAIT_SECS: u64 = 3;
+const BITCOIND_START_WAIT_SECS: u64 = 5;
 
 pub async fn start_orca_node(seed: Option<u64>) -> Result<(), Box<dyn Error>> {
     let _ = tracing_subscriber::fmt()
@@ -124,7 +124,14 @@ async fn handle_input_line(
             let peer_id = expect_input!(args.next(), "peer_id", Utils::get_peer_id_from_input);
             let peer_addr = Utils::get_address_through_relay(&peer_id, None);
 
-            let _ = client.dial(peer_id, peer_addr).await;
+            match client.dial(peer_id, peer_addr).await {
+                Ok(_) => {
+                    println!("Dialled successfully");
+                }
+                Err(e) => {
+                    println!("Failed to dial {:?}", e)
+                }
+            }
         }
         Some("startproviding") => {
             let key = expect_input!(args.next(), "key", String::from);
@@ -162,6 +169,11 @@ async fn handle_input_line(
         }
         Some("advertise") => {
             let _ = client.advertise_provided_files().await;
+            if let Some(ProxyMode::ProxyProvider) = OrcaNetConfig::get_proxy_config() {
+                let _ = client
+                    .start_providing(OrcaNetConfig::PROXY_PROVIDER_KEY_DHT.to_string())
+                    .await;
+            }
         }
         Some("startproxyprovider") => {
             let _ = event_sender

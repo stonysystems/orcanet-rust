@@ -108,6 +108,11 @@ impl Utils {
         let mut results = Vec::new();
 
         for peer_id in peers {
+            // let response = network_client
+            //     .clone()
+            //     .send_request(peer_id.clone(), request.clone())
+            //     .await;
+
             let response = network_client
                 .clone()
                 .send_request(peer_id.clone(), request.clone())
