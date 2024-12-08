@@ -45,6 +45,7 @@ impl OrcaNetConfig {
     pub const DATA_TRANSFER_PD_ALLOWED: f64 = 300.0; // Percent diff allowed
     pub const PROXY_TERMINATION_PD_THRESHOLD: f64 = 300.0; // Beyond this, terminate the connection
 
+    // TODO: Move these to the Config file?
     pub fn get_bootstrap_peer_id() -> PeerId {
         "12D3KooWE1xpVccUXZJWZLVWPxXzUJQ7kMqN8UQ2WLn9uQVytmdA"
             .parse()

@@ -222,6 +222,8 @@ async fn get_providers(state: &State<AppState>, file_id: String) -> Json<AppResp
     // Get providers for the file
     let providers = network_client.get_providers(file_id.clone()).await;
 
+    tracing::info!("Got file providers: {:?}", providers);
+
     if providers.is_empty() {
         AppResponse::success(json!([]));
     }

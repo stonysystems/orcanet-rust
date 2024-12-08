@@ -43,6 +43,8 @@ async fn get_providers(state: &State<AppState>) -> Json<AppResponse> {
         .get_providers(OrcaNetConfig::PROXY_PROVIDER_KEY_DHT.to_string())
         .await;
 
+    tracing::info!("Got proxy providers: {:?}", proxy_providers);
+
     if proxy_providers.is_empty() {
         return AppResponse::success(json!([]));
     }
@@ -50,7 +52,7 @@ async fn get_providers(state: &State<AppState>) -> Json<AppResponse> {
     // Ask them for metadata
     let responses = Utils::request_from_peers(
         OrcaNetRequest::HTTPProxyMetadataRequest,
-        network_client,
+        network_client.clone(),
         proxy_providers.into_iter(),
     )
     .await;

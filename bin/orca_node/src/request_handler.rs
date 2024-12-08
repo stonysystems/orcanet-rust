@@ -305,6 +305,7 @@ impl RequestHandlerLoop {
 
                 match request {
                     OrcaNetRequest::HTTPProxyMetadataRequest => {
+                        tracing::info!("Received proxy metadata request");
                         Ok(OrcaNetResponse::HTTPProxyMetadataResponse(metadata))
                     }
                     OrcaNetRequest::HTTPProxyProvideRequest => {

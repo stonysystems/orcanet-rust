@@ -119,12 +119,11 @@ impl Utils {
                 }
                 Err(e) => {
                     tracing::error!(
-                        "Error getting file metadata from peer {:?}. Error: {:?}",
+                        "Error getting metadata from peer {:?}. Error: {:?}",
                         peer_id,
                         e
                     )
                 }
-                _ => {}
             }
         }
 

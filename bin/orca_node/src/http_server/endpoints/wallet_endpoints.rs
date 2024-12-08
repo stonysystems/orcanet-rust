@@ -41,9 +41,17 @@ fn get_block_count() -> Json<AppResponse> {
 #[get("/balance")]
 fn get_balance() -> Json<AppResponse> {
     let rpc_wrapper = RPCWrapper::new(OrcaNetConfig::get_network_type());
+    let btc_address = OrcaNetConfig::get_btc_address();
 
     match rpc_wrapper.get_client().get_balance(None, None) {
-        Ok(balance) => AppResponse::success(json!(balance.to_string())),
+        Ok(amount) => {
+            let balance = Utils::round(amount.to_btc(), 3);
+
+            AppResponse::success(json!({
+                "address": btc_address,
+                "balance": balance
+            }))
+        }
         Err(e) => AppResponse::error(format!("Error getting balance {:?}", e)),
     }
 }
