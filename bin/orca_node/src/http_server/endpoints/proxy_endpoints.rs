@@ -20,6 +20,7 @@ pub fn get_proxy_endpoints() -> Vec<Route> {
         stop_proxy,
         connect,
         start_providing,
+        get_proxy_status,
         start_client
     ]
 }
@@ -176,6 +177,29 @@ async fn start_providing(state: &State<AppState>) -> Json<AppResponse> {
         .await;
 
     AppResponse::success(json!("Started providing proxy"))
+}
+
+#[get("/proxy-status")]
+async fn get_proxy_status() -> Json<AppResponse> {
+    match OrcaNetConfig::get_proxy_config() {
+        Some(ProxyMode::ProxyProvider) => AppResponse::success(json!({
+            "type": "provider"
+        })),
+        Some(ProxyMode::ProxyClient { session_id }) => {
+            let mut proxy_sessions_table = ProxySessionsTable::new(None);
+            match proxy_sessions_table.get_session_info(&session_id) {
+                Ok(session_info) => AppResponse::success(json!({
+                    "type": "client",
+                    "session_info": session_info
+                })),
+                Err(e) => {
+                    tracing::error!("Error fetching session info from DB: {:?}", e);
+                    AppResponse::error("Error fetching session info from DB".to_string())
+                }
+            }
+        }
+        None => AppResponse::success(json!(Option::<ProxyMode>::None)),
+    }
 }
 
 // For testing only
